@@ -203,7 +203,7 @@ export default function MissionEndScreen({
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
       >
-        <div className="flex justify-between items-center px-1">
+        <div className="flex justify-between items-center px-1 relative z-30">
           <span className="text-xs font-mono font-bold tracking-wider text-cyan-400 uppercase">
             {t("common.nasaSpaceApps")}
           </span>
@@ -286,11 +286,10 @@ export default function MissionEndScreen({
           <button
             type="button"
             onClick={handleShareChallenge}
-            className={`w-full sm:w-auto px-5 py-3 rounded-xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 transition-all shadow-lg active:scale-95 border cursor-pointer shrink-0 ${
-              copiedChallenge
-                ? "bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-400 shadow-emerald-900/60"
-                : "bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white border-cyan-400/40 shadow-cyan-900/40"
-            }`}
+            className={`w-full sm:w-auto px-5 py-3 rounded-xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 transition-all shadow-lg active:scale-95 border cursor-pointer shrink-0 ${copiedChallenge
+              ? "bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-400 shadow-emerald-900/60"
+              : "bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white border-cyan-400/40 shadow-cyan-900/40"
+              }`}
           >
             {copiedChallenge ? (
               <>

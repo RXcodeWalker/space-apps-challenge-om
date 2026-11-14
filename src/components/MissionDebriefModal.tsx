@@ -228,7 +228,9 @@ export default function MissionDebriefModal({
             </div>
             <div className="flex items-center gap-3">
               <span className="text-slate-400 hidden sm:inline">
-                {environment.id === "lunar_south_pole"
+                {gameState.scenario
+                  ? gameState.scenario.title
+                  : environment.id === "lunar_south_pole"
                   ? t("destinations.moon.name")
                   : environment.id === "mars_gale_crater"
                     ? t("destinations.mars.name")

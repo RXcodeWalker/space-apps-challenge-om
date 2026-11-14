@@ -13,6 +13,8 @@
 
 import type { MissionEnvironment, TurnEvent } from "../data/nasaConstants";
 import type { IncidentCard, IncidentChoice } from "../data/incidentCards";
+import type { FlightDirectorInterventionResult } from "../types/intervention";
+import type { HistoricScenario } from "../data/scenarioData";
 import {
   TOTAL_TURNS,
   MIN_SYSTEM_HEALTH,
@@ -69,6 +71,7 @@ export type {
   CrewMoraleEvent,
   SpecialistRepairEffects,
   SpecialistRepairOption,
+  HistoricScenario,
 };
 export { DIFFICULTY_PRESETS, createInitialCrewMembers, INCIDENT_SPECIALIST_REPAIRS };
 
@@ -140,6 +143,7 @@ export interface IncidentChoiceRecord {
   specialistName?: string;
   specialistAction?: string;
   specialistRiskRewardSummary?: string;
+  interventionResult?: FlightDirectorInterventionResult;
 }
 
 export interface ActiveModifier {
@@ -183,6 +187,7 @@ export interface GameState {
   cumulativeThermalFatigueWear: number;
   micrometeoroidHistory: MicrometeoroidStrike[];
   cadetHints?: AutomatedHint[];
+  scenario?: HistoricScenario;
 }
 
 // ---------------------------------------------------------------------------
@@ -444,7 +449,8 @@ function computeAlerts(
   effectiveBudgetMW: number,
   config: DifficultyConfig,
   thermalReport?: ThermalFatigueReport,
-  strike?: MicrometeoroidStrike
+  strike?: MicrometeoroidStrike,
+  scenario?: HistoricScenario
 ): MissionAlert[] {
   const alerts: MissionAlert[] = [];
   const totalUsed = totalAllocatedMW(allocation);
@@ -636,6 +642,74 @@ function computeAlerts(
     });
   }
 
+  // Scenario-Specific Critical Alerts
+  if (scenario) {
+    if (scenario.id === "artemis_iii_lunar_night") {
+      if (allocation.radiationShielding < 10) {
+        alerts.push({
+          severity: "critical",
+          subsystem: "radiationShielding",
+          headline: "🥶 HABITAT FREEZE: Cryogenic Cold Penetrating Hull",
+          detail: `Thermal heating allocated only ${allocation.radiationShielding} MW (minimum 10 MW required). External temperature −173°C is freezing structural seals!`,
+          tradeOffExplanation:
+            "During the 14-day lunar night, surface temperatures plunge to 100 K (−173°C). Radiator loops require ≥10 MW continuously to keep interior habitat livable.",
+          kidFriendlyExplanation:
+            "WARNING! The Moon night is −173°C and the habitat is freezing! Send at least 10 MW to heaters right now!",
+        });
+      }
+      if (allocation.lifeSupport < 12) {
+        alerts.push({
+          severity: "critical",
+          subsystem: "lifeSupport",
+          headline: "⚠️ ECLSS CO₂ SCRUBBERS UNDERVOLTAGE",
+          detail: `Life Support allocated ${allocation.lifeSupport} MW (minimum 12 MW required). Cryogenic CO₂ scrubbers failing to regenerate; crew breathing quality declining.`,
+          tradeOffExplanation:
+            "Closed-loop ECLSS requires at least 12 MW to cycle cryogenic CO₂ desiccant beds during the prolonged lunar darkness.",
+          kidFriendlyExplanation:
+            "AIR WARNING! The air scrubbers don't have enough power to clean out carbon dioxide! Give Life Support at least 12 MW!",
+        });
+      }
+    } else if (scenario.id === "opportunity_dust_storm") {
+      if (allocation.foodProduction < 10) {
+        alerts.push({
+          severity: "warning",
+          subsystem: "foodProduction",
+          headline: "🔴 DUST BLACKOUT: Aeroponics in Thermal Shock",
+          detail: "Atmospheric tau 10.8 (98% blackout) has halted all natural photosynthesis. Aeroponic LED arrays need ≥10 MW or crops die.",
+          tradeOffExplanation:
+            "The 2018 Martian global dust storm blocks 98% of solar photons. Crops must be artificially illuminated with at least 10 MW or enter lethal thermal shock.",
+          kidFriendlyExplanation:
+            "The giant Martian dust storm has blacked out the Sun! Give the greenhouse 10 MW or the plants won't survive!",
+        });
+      }
+    } else if (scenario.id === "apollo_13_cold_cabin") {
+      if (allocation.radiationShielding > 6) {
+        alerts.push({
+          severity: "warning",
+          subsystem: "radiationShielding",
+          headline: "⚡ COLD CABIN BREACH: Non-Essential Heaters Drawing Power",
+          detail: `You allocated ${allocation.radiationShielding} MW to thermal heating. Cold Cabin Protocol dictates powering down heaters (<6 MW) to preserve amps for Life Support!`,
+          tradeOffExplanation:
+            "With battery banks ruptured and power capped at 45 MW, drawing heating power starves critical LiOH scrubbers and avionics.",
+          kidFriendlyExplanation:
+            "Cold Cabin Rule: Turn OFF the heaters! The astronauts must endure the cold so all power goes to life support air scrubbers!",
+        });
+      }
+      if (allocation.lifeSupport < 16) {
+        alerts.push({
+          severity: "critical",
+          subsystem: "lifeSupport",
+          headline: "🚨 LiOH SCRUBBER EMERGENCY: Carbon Dioxide Surge",
+          detail: `Life Support allocated only ${allocation.lifeSupport} MW (needed ≥16 MW). The taped-together lithium hydroxide canisters are saturating; CO₂ is spiking!`,
+          tradeOffExplanation:
+            "Square canisters adapted into round holes create high flow resistance, demanding dedicated blower fan and scrubber power (≥16 MW).",
+          kidFriendlyExplanation:
+            "CRITICAL! Carbon dioxide is rising in the cabin! Send more power to Life Support to keep the air scrubbers running!",
+        });
+      }
+    }
+  }
+
   return alerts;
 }
 
@@ -759,20 +833,73 @@ function buildNarratives(
 export function createInitialGameState(
   environment: MissionEnvironment,
   difficulty: DifficultyTier = "commander",
-  missionSeed?: string
+  missionSeed?: string,
+  scenario?: HistoricScenario
 ): GameState {
   const seed = normalizeSeed(missionSeed || generateMissionSeed());
   const config = DIFFICULTY_PRESETS[difficulty];
   const initialSub = initialSubsystems(difficulty);
   const initialCrw = initialCrew(difficulty);
 
+  // If a scenario is provided, apply its initial conditions & subsystem overrides
+  if (scenario?.initialConditions) {
+    const initCond = scenario.initialConditions;
+    if (initCond.startingSubsystems) {
+      if (initCond.startingSubsystems.powerGrid) {
+        initialSub.powerGrid.health = initCond.startingSubsystems.powerGrid.health;
+        initialSub.powerGrid.wearAccumulated = initCond.startingSubsystems.powerGrid.wearAccumulated;
+        initialSub.powerGrid.statusMessage = initCond.startingSubsystems.powerGrid.statusMessage;
+      }
+      if (initCond.startingSubsystems.lifeSupport) {
+        initialSub.lifeSupport.health = initCond.startingSubsystems.lifeSupport.health;
+        initialSub.lifeSupport.wearAccumulated = initCond.startingSubsystems.lifeSupport.wearAccumulated;
+        initialSub.lifeSupport.statusMessage = initCond.startingSubsystems.lifeSupport.statusMessage;
+      }
+      if (initCond.startingSubsystems.radiationShielding) {
+        initialSub.radiationShielding.health = initCond.startingSubsystems.radiationShielding.health;
+        initialSub.radiationShielding.wearAccumulated = initCond.startingSubsystems.radiationShielding.wearAccumulated;
+        initialSub.radiationShielding.statusMessage = initCond.startingSubsystems.radiationShielding.statusMessage;
+      }
+      if (initCond.startingSubsystems.foodProduction) {
+        initialSub.foodProduction.health = initCond.startingSubsystems.foodProduction.health;
+        initialSub.foodProduction.wearAccumulated = initCond.startingSubsystems.foodProduction.wearAccumulated;
+        initialSub.foodProduction.statusMessage = initCond.startingSubsystems.foodProduction.statusMessage;
+      }
+    }
+    if (initCond.startingCrewMorale !== undefined) {
+      initialCrw.morale = initCond.startingCrewMorale;
+      if (initialCrw.members) {
+        initialCrw.members = initialCrw.members.map((m) => ({
+          ...m,
+          morale: initCond.startingCrewMorale!,
+        }));
+      }
+    }
+    if (initCond.startingFoodDays !== undefined) {
+      initialCrw.foodReserveDays = initCond.startingFoodDays;
+      initialCrw.crewCaloricReserveDays = initCond.startingFoodDays;
+    }
+    if (initCond.startingOxygenBufferPercent !== undefined) {
+      initialCrw.oxygenBufferPercent = initCond.startingOxygenBufferPercent;
+    }
+  }
+
+  const effectiveInitialBudget = getEffectivePowerBudget(
+    environment,
+    1,
+    0,
+    difficulty,
+    seed,
+    scenario
+  );
+
   const initialCadetHints =
     config.enableAutomatedHints
       ? generateCadetAutomatedHints(
           initialSub,
           initialCrw,
-          getDefaultAllocation(environment.basePowerBudgetMW, difficulty),
-          environment.basePowerBudgetMW,
+          getDefaultAllocation(effectiveInitialBudget, difficulty),
+          effectiveInitialBudget,
           1
         )
       : undefined;
@@ -793,6 +920,7 @@ export function createInitialGameState(
     cumulativeThermalFatigueWear: 0,
     micrometeoroidHistory: [],
     cadetHints: initialCadetHints,
+    scenario,
   };
 }
 
@@ -800,18 +928,29 @@ export function applyIncidentChoice(
   state: GameState,
   incident: IncidentCard,
   choice: IncidentChoice,
-  assignedSpecialist?: SpecialistRepairOption
+  assignedSpecialist?: SpecialistRepairOption,
+  interventionResult?: FlightDirectorInterventionResult
 ): GameState {
   const { effects } = choice;
   const specialistEffects = assignedSpecialist?.effects;
 
-  // Combine directive and specialist effects for subsystems
+  // Combine directive, specialist, and 15-second flight director intervention effects
+  const interventionGridDelta = interventionResult?.gridHealthBonus ?? 0;
+  const interventionLifeSupportDelta = interventionResult?.lifeSupportDelta ?? 0;
+  const interventionShieldingDelta = interventionResult?.shieldEfficiencyBonus ?? 0;
+
   const powerGridDelta =
-    (effects.powerGridHealthDelta ?? 0) + (specialistEffects?.powerGridHealthDelta ?? 0);
+    (effects.powerGridHealthDelta ?? 0) +
+    (specialistEffects?.powerGridHealthDelta ?? 0) +
+    interventionGridDelta;
   const lifeSupportDelta =
-    (effects.lifeSupportHealthDelta ?? 0) + (specialistEffects?.lifeSupportHealthDelta ?? 0);
+    (effects.lifeSupportHealthDelta ?? 0) +
+    (specialistEffects?.lifeSupportHealthDelta ?? 0) +
+    interventionLifeSupportDelta;
   const shieldingDelta =
-    (effects.shieldingHealthDelta ?? 0) + (specialistEffects?.shieldingHealthDelta ?? 0);
+    (effects.shieldingHealthDelta ?? 0) +
+    (specialistEffects?.shieldingHealthDelta ?? 0) +
+    interventionShieldingDelta;
   const foodProductionDelta =
     ((effects as { foodProductionHealthDelta?: number }).foodProductionHealthDelta ?? 0) +
     ((specialistEffects as { foodProductionHealthDelta?: number } | undefined)?.foodProductionHealthDelta ?? 0);
@@ -918,8 +1057,23 @@ export function applyIncidentChoice(
     }
   }
 
+  // Radiation calculation modified by flight director intervention:
+  // - Optimal deflection (+20% shield) achieves 0 radiation leak
+  // - Failed intervention or missed angle allows residual leak through
+  let baseRadiationDelta = effects.radiationDeltaMSv ?? 0;
+  if (interventionResult) {
+    if (
+      interventionResult.status === "success" &&
+      interventionResult.interventionType === "magnetic_shield"
+    ) {
+      baseRadiationDelta = 0; // Optimal Deflection: zero radiation leak!
+    } else if (interventionResult.radiationLeakMSv !== undefined) {
+      baseRadiationDelta += interventionResult.radiationLeakMSv;
+    }
+  }
+
   const radDelta =
-    (effects.radiationDeltaMSv ?? 0) +
+    baseRadiationDelta +
     (specialistEffects?.radiationDeltaMSv ? specialistEffects.radiationDeltaMSv * 0.25 : 0);
   const newMissionRadiation = Math.max(
     0,
@@ -930,12 +1084,23 @@ export function applyIncidentChoice(
     Math.round((state.crew.careerRadiationExposureMSv + radDelta * 3) * 10) / 10
   );
 
+  const interventionMoraleBonus =
+    interventionResult?.status === "success" ? 4 : interventionResult?.status === "failure" ? -4 : 0;
   const avgTeamMorale =
     updatedMembers.length > 0
-      ? Math.round(updatedMembers.reduce((sum, m) => sum + m.morale, 0) / updatedMembers.length)
-      : clamp(state.crew.morale + (effects.moraleDelta ?? 0), 0, 100);
+      ? clamp(
+          Math.round(
+            updatedMembers.reduce((sum, m) => sum + m.morale, 0) / updatedMembers.length
+          ) + interventionMoraleBonus,
+          0,
+          100
+        )
+      : clamp(state.crew.morale + (effects.moraleDelta ?? 0) + interventionMoraleBonus, 0, 100);
 
-  const foodDelta = (effects.foodDaysDelta ?? 0) + (specialistEffects?.foodDaysDelta ?? 0);
+  const foodDelta =
+    (effects.foodDaysDelta ?? 0) +
+    (specialistEffects?.foodDaysDelta ?? 0) +
+    (interventionResult?.foodDaysDelta ?? 0);
   const o2Delta = (effects.oxygenBufferDelta ?? 0) + (specialistEffects?.oxygenBufferDelta ?? 0);
   const updatedFood = clamp(
     Math.round((state.crew.foodReserveDays + foodDelta) * 10) / 10,
@@ -982,15 +1147,24 @@ export function applyIncidentChoice(
     specialistRiskRewardSummary: assignedSpecialist
       ? `${assignedSpecialist.rewardDescription} | Risk: ${assignedSpecialist.riskDescription}`
       : undefined,
+    interventionResult: interventionResult,
   };
 
   const newModifiers = [...(state.activeModifiers || [])];
-  const totalPowerDelta = (effects.powerDeltaMW ?? 0) + (specialistEffects?.powerDeltaMW ?? 0);
+  const interventionPowerDeltaMW = interventionResult?.powerDeltaMW ?? 0;
+  const totalPowerDelta =
+    (effects.powerDeltaMW ?? 0) +
+    (specialistEffects?.powerDeltaMW ?? 0) +
+    interventionPowerDeltaMW;
   if (totalPowerDelta !== 0) {
     newModifiers.push({
       id: `${incident.id}_power`,
       name: `${incident.title}: ${choice.shortTag}${
         assignedSpecialist ? ` (+ ${assignedSpecialist.actionTitle})` : ""
+      }${
+        interventionResult
+          ? ` [Intervention: ${interventionResult.status.toUpperCase()}]`
+          : ""
       }`,
       powerDeltaMW: totalPowerDelta,
       turnsRemaining: 1, // impacts this sol
@@ -1000,7 +1174,8 @@ export function applyIncidentChoice(
   const bonus =
     (state.permanentWaterO2Bonus || 0) +
     (effects.permanentWaterO2Bonus || 0) +
-    (specialistEffects?.permanentWaterO2Bonus || 0);
+    (specialistEffects?.permanentWaterO2Bonus || 0) +
+    (interventionResult?.permanentWaterO2Bonus ?? 0);
 
   return {
     ...state,
@@ -1064,17 +1239,53 @@ export function getEffectivePowerBudget(
   turn: number,
   additionalModifierMW = 0,
   difficulty: DifficultyTier = "commander",
-  missionSeed?: string
+  missionSeed?: string,
+  scenario?: HistoricScenario
 ): number {
   const config = DIFFICULTY_PRESETS[difficulty];
-  const baseEvent = environment.turnEvents[turn - 1];
+  const baseEvent = scenario?.turnEvents ? scenario.turnEvents[turn - 1] : environment.turnEvents[turn - 1];
   const event =
     missionSeed && baseEvent
-      ? getSeededTurnEvent(baseEvent, missionSeed, environment.id, turn)
+      ? getSeededTurnEvent(baseEvent, missionSeed, scenario ? scenario.id : environment.id, turn)
       : baseEvent;
-  const rtgFloor = environment.basePowerBudgetMW * config.rtgReserveFraction;
   const eventDelta = event ? event.powerDeltaMW : 0;
 
+  // Seeded baseline power / solar flux variance
+  let seededFluxVarianceMW = 0;
+  if (missionSeed) {
+    const rng = createSeededRNG(`${missionSeed}_flux_${scenario ? scenario.id : environment.id}_sol${turn}`);
+    seededFluxVarianceMW = Math.round((rng.next() - 0.5) * 6);
+  }
+
+  // Handle Scenario Specific Power Mechanics
+  if (scenario) {
+    const fixedDelta = baseEvent ? baseEvent.powerDeltaMW : 0;
+    if (scenario.id === "artemis_iii_lunar_night") {
+      // Constraint: 0 MW Solar Power for 7 consecutive Sols.
+      // Survival challenge: Ration a fixed 35 MW Kilopower nuclear backup generator.
+      const kilopowerBaseload = 35;
+      const effective = Math.max(25, kilopowerBaseload + fixedDelta + additionalModifierMW);
+      return Math.round(effective);
+    }
+
+    if (scenario.id === "opportunity_dust_storm") {
+      // Constraint: Atmospheric opacity tau jumps to 10.8 (98% sunlight blackout).
+      // Survival challenge: Emergency low-power triage (slashed down to ~22 MW).
+      const marsBase = 60;
+      const effective = Math.max(20, marsBase + fixedDelta + additionalModifierMW);
+      return Math.round(effective);
+    }
+
+    if (scenario.id === "apollo_13_cold_cabin") {
+      // Constraint: Battery bank ruptured (Max power capped at 45 MW total).
+      // Survival challenge: Turn off habitat heating and shields to prioritize communications and life support.
+      const basePower = 45;
+      const effective = Math.min(45, Math.max(20, basePower + fixedDelta + additionalModifierMW));
+      return Math.round(effective);
+    }
+  }
+
+  const rtgFloor = environment.basePowerBudgetMW * config.rtgReserveFraction;
   let baseGeneration = 0;
   if (environment.id === "europa_under_ice") {
     // Under-ice environment: Zero solar flux!
@@ -1089,13 +1300,6 @@ export function getEffectivePowerBudget(
     baseGeneration = environment.basePowerBudgetMW * environment.baselineSolarEfficiency;
   }
 
-  // Seeded baseline power / solar flux variance
-  let seededFluxVarianceMW = 0;
-  if (missionSeed) {
-    const rng = createSeededRNG(`${missionSeed}_flux_${environment.id}_sol${turn}`);
-    seededFluxVarianceMW = Math.round((rng.next() - 0.5) * 6);
-  }
-
   const effective = Math.max(
     rtgFloor,
     baseGeneration + eventDelta + additionalModifierMW + seededFluxVarianceMW
@@ -1108,12 +1312,12 @@ export function processTurn(
   allocation: PowerAllocation
 ): { nextState: GameState; result: TurnResult } {
   const turn = gameState.currentTurn + 1;
-  const { environment, difficulty } = gameState;
+  const { environment, difficulty, scenario } = gameState;
   const config = DIFFICULTY_PRESETS[difficulty];
-  const baseEvent = environment.turnEvents[turn - 1];
+  const baseEvent = scenario?.turnEvents ? scenario.turnEvents[turn - 1] : environment.turnEvents[turn - 1];
   const event =
     gameState.missionSeed && baseEvent
-      ? getSeededTurnEvent(baseEvent, gameState.missionSeed, environment.id, turn)
+      ? getSeededTurnEvent(baseEvent, gameState.missionSeed, scenario ? scenario.id : environment.id, turn)
       : baseEvent;
 
   // 1. HARDCORE MECHANIC: Random Micro-Meteoroid Puncture Check
@@ -1137,7 +1341,8 @@ export function processTurn(
     turn,
     modifierPowerDelta,
     difficulty,
-    gameState.missionSeed
+    gameState.missionSeed,
+    scenario
   );
 
   // Clamp allocation so it never exceeds the budget (simulate brownout proportionally)
@@ -1433,7 +1638,8 @@ export function processTurn(
     effectiveBudgetMW,
     config,
     thermalReport,
-    microStrike ?? undefined
+    microStrike ?? undefined,
+    scenario
   );
 
   const score = computeMissionScore(nextSubsystems, nextCrew, config);
@@ -1495,7 +1701,8 @@ export function processTurn(
 export function getTradeOffHints(
   allocation: PowerAllocation,
   effectiveBudgetMW: number,
-  difficulty: DifficultyTier = "commander"
+  difficulty: DifficultyTier = "commander",
+  scenario?: HistoricScenario
 ): string[] {
   const hints: string[] = [];
   const config = DIFFICULTY_PRESETS[difficulty];
@@ -1504,6 +1711,29 @@ export function getTradeOffHints(
 
   if (total > effectiveBudgetMW) {
     hints.push(`You're trying to use ${total} MW but only ${effectiveBudgetMW} MW is available — system will auto-scale down.`);
+  }
+
+  // Scenario-specific tactical survival hints
+  if (scenario) {
+    if (scenario.id === "artemis_iii_lunar_night") {
+      if (allocation.radiationShielding < 10) {
+        hints.push("🌑 Artemis Lunar Night: Maintain at least 10 MW to Thermal Shielding to stop the habitat from freezing at −173°C!");
+      }
+      if (allocation.lifeSupport < 12) {
+        hints.push("🌑 Artemis Lunar Night: Maintain at least 12 MW to Life Support or O₂ scrubbers will lose scrubbing capacity in the cold!");
+      }
+    } else if (scenario.id === "opportunity_dust_storm") {
+      if (allocation.foodProduction < 10) {
+        hints.push("🔴 Opportunity Dust Storm: Food Production needs ≥10 MW to prevent crop thermal shock under 98% sunlight blackout, or prepare crew for ration hibernation!");
+      }
+    } else if (scenario.id === "apollo_13_cold_cabin") {
+      if (allocation.radiationShielding > 6) {
+        hints.push("🚀 Apollo 13 Protocol: Thermal heating should be cut (<6 MW) to divert limited 45 MW power to Life Support scrubbers!");
+      }
+      if (allocation.lifeSupport < 16) {
+        hints.push("🚀 Apollo 13 Protocol: Prioritize ≥16 MW to Life Support so jury-rigged LiOH scrubbers keep CO₂ below toxic levels!");
+      }
+    }
   }
 
   if (allocation.lifeSupport < baselines.lifeSupport - 4) {

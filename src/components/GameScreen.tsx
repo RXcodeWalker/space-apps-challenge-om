@@ -52,6 +52,7 @@ import { useTranslation } from "../i18n/LanguageContext";
 import { soundEffects, useSoundMuted } from "../utils/soundEffects";
 import { ambientAudio } from "../utils/ambientAudio";
 import type { SpecialistRepairOption } from "../data/crewData";
+import type { HistoricScenario } from "../data/scenarioData";
 
 import type { MissionEnvironment } from "../data/nasaConstants";
 import { TOTAL_TURNS } from "../data/nasaConstants";
@@ -76,6 +77,7 @@ interface GameScreenProps {
   environment: MissionEnvironment;
   difficulty?: DifficultyTier;
   missionSeed?: string;
+  scenario?: HistoricScenario;
   onMissionEnd: (finalState: GameState) => void;
   onShowNasaData: () => void;
   onSwitchPlanet?: () => void;
@@ -85,13 +87,14 @@ export default function GameScreen({
   environment,
   difficulty = "commander",
   missionSeed,
+  scenario,
   onMissionEnd,
   onShowNasaData,
   onSwitchPlanet,
 }: GameScreenProps) {
   const { t } = useTranslation();
   const [gameState, setGameState] = useState<GameState>(() =>
-    createInitialGameState(environment, difficulty, missionSeed)
+    createInitialGameState(environment, difficulty, missionSeed, scenario)
   );
   const [phase, setPhase] = useState<"allocate" | "result">("allocate");
   const [lastResult, setLastResult] = useState<
@@ -131,9 +134,13 @@ export default function GameScreen({
     currentTurn,
     modifierPowerDelta,
     gameState.difficulty,
-    gameState.missionSeed
+    gameState.missionSeed,
+    gameState.scenario
   );
-  const currentEvent = environment.turnEvents[currentTurn - 1];
+  const currentEvent =
+    gameState.scenario?.turnEvents
+      ? gameState.scenario.turnEvents[currentTurn - 1]
+      : environment.turnEvents[currentTurn - 1];
 
   const [allocation, setAllocation] = useState<PowerAllocation>(() =>
     getDefaultAllocation(effectiveBudget, gameState.difficulty)
@@ -209,11 +216,12 @@ export default function GameScreen({
         gameState.currentTurn + 1,
         modPower,
         gameState.difficulty,
-        gameState.missionSeed
+        gameState.missionSeed,
+        gameState.scenario
       );
       setAllocation(getDefaultAllocation(budget, gameState.difficulty));
     }
-  }, [gameState.currentTurn, phase, environment, gameState.activeModifiers, gameState.difficulty, gameState.missionSeed]);
+  }, [gameState.currentTurn, phase, environment, gameState.activeModifiers, gameState.difficulty, gameState.missionSeed, gameState.scenario]);
 
   const handleAllocationChange = useCallback((next: PowerAllocation) => {
     setAllocation(next);
@@ -245,7 +253,8 @@ export default function GameScreen({
         currentTurn,
         modPower,
         updatedState.difficulty,
-        updatedState.missionSeed
+        updatedState.missionSeed,
+        updatedState.scenario
       );
       setAllocation(getDefaultAllocation(newBudget, updatedState.difficulty));
     },
@@ -284,16 +293,28 @@ export default function GameScreen({
 
   // One-Click Play Again Handler
   const handlePlayAgain = useCallback(() => {
-    const freshState = createInitialGameState(environment, gameState.difficulty, gameState.missionSeed);
+    const freshState = createInitialGameState(
+      environment,
+      gameState.difficulty,
+      gameState.missionSeed,
+      gameState.scenario
+    );
     setGameState(freshState);
     setPhase("allocate");
     setLastResult(null);
     setActiveIncident(null);
     setDismissedIncidents({});
     setShowDebriefModal(false);
-    const initialBudget = getEffectivePowerBudget(environment, 1, 0, gameState.difficulty, gameState.missionSeed);
+    const initialBudget = getEffectivePowerBudget(
+      environment,
+      1,
+      0,
+      gameState.difficulty,
+      gameState.missionSeed,
+      gameState.scenario
+    );
     setAllocation(getDefaultAllocation(initialBudget, gameState.difficulty));
-  }, [environment, gameState.difficulty, gameState.missionSeed]);
+  }, [environment, gameState.difficulty, gameState.missionSeed, gameState.scenario]);
 
   // Switch Planet Handler
   const handleSwitchPlanetAction = useCallback(() => {
@@ -486,13 +507,12 @@ export default function GameScreen({
                 <motion.div
                   initial={{ opacity: 0, y: -6 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className={`p-3.5 sm:p-4 rounded-2xl border-2 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-xl ${
-                    allocation.lifeSupport < 28 ||
+                  className={`p-3.5 sm:p-4 rounded-2xl border-2 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-xl ${allocation.lifeSupport < 28 ||
                     gameState.crew.oxygenBufferPercent < 70 ||
                     gameState.subsystems.lifeSupport.health < 70
-                      ? "bg-emerald-950/80 border-emerald-400/70 text-emerald-100 shadow-emerald-950/50 ring-2 ring-emerald-500/30"
-                      : "bg-slate-900/80 border-slate-800 text-slate-300"
-                  }`}
+                    ? "bg-emerald-950/80 border-emerald-400/70 text-emerald-100 shadow-emerald-950/50 ring-2 ring-emerald-500/30"
+                    : "bg-slate-900/80 border-slate-800 text-slate-300"
+                    }`}
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-400/40 flex items-center justify-center text-xl shrink-0">
@@ -575,11 +595,10 @@ export default function GameScreen({
                       </div>
                       <p className="text-xs font-semibold text-white truncate mt-0.5">
                         {gameState.micrometeoroidHistory.length > 0
-                          ? `Last: ${
-                              gameState.micrometeoroidHistory[
-                                gameState.micrometeoroidHistory.length - 1
-                              ].telemetryHeadline
-                            }`
+                          ? `Last: ${gameState.micrometeoroidHistory[
+                            gameState.micrometeoroidHistory.length - 1
+                          ].telemetryHeadline
+                          }`
                           : "Hypervelocity Bumper: Active (32% Sol Hazard)"}
                       </p>
                     </div>
@@ -597,10 +616,10 @@ export default function GameScreen({
                           {environment.id === "lunar_south_pole"
                             ? "227°C"
                             : environment.id === "europa_under_ice"
-                            ? "160°C"
-                            : environment.id === "titan_hydrocarbon"
-                            ? "200°C"
-                            : "100°C"})
+                              ? "160°C"
+                              : environment.id === "titan_hydrocarbon"
+                                ? "200°C"
+                                : "100°C"})
                         </span>
                         <span className="text-[10px] font-mono text-slate-400">
                           +{((gameState.cumulativeThermalFatigueWear || 0) * 100).toFixed(1)}% Wear
@@ -630,9 +649,68 @@ export default function GameScreen({
                         {gameState.crew.careerRadiationExposureMSv > 500
                           ? "CRITICAL: Grounding Limit Exceeded"
                           : gameState.crew.careerRadiationExposureMSv > 400
-                          ? "Warning: Approaching 3% REID Cap"
-                          : "Status: NCRP Compliant (<500 mSv)"}
+                            ? "Warning: Approaching 3% REID Cap"
+                            : "Status: NCRP Compliant (<500 mSv)"}
                       </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Historic Scenario Alert & Telemetry Banner */}
+              {gameState.scenario && (
+                <div
+                  className="rounded-2xl p-4 sm:p-4.5 border-2 shadow-xl backdrop-blur-md relative overflow-hidden"
+                  style={{
+                    backgroundColor: "rgba(11, 17, 32, 0.95)",
+                    borderColor: `${gameState.scenario.accentColor}70`,
+                    boxShadow: `0 0 25px ${gameState.scenario.glowColor}`,
+                  }}
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-start gap-3">
+                      <span className="text-3xl shrink-0 drop-shadow">
+                        {gameState.scenario.emoji}
+                      </span>
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span
+                            className="text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
+                            style={{
+                              backgroundColor: `${gameState.scenario.accentColor}25`,
+                              color: gameState.scenario.accentColor,
+                              border: `1px solid ${gameState.scenario.accentColor}50`,
+                            }}
+                          >
+                            {gameState.scenario.badge}
+                          </span>
+                          <span className="text-[10px] font-mono font-bold text-amber-300 px-2 py-0.5 rounded bg-amber-950/60 border border-amber-500/40">
+                            {gameState.scenario.difficultyBadge}
+                          </span>
+                          <span className="text-xs font-mono text-slate-400">
+                            {gameState.scenario.location} · {gameState.scenario.yearOrEra}
+                          </span>
+                        </div>
+                        <h2 className="text-base sm:text-lg font-black text-white mt-1">
+                          {gameState.scenario.title}
+                        </h2>
+                        <p className="text-xs text-slate-300 font-medium mt-0.5 leading-relaxed">
+                          <strong className="text-cyan-300">Survival Challenge:</strong>{" "}
+                          {gameState.scenario.survivalChallenge}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="shrink-0 flex items-center sm:self-center">
+                      <span
+                        className="text-[11px] font-mono font-bold px-3 py-1.5 rounded-xl border text-center shadow-inner"
+                        style={{
+                          backgroundColor: `${gameState.scenario.accentColor}15`,
+                          color: gameState.scenario.accentColor,
+                          borderColor: `${gameState.scenario.accentColor}40`,
+                        }}
+                      >
+                        {gameState.scenario.initialConditions.statusBadge}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -642,6 +720,7 @@ export default function GameScreen({
                 environment={environment}
                 difficulty={gameState.difficulty}
                 missionSeed={gameState.missionSeed}
+                scenario={gameState.scenario}
                 currentTurn={currentTurn}
                 totalTurns={TOTAL_TURNS}
                 effectiveBudgetMW={effectiveBudget}
@@ -683,7 +762,7 @@ export default function GameScreen({
               className="flex flex-col gap-4"
             >
               {/* Header Telemetry Bar (accessible NASA Data anytime) */}
-              <div className="flex items-center justify-between p-3 rounded-2xl bg-[#090E1A] border border-cyan-900/40 shadow-lg">
+              <div className="flex items-center justify-between p-3 rounded-2xl bg-[#090E1A] border border-cyan-900/40 shadow-lg relative z-30">
                 <div className="flex items-center gap-3">
                   <span className="text-xs font-mono font-bold tracking-wider text-[#06B6D4] uppercase">
                     {t("game.solIndicator", { current: lastResult.turn, total: TOTAL_TURNS })}
@@ -703,8 +782,8 @@ export default function GameScreen({
                     {environment.id === "lunar_south_pole"
                       ? t("destinations.moon.name")
                       : environment.id === "mars_gale_crater"
-                      ? t("destinations.mars.name")
-                      : environment.name}
+                        ? t("destinations.mars.name")
+                        : environment.name}
                   </span>
                   {gameState.missionSeed && (
                     <span
@@ -724,11 +803,10 @@ export default function GameScreen({
                   <button
                     type="button"
                     onClick={toggleMute}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold font-mono transition-colors ${
-                      isMuted
-                        ? "bg-rose-950/40 border-rose-600/40 text-rose-300 hover:bg-rose-900/40"
-                        : "bg-slate-900 hover:bg-slate-800 border-slate-700 text-slate-300 hover:text-cyan-300"
-                    }`}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold font-mono transition-colors ${isMuted
+                      ? "bg-rose-950/40 border-rose-600/40 text-rose-300 hover:bg-rose-900/40"
+                      : "bg-slate-900 hover:bg-slate-800 border-slate-700 text-slate-300 hover:text-cyan-300"
+                      }`}
                     title={isMuted ? "Audio Muted (Click to Unmute)" : "Audio Active (Click to Mute)"}
                   >
                     {isMuted ? (

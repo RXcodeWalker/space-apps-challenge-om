@@ -282,6 +282,67 @@ class SoundEffectsManager {
   }
 
   /**
+   * 5. Subtle aerospace radio transmission squelch
+   * Synthesizes a NASA Quindar-style comms burst and bandpassed static click
+   */
+  public playRadioSquelch(): void {
+    if (this.isMuted) return;
+
+    const ctx = this.getContext();
+    if (!ctx) return;
+
+    try {
+      const t = ctx.currentTime;
+
+      // 1. Brief Apollo Quindar intro chirp (2475 Hz pure sine beep, very short)
+      const osc = ctx.createOscillator();
+      const oscGain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(2475, t);
+      oscGain.gain.setValueAtTime(0.025 * this.sfxVolume, t);
+      oscGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.04);
+
+      osc.connect(oscGain);
+      oscGain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.045);
+
+      // 2. Filtered radio static burst (squelch break)
+      const sampleRate = ctx.sampleRate;
+      const duration = 0.065;
+      const bufferSize = Math.floor(sampleRate * duration);
+      const buffer = ctx.createBuffer(1, bufferSize, sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        // Pink-weighted random noise with rapid exponential envelope
+        const env = Math.exp(-i / (bufferSize * 0.35));
+        data[i] = (Math.random() * 2 - 1) * env;
+      }
+
+      const noise = ctx.createBufferSource();
+      noise.buffer = buffer;
+
+      const filter = ctx.createBiquadFilter();
+      filter.type = "bandpass";
+      filter.frequency.setValueAtTime(1900, t);
+      filter.Q.setValueAtTime(2.2, t);
+
+      const noiseGain = ctx.createGain();
+      noiseGain.gain.setValueAtTime(0.045 * this.sfxVolume, t);
+      noiseGain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+
+      noise.connect(filter);
+      filter.connect(noiseGain);
+      noiseGain.connect(ctx.destination);
+
+      noise.start(t);
+      noise.stop(t + duration);
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  /**
    * General button interaction beep
    */
   public playButtonClick(): void {
@@ -309,6 +370,191 @@ class SoundEffectsManager {
     } catch {
       // Graceful fallback
     }
+  }
+
+  /**
+   * 6. Fast-paced 15-second countdown clock ticking
+   * Synthesizes an authentic aerospace Mission Control chronograph tick.
+   * Accelerates and sharpens pitch when under 4 seconds.
+   */
+  public playCountdownTick(isUrgent: boolean = false): void {
+    if (this.isMuted) return;
+
+    const ctx = this.getContext();
+    if (!ctx) return;
+
+    try {
+      const t = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      if (isUrgent) {
+        // Urgent higher-frequency dual-pop chirp
+        osc.type = "sawtooth";
+        osc.frequency.setValueAtTime(1480, t);
+        osc.frequency.exponentialRampToValueAtTime(800, t + 0.035);
+
+        // Lowpass to prevent harsh distortion
+        const filter = ctx.createBiquadFilter();
+        filter.type = "lowpass";
+        filter.frequency.setValueAtTime(2800, t);
+
+        gain.gain.setValueAtTime(0.08 * this.sfxVolume, t);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.038);
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(t);
+        osc.stop(t + 0.04);
+      } else {
+        // Crisp, subtle aerospace chronograph tick
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(960, t);
+        osc.frequency.exponentialRampToValueAtTime(420, t + 0.025);
+
+        gain.gain.setValueAtTime(0.05 * this.sfxVolume, t);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.028);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(t);
+        osc.stop(t + 0.03);
+      }
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  /**
+   * 7. Micro-puzzle triage victory chime
+   * Plays an uplifting, crisp ascending 4-note cadence
+   */
+  public playPuzzleSuccess(): void {
+    if (this.isMuted) return;
+
+    const ctx = this.getContext();
+    if (!ctx) return;
+
+    try {
+      const notes = [
+        { freq: 523.25, start: 0.0, dur: 0.18, vol: 0.11 }, // C5
+        { freq: 659.25, start: 0.07, dur: 0.22, vol: 0.13 }, // E5
+        { freq: 783.99, start: 0.14, dur: 0.28, vol: 0.14 }, // G5
+        { freq: 1046.5, start: 0.22, dur: 0.45, vol: 0.16 }, // C6
+      ];
+
+      notes.forEach(({ freq, start, dur, vol }) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const startTime = ctx.currentTime + start;
+        const endTime = startTime + dur;
+
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(freq, startTime);
+
+        gain.gain.setValueAtTime(0.0001, startTime);
+        gain.gain.linearRampToValueAtTime(vol * this.sfxVolume, startTime + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, endTime);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(startTime);
+        osc.stop(endTime);
+      });
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  /**
+   * 8. Micro-puzzle triage failure / buzzer tone
+   * Deep warning double-buzz denoting triage breach / timeout
+   */
+  public playPuzzleFail(): void {
+    if (this.isMuted) return;
+
+    const ctx = this.getContext();
+    if (!ctx) return;
+
+    try {
+      const tones = [
+        { freq: 240, start: 0.0, dur: 0.12 },
+        { freq: 175, start: 0.14, dur: 0.18 },
+      ];
+
+      tones.forEach(({ freq, start, dur }) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const filter = ctx.createBiquadFilter();
+
+        osc.type = "sawtooth";
+        osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
+
+        filter.type = "lowpass";
+        filter.frequency.setValueAtTime(600, ctx.currentTime + start);
+
+        gain.gain.setValueAtTime(0.07 * this.sfxVolume, ctx.currentTime + start);
+        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + start + dur);
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(ctx.currentTime + start);
+        osc.stop(ctx.currentTime + start + dur);
+      });
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  /**
+   * 9. Heavy mechanical circuit breaker toggle sound
+   */
+  public playSwitchToggle(on: boolean = true): void {
+    if (this.isMuted) return;
+
+    const ctx = this.getContext();
+    if (!ctx) return;
+
+    try {
+      const t = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = "square";
+      const startFreq = on ? 480 : 340;
+      const endFreq = on ? 820 : 180;
+      osc.frequency.setValueAtTime(startFreq, t);
+      osc.frequency.exponentialRampToValueAtTime(endFreq, t + 0.03);
+
+      const filter = ctx.createBiquadFilter();
+      filter.type = "lowpass";
+      filter.frequency.setValueAtTime(1600, t);
+
+      gain.gain.setValueAtTime(0.08 * this.sfxVolume, t);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.035);
+
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(t);
+      osc.stop(t + 0.04);
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  /**
+   * 10. Subtle dial rotation tactile feedback
+   */
+  public playDialTick(pitchOffset: number = 0): void {
+    this.playSliderClick(pitchOffset);
   }
 }
 

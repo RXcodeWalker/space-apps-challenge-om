@@ -19,6 +19,8 @@ import {
   Shield,
 } from "lucide-react";
 import type { IncidentCard, IncidentChoice } from "../data/incidentCards";
+import type { FlightDirectorInterventionResult } from "../types/intervention";
+import FlightDirectorIntervention from "./interventions/FlightDirectorIntervention";
 import {
   type CrewRoleId,
   type CrewMember,
@@ -31,7 +33,11 @@ interface IncidentModalProps {
   incident: IncidentCard;
   isOpen: boolean;
   crewMembers?: CrewMember[];
-  onSelectChoice: (choice: IncidentChoice, specialistRepair?: SpecialistRepairOption) => void;
+  onSelectChoice: (
+    choice: IncidentChoice,
+    specialistRepair?: SpecialistRepairOption,
+    interventionResult?: FlightDirectorInterventionResult
+  ) => void;
 }
 
 export default function IncidentModal({
@@ -47,11 +53,16 @@ export default function IncidentModal({
   // Crew Specialist Assignment State: "none" or one of the 4 roles
   const [selectedSpecialistRole, setSelectedSpecialistRole] = useState<CrewRoleId | "none">("none");
 
+  // 15-Second Flight Director Tactical Intervention State
+  const [interventionResult, setInterventionResult] =
+    useState<FlightDirectorInterventionResult | null>(null);
+
   useEffect(() => {
     if (isOpen) {
       soundEffects.playIncidentAlert();
       setSelectedSpecialistRole("none");
       setSelectedChoiceId(incident.choices[0]?.id || "");
+      setInterventionResult(null);
     }
   }, [isOpen, incident]);
 
@@ -196,6 +207,13 @@ export default function IncidentModal({
                 {incident.nasaScience.explanation}
               </p>
             </div>
+
+            {/* FAST-PACED 15-SECOND FLIGHT DIRECTOR TACTICAL INTERVENTION */}
+            <FlightDirectorIntervention
+              incident={incident}
+              onInterventionComplete={(res) => setInterventionResult(res)}
+              activeResult={interventionResult}
+            />
 
             {/* SECTION 1: PRIMARY COMMANDER DIRECTIVE */}
             <div>
@@ -504,13 +522,35 @@ export default function IncidentModal({
 
           {/* Modal Footer */}
           <div className="p-4 sm:p-5 border-t border-white/10 bg-slate-950/90 flex flex-col sm:flex-row items-center justify-between gap-3">
-            <div className="text-xs text-slate-400 font-mono flex items-center gap-2">
-              <Info className="w-4 h-4 text-cyan-400 shrink-0" />
-              <span>
-                {activeSpecialistRepair
-                  ? `Deploying ${activeCrewMember?.name || "Astronaut"} to emergency repair.`
-                  : "Automated systems protocol selected. No crew assigned to risk."}
-              </span>
+            <div className="text-xs text-slate-400 font-mono flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+              <div className="flex items-center gap-1.5">
+                <Info className="w-4 h-4 text-cyan-400 shrink-0" />
+                <span>
+                  {activeSpecialistRepair
+                    ? `Deploying ${activeCrewMember?.name || "Astronaut"} to emergency repair.`
+                    : "Automated systems protocol selected. No crew assigned to risk."}
+                </span>
+              </div>
+              {interventionResult && (
+                <span
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1 w-fit ${
+                    interventionResult.status === "success"
+                      ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                      : interventionResult.status === "skipped"
+                      ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
+                      : "bg-red-500/20 text-red-300 border border-red-500/40"
+                  }`}
+                >
+                  <span>
+                    Intervention:{" "}
+                    {interventionResult.status === "success"
+                      ? "Optimal Deflection / Grid Balanced"
+                      : interventionResult.status === "skipped"
+                      ? "Auto-Resolved (Cadet Mode)"
+                      : "Breached"}
+                  </span>
+                </span>
+              )}
             </div>
 
             <motion.button
@@ -520,7 +560,11 @@ export default function IncidentModal({
               disabled={!selectedChoice}
               onClick={() => {
                 if (selectedChoice) {
-                  onSelectChoice(selectedChoice, activeSpecialistRepair);
+                  onSelectChoice(
+                    selectedChoice,
+                    activeSpecialistRepair,
+                    interventionResult || undefined
+                  );
                 }
               }}
               className={`w-full sm:w-auto px-6 py-3 rounded-xl font-black text-sm flex items-center justify-center gap-2 shadow-lg disabled:opacity-50 transition-all ${

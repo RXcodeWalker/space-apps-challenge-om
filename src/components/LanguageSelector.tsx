@@ -25,7 +25,7 @@ export default function LanguageSelector({
 
   // Close on outside click
   useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
+    function handleClickOutside(event: MouseEvent | TouchEvent) {
       if (
         containerRef.current &&
         !containerRef.current.contains(event.target as Node)
@@ -34,7 +34,11 @@ export default function LanguageSelector({
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("touchstart", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+    };
   }, []);
 
   // Close on Escape key
@@ -57,7 +61,10 @@ export default function LanguageSelector({
   }
 
   return (
-    <div ref={containerRef} className={`relative inline-block text-left ${className}`}>
+    <div
+      ref={containerRef}
+      className={`relative inline-block text-left ${isOpen ? "z-50" : "z-auto"} ${className}`}
+    >
       {/* Trigger Button */}
       <button
         type="button"

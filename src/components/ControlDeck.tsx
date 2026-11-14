@@ -7,7 +7,7 @@
 //  4. Live Consequence Preview with real-time color-coded deltas & arrows
 //  5. High-contrast "Commit & Advance Turn" button
 // ============================================================
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import {
   Shield,
@@ -30,9 +30,16 @@ import {
   ShieldAlert,
   Sliders,
   Search,
+  Radio,
 } from "lucide-react";
 import AmbientAudioModal from "./AmbientAudioModal";
 import CrewPanel from "./CrewPanel";
+import CrewCommsBubble from "./CrewCommsBubble";
+import {
+  evaluatePowerAdjustmentDialogue,
+  getSolAdvanceDialogue,
+  type CommsDialogue,
+} from "../data/crewDialogue";
 import { soundEffects, useSoundMuted } from "../utils/soundEffects";
 import type {
   SubsystemState,
@@ -54,6 +61,7 @@ import {
   DIFFICULTY_PRESETS,
   type DifficultyTier,
 } from "../data/difficultyTiers";
+import type { HistoricScenario } from "../data/scenarioData";
 import { useTranslation } from "../i18n/LanguageContext";
 import LanguageSelector from "./LanguageSelector";
 import PwaNavButton from "./PwaNavButton";
@@ -62,6 +70,7 @@ export interface ControlDeckProps {
   environment: MissionEnvironment;
   difficulty?: DifficultyTier;
   missionSeed?: string;
+  scenario?: HistoricScenario;
   currentTurn: number; // 1 to 10
   totalTurns?: number;
   effectiveBudgetMW: number;
@@ -83,6 +92,7 @@ export default function ControlDeck({
   environment,
   difficulty = "commander",
   missionSeed,
+  scenario,
   currentTurn,
   totalTurns = TOTAL_TURNS,
   effectiveBudgetMW,
@@ -103,6 +113,59 @@ export default function ControlDeck({
   const [isMuted, toggleMute] = useSoundMuted();
   const [isAudioModalOpen, setIsAudioModalOpen] = useState(false);
   const [isCrewModalOpen, setIsCrewModalOpen] = useState(false);
+
+  // Dynamic Crew Radio Dialogue State
+  const [activeDialogue, setActiveDialogue] = useState<CommsDialogue | null>(null);
+  const [lastAdjustedChannel, setLastAdjustedChannel] = useState<SubsystemId | undefined>(undefined);
+  const lastEvaluatedIdRef = useRef<string | null>(null);
+  const lastTurnRef = useRef<number>(-1);
+
+  // 1. Sol Advance Check-In Effect
+  useEffect(() => {
+    if (lastTurnRef.current !== currentTurn) {
+      lastTurnRef.current = currentTurn;
+      const solDialogue = getSolAdvanceDialogue(currentTurn, environment, currentEvent, crew);
+      setActiveDialogue(solDialogue);
+      lastEvaluatedIdRef.current = solDialogue.id;
+    }
+  }, [currentTurn, environment, currentEvent, crew]);
+
+  // 2. Reactive Power Adjustment Dialogue Effect
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const dialogue = evaluatePowerAdjustmentDialogue({
+        allocation,
+        lastAdjustedChannel,
+        subsystems,
+        crew,
+        currentTurn,
+        effectiveBudgetMW,
+        currentEvent,
+        environment,
+      });
+
+      if (dialogue) {
+        if (dialogue.id !== lastEvaluatedIdRef.current) {
+          lastEvaluatedIdRef.current = dialogue.id;
+          setActiveDialogue(dialogue);
+        }
+      } else {
+        lastEvaluatedIdRef.current = null;
+      }
+    }, 150);
+
+    return () => clearTimeout(timer);
+  }, [
+    allocation,
+    lastAdjustedChannel,
+    subsystems,
+    crew,
+    currentTurn,
+    effectiveBudgetMW,
+    currentEvent,
+    environment,
+  ]);
+
   const config = DIFFICULTY_PRESETS[difficulty];
   const baselines = config.baselinePowerDemands;
 
@@ -251,6 +314,7 @@ export default function ControlDeck({
     (channel: SubsystemId, newValue: number) => {
       const clamped = Math.max(0, Math.min(effectiveBudgetMW, Math.round(newValue)));
       soundEffects.playSliderClick(clamped);
+      setLastAdjustedChannel(channel);
       onAllocationChange({
         ...allocation,
         [channel]: clamped,
@@ -263,6 +327,7 @@ export default function ControlDeck({
     (channel: SubsystemId, delta: number) => {
       const current = allocation[channel];
       soundEffects.playSliderClick(current + delta);
+      setLastAdjustedChannel(channel);
       handleUpdate(channel, current + delta);
     },
     [allocation, handleUpdate]
@@ -274,12 +339,16 @@ export default function ControlDeck({
       soundEffects.playSliderClick(50);
       let target: PowerAllocation;
       if (type === "balanced") {
+        setLastAdjustedChannel("lifeSupport");
         target = { powerGrid: 25, lifeSupport: 25, radiationShielding: 25, foodProduction: 25 };
       } else if (type === "stormDefense") {
+        setLastAdjustedChannel("radiationShielding");
         target = { powerGrid: 15, lifeSupport: 20, radiationShielding: 55, foodProduction: 10 };
       } else if (type === "harvestPush") {
+        setLastAdjustedChannel("foodProduction");
         target = { powerGrid: 15, lifeSupport: 25, radiationShielding: 15, foodProduction: 45 };
       } else {
+        setLastAdjustedChannel("powerGrid");
         target = { powerGrid: 50, lifeSupport: 20, radiationShielding: 15, foodProduction: 15 };
       }
 
@@ -311,7 +380,7 @@ export default function ControlDeck({
       {/* 1. TOP TELEMETRY BAR */}
       <div
         data-tutorial="incident-alerts"
-        className="w-full rounded-2xl bg-[#0B1120] border border-cyan-900/40 p-3 sm:p-4 shadow-xl flex flex-wrap items-center justify-between gap-3"
+        className="w-full rounded-2xl bg-[#0B1120] border border-cyan-900/40 p-3 sm:p-4 shadow-xl flex flex-wrap items-center justify-between gap-3 relative z-30"
       >
         {/* Sol progress */}
         <div className="flex items-center gap-3">
@@ -334,13 +403,28 @@ export default function ControlDeck({
                 <span>{config.emoji}</span>
                 <span>{t(`difficulties.${difficulty}.title`)}</span>
               </span>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-semibold hidden sm:inline">
-                {environment.id === "lunar_south_pole"
-                  ? t("destinations.moon.name")
-                  : environment.id === "mars_gale_crater"
-                  ? t("destinations.mars.name")
-                  : environment.name}
-              </span>
+              {scenario ? (
+                <span
+                  className="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider font-mono flex items-center gap-1 border shadow-sm"
+                  style={{
+                    backgroundColor: `${scenario.accentColor}25`,
+                    color: scenario.accentColor,
+                    borderColor: `${scenario.accentColor}60`,
+                  }}
+                  title={`NASA Scenario: ${scenario.title} — ${scenario.survivalChallenge}`}
+                >
+                  <span>{scenario.emoji}</span>
+                  <span>{scenario.shortTitle}</span>
+                </span>
+              ) : (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-semibold hidden sm:inline">
+                  {environment.id === "lunar_south_pole"
+                    ? t("destinations.moon.name")
+                    : environment.id === "mars_gale_crater"
+                    ? t("destinations.mars.name")
+                    : environment.name}
+                </span>
+              )}
               {missionSeed && (
                 <span
                   className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-950/80 text-cyan-300 border border-cyan-700/50 font-mono font-bold"
@@ -510,6 +594,21 @@ export default function ControlDeck({
             </button>
           )}
 
+          {/* Crew Radio Comms Button */}
+          <button
+            type="button"
+            onClick={() => {
+              soundEffects.playButtonClick();
+              const checkin = getSolAdvanceDialogue(currentTurn, environment, currentEvent, crew);
+              setActiveDialogue(checkin);
+            }}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-emerald-500/40 text-slate-300 hover:text-emerald-300 transition-all text-xs font-bold"
+            title="Check-in with Habitat Crew Radio"
+          >
+            <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+            <span className="hidden sm:inline">Crew Radio</span>
+          </button>
+
           {/* NASA Data Button */}
           <button
             type="button"
@@ -522,6 +621,16 @@ export default function ControlDeck({
           </button>
         </div>
       </div>
+
+      {/* Dynamic Comic Radio Comms Bubble from Crew Members */}
+      {activeDialogue && (
+        <div className="w-full">
+          <CrewCommsBubble
+            dialogue={activeDialogue}
+            onDismiss={() => setActiveDialogue(null)}
+          />
+        </div>
+      )}
 
       {/* Optional Child Slot (e.g. OutpostVisualizer Cross-Section) */}
       {children && <div className="w-full">{children}</div>}
