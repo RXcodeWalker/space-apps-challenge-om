@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --color-nasa-blue: #0b3d91;
+    --color-nasa-red: #fc3d21;
+    --color-nasa-gold: #ffd700;
+  }
+
+  body {
+    @apply bg-slate-950 text-slate-100 font-sans antialiased;
+  }
+
+  * {
+    @apply box-border;
+  }
+}
+
+@layer utilities {
+  .health-bar-critical {
+    @apply bg-red-500;
+  }
+  .health-bar-warning {
+    @apply bg-yellow-400;
+  }
+  .health-bar-good {
+    @apply bg-emerald-400;
+  }
+  .glass-panel {
+    @apply bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl;
+  }
+  .nasa-gradient {
+    background: linear-gradient(135deg, #0b3d91 0%, #1a5276 50%, #0b3d91 100%);
+  }
+}
