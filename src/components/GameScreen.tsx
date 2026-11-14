@@ -25,7 +25,6 @@ import {
   AlertTriangle,
   Flame,
   ShieldAlert,
-  Search,
 } from "lucide-react";
 
 import OutpostVisualizer from "./OutpostVisualizer";
@@ -64,6 +63,7 @@ import {
   type GameState,
   type PowerAllocation,
   type DifficultyTier,
+  type MissionAlert,
 } from "../engine/simulationEngine";
 import { DIFFICULTY_PRESETS } from "../data/difficultyTiers";
 import {
@@ -419,6 +419,27 @@ export default function GameScreen({
         environmentName={environment.name}
       />
 
+      {/* Interactive "Why Did This Happen?" Root Cause Drill-down Modal */}
+      {selectedRootCauseProfile && (
+        <RootCauseModal
+          isOpen={selectedRootCauseProfile !== null}
+          onClose={() => setSelectedRootCauseProfile(null)}
+          profile={selectedRootCauseProfile}
+          context={{
+            environment,
+            currentTurn: lastResult ? lastResult.turn : currentTurn,
+            allocation: lastResult ? lastResult.allocation : allocation,
+            effectiveBudgetMW: lastResult ? lastResult.powerBudgetMW : effectiveBudget,
+            subsystems: lastResult ? lastResult.subsystems : gameState.subsystems,
+            crew: lastResult ? lastResult.crew : gameState.crew,
+            currentEvent: lastResult ? lastResult.event : currentEvent,
+            alerts: lastResult ? lastResult.alerts : [],
+          }}
+          onApplyAllocation={handleApplyCounterfactualAllocation}
+          canApplyAllocation={phase === "allocate"}
+        />
+      )}
+
       <main className="flex-1 max-w-7xl mx-auto w-full px-3 sm:px-6 py-4 sm:py-6 flex flex-col gap-5">
         <AnimatePresence mode="wait">
           {/* ========================================================= */}
@@ -620,6 +641,7 @@ export default function GameScreen({
                 onShowNasaData={onShowNasaData}
                 onOpenTutorial={() => setIsTutorialOpen(true)}
                 onOpenCrewRoster={() => setIsCrewModalOpen(true)}
+                onInspectRootCause={handleInspectTypeRootCause}
                 currentEvent={currentEvent}
               >
                 {/* Live Responsive Habitat Cross-Section Visualizer */}
@@ -630,6 +652,7 @@ export default function GameScreen({
                   effectiveBudgetMW={effectiveBudget}
                   currentEvent={currentEvent}
                   crew={gameState.crew}
+                  onInspectRootCause={handleInspectTypeRootCause}
                 />
               </ControlDeck>
             </motion.div>
