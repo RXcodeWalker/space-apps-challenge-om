@@ -37,6 +37,10 @@ export interface MissionEnvironment {
   citations: NasaCitation[];
   turnEvents: TurnEvent[];      // deterministic sequence, one per turn
   kidSummary: string;
+  primaryPowerSource?: "solar_fsp" | "cryo_geothermal_rtg" | "mmrtg_methane_cryo";
+  atmosphericPressureKPa?: number;
+  surfaceTempCelsius?: string;
+  gravityG?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -195,6 +199,10 @@ export const LUNAR_SOUTH_POLE: MissionEnvironment = {
   turnEvents: lunarTurnEvents,
   kidSummary:
     "The south pole of the Moon is special! Mountaintop rims near Shackleton Crater get sunlight almost all year, and deep icy craters hold frozen water. But there's NO air and NO magnetic shield, so the Sun's radiation is dangerous. You'll need to balance solar power, grow food, and keep the crew safe from solar storms!",
+  primaryPowerSource: "solar_fsp",
+  atmosphericPressureKPa: 0.0,
+  surfaceTempCelsius: "−173°C to +54°C",
+  gravityG: 0.166,
 };
 
 // ---------------------------------------------------------------------------
@@ -353,11 +361,357 @@ export const MARS_GALE_CRATER: MissionEnvironment = {
   turnEvents: marsTurnEvents,
   kidSummary:
     "Gale Crater on Mars is where NASA's Curiosity rover lives! Mars has a super-thin atmosphere (mostly CO₂), giant planet-wide dust storms, and radiation from space. The good news: there's water hiding underground! You'll need to manage power through dust storms, protect your crew from solar bursts, and find clever ways to grow food on the Red Planet.",
+  primaryPowerSource: "solar_fsp",
+  atmosphericPressureKPa: 0.61,
+  surfaceTempCelsius: "−80°C to +20°C",
+  gravityG: 0.379,
+};
+
+// ---------------------------------------------------------------------------
+// Europa Under-Ice Station — Clipper-Inspired Ocean Worlds Outpost
+// Primary data sources: NASA Europa Clipper (REASON, PIMS, MASPEX, SUDA, MISE),
+// Galileo Magnetometer & JPL Jovian Magnetospheric Environment models.
+// ---------------------------------------------------------------------------
+const europaTurnEvents: TurnEvent[] = [
+  {
+    id: "europa_subsurface_sync",
+    label: "Sol 1 — Sub-Surface Ops & RTG Sync",
+    description: "Outpost initialized 15 km beneath Europa's chaotic ice shell. Sealed cryo-geothermal exchangers and next-gen RTG arrays sync at 85 MW baseload. Zero solar flux penetrates the ice.",
+    kidFriendlyDescription: "You've landed deep under the icy shell of Jupiter's moon Europa! It's completely dark under miles of solid ice, so you have zero solar power — but your nuclear RTG batteries and hot hydrothermal seafloor heat keep you warm!",
+    powerDeltaMW: 0,
+    radiationSpikeMultiplier: 1.0,
+    lifeSupportStressFactor: 1.0,
+    shieldingWearDelta: 0,
+  },
+  {
+    id: "europa_jovian_plasma_crossing",
+    label: "Sol 2 — Jovian Plasma Sheet Crossing",
+    description: "Jupiter's tilted magnetic field swings its dense co-rotating magnetospheric plasma sheet across Europa. Radiation dose rate spikes 4.2×. Superconducting deflection coils require maximum power.",
+    kidFriendlyDescription: "Giant Jupiter just swung a wave of supercharged space radiation right at Europa! Your magnetic force fields need heavy power right now to shield the crew.",
+    powerDeltaMW: -6,
+    radiationSpikeMultiplier: 4.2,
+    lifeSupportStressFactor: 1.1,
+    shieldingWearDelta: 0.12,
+  },
+  {
+    id: "europa_hydrothermal_vent_surge",
+    label: "Sol 3 — Hydrothermal Vent Plume Surge",
+    description: "REASON ice-sounding radar detects deep ocean convection plume. Cryo-geothermal Stirling turbines capture boiling mineral brine, generating an extra +18 MW of clean geothermal energy.",
+    kidFriendlyDescription: "Hot underwater ocean geysers just surged beneath the ice! Your cryo-geothermal generators captured the boiling steam, giving your station a giant +18 MW power boost!",
+    powerDeltaMW: 18,
+    radiationSpikeMultiplier: 0.9,
+    lifeSupportStressFactor: 0.9,
+    shieldingWearDelta: 0,
+  },
+  {
+    id: "europa_tidal_flexing_strain",
+    label: "Sol 4 — Laplace Resonance Tidal Flexing",
+    description: "Orbital resonance with Io and Ganymede produces intense gravitational tidal flexing. The ice shell groans and shifts; active heating loops must melt expanding ice blockages along structural trusses.",
+    kidFriendlyDescription: "Jupiter and its sibling moons are pulling Europa like a rubber band! The ice walls are shifting and squeezing your station, requiring emergency heating power to keep structural seams intact.",
+    powerDeltaMW: -10,
+    radiationSpikeMultiplier: 1.0,
+    lifeSupportStressFactor: 1.35,
+    shieldingWearDelta: 0.08,
+  },
+  {
+    id: "europa_io_flux_tube_induction",
+    label: "Sol 5 — Io Flux Tube Magnetic Coupling",
+    description: "Europa intersects the Jovian auroral flux tube. Mega-ampere induction currents surge through the conductive salty ocean, causing electrical oscillations across the habitat transformer buses.",
+    kidFriendlyDescription: "A massive invisible electric highway from volcanic Io zaps through Jupiter's magnetic field! Sparks jump across power lines, demanding tight grid regulation.",
+    powerDeltaMW: -14,
+    radiationSpikeMultiplier: 2.6,
+    lifeSupportStressFactor: 1.2,
+    shieldingWearDelta: 0.10,
+  },
+  {
+    id: "europa_radiolytic_oxygen_harvest",
+    label: "Sol 6 — Cryo-Plume Volatile Extraction",
+    description: "Automated cryo-harvesters tap sub-ice pockets of radiolytic oxidants (H₂O₂ & O₂) produced by Jovian irradiation of surface ice, giving ECLSS an abundance of pure breathable oxygen.",
+    kidFriendlyDescription: "Your exploration rovers found trapped pockets of natural oxygen formed by radiation on the surface ice! Your life support tanks fill with crisp, pure air.",
+    powerDeltaMW: 5,
+    radiationSpikeMultiplier: 1.0,
+    lifeSupportStressFactor: 0.7,
+    shieldingWearDelta: 0,
+  },
+  {
+    id: "europa_brine_cavitation_shift",
+    label: "Sol 7 — Ocean Salinity & Dielectric Shift",
+    description: "High-salinity magnesium sulfate brine shifts the dielectric constant in the primary radiator loops. Impeller cavitation temporarily throttles heat rejection by 15%.",
+    kidFriendlyDescription: "Salty ocean mineral water is eroding the cooling pump blades. Your engineers need extra power to filter the salt and prevent the engines from overheating.",
+    powerDeltaMW: -12,
+    radiationSpikeMultiplier: 1.0,
+    lifeSupportStressFactor: 1.25,
+    shieldingWearDelta: 0.07,
+  },
+  {
+    id: "europa_heavy_ion_belt_peak",
+    label: "Sol 8 — Jovian Trapped Ion Belt Peak",
+    description: "PIMS instruments detect a severe surge in trapped energetic sulfur and oxygen ions. Secondary bremsstrahlung X-rays penetrate upper ice bulkheads; radiation spikes 5.0×.",
+    kidFriendlyDescription: "RED ALERT: Jupiter's most intense radiation belt has swept over the moon! Secondary X-rays are piercing the outer ice crust. Divert maximum power to magnetic shielding immediately!",
+    powerDeltaMW: -8,
+    radiationSpikeMultiplier: 5.0,
+    lifeSupportStressFactor: 1.3,
+    shieldingWearDelta: 0.16,
+  },
+  {
+    id: "europa_radar_deep_sounding",
+    label: "Sol 9 — REASON Ice Sounding Deep Scan",
+    description: "Europa Clipper REASON radar conducts high-frequency ice-penetrating radar sounding, mapping 30 km of internal ice-ocean interfaces and requiring high continuous RF broadcast power.",
+    kidFriendlyDescription: "The science crew is firing high-power radar beams straight through miles of solid ice to create a 3D map of the hidden alien ocean! It drains a lot of power, but the data is priceless.",
+    powerDeltaMW: -15,
+    radiationSpikeMultiplier: 1.0,
+    lifeSupportStressFactor: 1.1,
+    shieldingWearDelta: 0.04,
+  },
+  {
+    id: "europa_ocean_biosignature_discovery",
+    label: "Sol 10 — Hydrothermal Biosignature Discovery",
+    description: "MASPEX high-resolution mass spectrometer detects complex amino-acid chains and metabolic methane signatures venting from deep hydrothermal vents! Mission objective accomplished.",
+    kidFriendlyDescription: "HISTORIC DISCOVERY! The robot chemistry lab discovered complex organic chemicals venting from warm seafloor geysers! Europa's hidden ocean might truly harbor alien life!",
+    powerDeltaMW: 8,
+    radiationSpikeMultiplier: 1.0,
+    lifeSupportStressFactor: 0.8,
+    shieldingWearDelta: 0,
+  },
+];
+
+const europaCitations: NasaCitation[] = [
+  {
+    datasetName: "Europa Clipper REASON — Ice Penetrating Radar",
+    missionInstrument: "NASA Europa Clipper / REASON (Radar for Europa Assessment and Sounding: Ocean to Near-surface)",
+    parameter: "Ice Shell Thickness & Ocean Interface Detection",
+    value: "Dual-frequency radar (9 MHz & 60 MHz) profiling 15–25 km ice shell and sub-surface water pockets",
+    kidFriendlyExplanation: "Radar beams see right through miles of frozen ice, just like an X-ray sees through human skin! It proves that a liquid ocean 2 times bigger than all of Earth's oceans combined is hiding underneath.",
+    sourceUrl: "https://www.jpl.nasa.gov/missions/europa-clipper/science-instruments/reason",
+  },
+  {
+    datasetName: "Europa Clipper PIMS — Plasma & Magnetic Sounding",
+    missionInstrument: "NASA Europa Clipper / PIMS (Plasma Instrument for Magnetic Sounding)",
+    parameter: "Induced Magnetic Field & Jovian Plasma Flow",
+    value: "Characterizes Jupiter's 428 µT equatorial magnetic field and Europa's induced ocean eddy currents (~2.5 S/m electrical conductivity)",
+    kidFriendlyExplanation: "Jupiter has a magnetic field 20,000 times stronger than Earth's! When it washes over Europa's salty water, the salt water makes its own magnetic field. PIMS measures this to tell us how deep and salty the hidden ocean is.",
+    sourceUrl: "https://www.jpl.nasa.gov/missions/europa-clipper/science-instruments/pims",
+  },
+  {
+    datasetName: "Europa Clipper MASPEX — Mass Spectrometry of Volatiles",
+    missionInstrument: "NASA Europa Clipper / MASPEX (Mass Spectrometer for Planetary Exploration)",
+    parameter: "Subsurface Volatiles & Organic Resolving Power",
+    value: "Mass resolution m/Δm > 20,000; detects isotope ratios (D/H, 12C/13C) and organic fragments in cryovolcanic plumes",
+    kidFriendlyExplanation: "MASPEX is like a super-magnifying glass for atoms! It can sniff out tiny organic chemicals, amino acids, and gases erupting from the ice to see if the ocean is habitable for life.",
+    sourceUrl: "https://www.jpl.nasa.gov/missions/europa-clipper/science-instruments/maspex",
+  },
+  {
+    datasetName: "Jovian Magnetosphere Trapped Radiation Belt",
+    missionInstrument: "NASA Galileo EPD & Europa Clipper Radiation Monitoring System",
+    parameter: "Unshielded Surface Ionizing Dose Rate",
+    value: "Surface dose rate ~540 mSv/day (54 rad/day); drops to 1.8 mSv/day behind 10+ meters of water ice equivalent shielding",
+    kidFriendlyExplanation: "Jupiter's radiation belts trap super-speed particles that would be lethal on the surface in days. But under deep ice, astronauts are shielded just like being in a bunker — though magnetic fields are still needed during storm peaks!",
+    sourceUrl: "https://europa.nasa.gov/mission/science/",
+  },
+  {
+    datasetName: "Tidal Dissipation & Geothermal Baseload",
+    missionInstrument: "NASA Astrobiology & Galileo Orbital Mechanics / Thermal Models",
+    parameter: "Seafloor Cryo-Geothermal Heat Flux",
+    value: "Tidal dissipation in silicate mantle generates ~1.0–1.5 TW (~20–40 mW/m²) of sustained hydrothermal heat flux",
+    kidFriendlyExplanation: "Even though Europa is 5 times farther from the Sun than Earth and gets zero sunlight under the ice, Jupiter's gravity constantly squeezes the moon's core, creating hot underwater volcanoes that power our base!",
+    sourceUrl: "https://solarsystem.nasa.gov/moons/jupiter-moons/europa/in-depth/",
+  },
+];
+
+export const EUROPA_UNDER_ICE: MissionEnvironment = {
+  id: "europa_under_ice",
+  name: "Europa",
+  subtitle: "Under-Ice Station — Clipper-Inspired",
+  emoji: "❄️",
+  backgroundGradient: "from-cyan-950 via-blue-950 to-slate-950",
+  basePowerBudgetMW: 100,
+  baselineSolarEfficiency: 0.0, // Zero solar flux beneath kilometers of ice
+  baselineDailyRadiationMSv: 1.8, // Shielded under ice, but Jovian magnetosphere surges
+  citations: europaCitations,
+  turnEvents: europaTurnEvents,
+  kidSummary:
+    "Europa is Jupiter's incredible ice moon! Miles beneath the frozen crust lies an enormous warm salt ocean with more water than all Earth's oceans combined. Because you're deep under ice, there is ZERO sunlight — your base runs on hot underwater volcanic vents and nuclear RTG batteries. Watch out for Jupiter's intense radiation storms and keep your magnetic force fields humming!",
+  primaryPowerSource: "cryo_geothermal_rtg",
+  atmosphericPressureKPa: 0.0000001, // Vacuum / trace O2 atmosphere
+  surfaceTempCelsius: "−173°C to −13°C",
+  gravityG: 0.134,
+};
+
+// ---------------------------------------------------------------------------
+// Titan Hydrocarbon Base — Dragonfly-Inspired Ocean Worlds Outpost
+// Primary data sources: NASA Dragonfly (DraMS, DraGMet, DraGNS, DragonCam),
+// Cassini-Huygens HASI, DISR, RADAR & VIMS instruments.
+// ---------------------------------------------------------------------------
+const titanTurnEvents: TurnEvent[] = [
+  {
+    id: "titan_arrival_ops",
+    label: "Sol 1 — Dragonfly Base Touchdown",
+    description: "Outpost established along the shore of Kraken Mare. Atmospheric pressure is 146.7 kPa (1.45 bar, 4× denser air than Earth). Surface temperature is −179°C (94 K). MMRTG and cryogenic lake heat exchanger nominal.",
+    kidFriendlyDescription: "Welcome to Titan, Saturn's giant moon! The air here is so thick you could strap fake wings to your arms and fly like a bird! It's freezing cold (−179°C), with lakes of liquid methane all around.",
+    powerDeltaMW: 0,
+    radiationSpikeMultiplier: 1.0,
+    lifeSupportStressFactor: 1.0,
+    shieldingWearDelta: 0,
+  },
+  {
+    id: "titan_tholin_smog_peak",
+    label: "Sol 2 — Dense Photochemical Tholin Smog",
+    description: "Upper atmospheric photochemistry generates thick organic tholin smog. Solar irradiance drops from 1.0 W/m² to near zero. Baseline reliance shifts 100% to MMRTG and cryogenic lake Rankine cycles.",
+    kidFriendlyDescription: "A thick orange smog has gathered in Titan's sky! The Sun looks like a faint lightbulb in a foggy room. Solar power is totally useless here — good thing we brought nuclear RTGs and cold lake power generators!",
+    powerDeltaMW: -5,
+    radiationSpikeMultiplier: 0.7,
+    lifeSupportStressFactor: 1.15,
+    shieldingWearDelta: 0.02,
+  },
+  {
+    id: "titan_kraken_mare_carnot_surge",
+    label: "Sol 3 — Cryogenic Lake Thermal Sink Surge",
+    description: "Shoreline cryogenic pumps tap Kraken Mare liquid methane at 94 K. The massive temperature differential (ΔT > 180°C) against MMRTG waste heat drives a high-efficiency Stirling-Rankine cycle, producing +22 MW bonus power!",
+    kidFriendlyDescription: "Your engineers connected heat pipes into the freezing methane lake! Because the lake is super cold (−179°C) and our engine is hot, physics gives us an enormous +22 MW power surge for free!",
+    powerDeltaMW: 22,
+    radiationSpikeMultiplier: 0.9,
+    lifeSupportStressFactor: 0.9,
+    shieldingWearDelta: 0,
+  },
+  {
+    id: "titan_methane_monsoon_downpour",
+    label: "Sol 4 — Methane Monsoon Downpour",
+    description: "Atmospheric methane clouds produce a violent cryogenic downpour. Flash hydrocarbon runoff drenches exterior heat sinks; dense droplets pull structural seals down to −182°C.",
+    kidFriendlyDescription: "It's raining liquid methane! Giant raindrops fall in slow motion because of low gravity. Flash floods of liquid natural gas are chilling our base seals — turn up the heaters!",
+    powerDeltaMW: -16,
+    radiationSpikeMultiplier: 0.5,
+    lifeSupportStressFactor: 1.4,
+    shieldingWearDelta: 0.10,
+  },
+  {
+    id: "titan_dragonfly_aerial_sortie",
+    label: "Sol 5 — Dragonfly Aerial Reconnaissance",
+    description: "Dragonfly octocopter completes an autonomous 15 km aerial flight across the Shangri-La hydrocarbon dunes, pinpointing high-grade organic deposits and mapping regional weather fronts.",
+    kidFriendlyDescription: "The Dragonfly drone just flew a 15-kilometer loop through the orange skies! Its cameras and sensors found safe travel routes and rich mineral deposits.",
+    powerDeltaMW: 10,
+    radiationSpikeMultiplier: 1.0,
+    lifeSupportStressFactor: 0.85,
+    shieldingWearDelta: 0,
+  },
+  {
+    id: "titan_cryo_turbine_cavitation",
+    label: "Sol 6 — Cryo-Turbine Impeller Cavitation",
+    description: "Liquid ethane currents create vortex bubbles and cavitation across the lake intake manifolds. Pumps must be throttled down to prevent cryogenic blade fatigue.",
+    kidFriendlyDescription: "Freezing liquid ethane bubbles are vibrating inside the lake water intake pipes. Your engineers need extra power to defrost and clear the impellers.",
+    powerDeltaMW: -14,
+    radiationSpikeMultiplier: 1.0,
+    lifeSupportStressFactor: 1.2,
+    shieldingWearDelta: 0.08,
+  },
+  {
+    id: "titan_polar_vortex_cold_snap",
+    label: "Sol 7 — Polar Vortex Cold Snap (−183°C)",
+    description: "Dense nitrogen-methane winds bring a severe cryogenic temperature drop to −183°C (90 Kelvin). Convective heat loss to the 1.45 bar atmosphere accelerates; thermal loops demand maximum heating power.",
+    kidFriendlyDescription: "Brrr! A cryogenic polar blizzard just rolled in, dropping temperatures to −183°C! The thick air sucks heat out of our walls 4 times faster than on Earth. Keep the heating systems blaring!",
+    powerDeltaMW: -12,
+    radiationSpikeMultiplier: 0.8,
+    lifeSupportStressFactor: 1.35,
+    shieldingWearDelta: 0.09,
+  },
+  {
+    id: "titan_organic_dune_electrostatics",
+    label: "Sol 8 — Tholin Dune Electrostatic Storm",
+    description: "Dry winds blow tholin-coated organic hydrocarbon sands. High dielectric friction generates high-voltage triboelectric arcs, disrupting RF comms and drawing surge-suppression power.",
+    kidFriendlyDescription: "The giant orange sand dunes are rubbing together in the wind, creating crackling static electricity lightning sparks across our antennas!",
+    powerDeltaMW: -8,
+    radiationSpikeMultiplier: 1.0,
+    lifeSupportStressFactor: 1.1,
+    shieldingWearDelta: 0.12,
+  },
+  {
+    id: "titan_cryovolcanic_slush_eruption",
+    label: "Sol 9 — Sotra Patera Ammonia Slush Incursion",
+    description: "Nearby cryovolcano vents a warm water-ammonia slurry from Titan's subsurface ocean. ECLSS filters tap the effluent, extracting abundant ammonia for hydroponic fertilizer.",
+    kidFriendlyDescription: "An ice volcano just erupted nearby! Instead of hot lava, it spews freezing water-ammonia slush from deep underground. Your life support team extracts rich fertilizer to grow huge fresh crops!",
+    powerDeltaMW: 6,
+    radiationSpikeMultiplier: 1.0,
+    lifeSupportStressFactor: 0.7,
+    shieldingWearDelta: 0,
+  },
+  {
+    id: "titan_prebiotic_synthesis_milestone",
+    label: "Sol 10 — Prebiotic Organic Synthesis Discovery",
+    description: "DraMS mass spectrometer analyzes lakebed sediments, confirming complex organic macromolecules, polycyclic aromatic hydrocarbons, and prebiotic nitrogenous bases! Mission triumph.",
+    kidFriendlyDescription: "AMAZING SCIENCE! Dragonfly's chemistry lab discovered the building blocks of life — complex organic molecules and amino acid ingredients — inside Titan's lakes! You proved ocean worlds hold secrets to the origins of life!",
+    powerDeltaMW: 12,
+    radiationSpikeMultiplier: 1.0,
+    lifeSupportStressFactor: 0.75,
+    shieldingWearDelta: 0,
+  },
+];
+
+const titanCitations: NasaCitation[] = [
+  {
+    datasetName: "NASA Dragonfly Rotorcraft Mission & DraMS Payload",
+    missionInstrument: "NASA Dragonfly / DraMS (Dragonfly Mass Spectrometer) & DraGNS",
+    parameter: "Autonomous Rotorcraft Flight in Dense Atmosphere",
+    value: "Dual-quadcopter nuclear rotorcraft; 1.45 bar atmosphere (density 5.4 kg/m³) with 0.138 g gravity enables 38× higher lift-to-power efficiency than Earth",
+    kidFriendlyExplanation: "Dragonfly is a nuclear-powered flying robot with 8 giant propellers! Because Titan's air is 4 times thicker than Earth's and gravity is weak, flying is effortless — Dragonfly can explore miles of alien terrain in a single flight!",
+    sourceUrl: "https://dragonfly.jhuapl.edu/",
+  },
+  {
+    datasetName: "Cassini-Huygens HASI Atmospheric Profile",
+    missionInstrument: "ESA/NASA Cassini-Huygens HASI (Huygens Atmospheric Structure Instrument)",
+    parameter: "Surface Atmospheric Pressure & Temperature",
+    value: "Surface pressure: 146.7 kPa (1.45 atm); surface temperature: 93.7 K (−179.5°C); composition: 95% N₂, 4.9% CH₄, 0.1% H₂",
+    kidFriendlyExplanation: "In 2005, the Huygens probe parachuted all the way down to Titan's surface and measured the air! It discovered Titan has a real atmosphere with clouds, rain, and air pressure 50% stronger than Earth's sea level.",
+    sourceUrl: "https://www.esa.int/Science_Exploration/Space_Science/Cassini-Huygens",
+  },
+  {
+    datasetName: "Cassini RADAR & VIMS — Hydrocarbon Seas Mapping",
+    missionInstrument: "NASA Cassini / RADAR Altimeter & Visual and Infrared Mapping Spectrometer",
+    parameter: "Kraken Mare & Ligeia Mare Hydrocarbon Volume",
+    value: "Liquid methane/ethane lakes cover >1.6 million km²; Kraken Mare reaches depths >300 m and holds hundreds of times more hydrocarbons than all global oil reserves",
+    kidFriendlyExplanation: "Titan is the only place in the solar system besides Earth with open liquid seas and lakes! But instead of water, the lakes are filled with liquid natural gas so clear and cold you could look deep into the abyss.",
+    sourceUrl: "https://science.nasa.gov/mission/cassini/science/titan/",
+  },
+  {
+    datasetName: "Dragonfly MMRTG & Cryogenic Thermodynamic Heat Rejection",
+    missionInstrument: "NASA Glenn & JPL / Multi-Mission Radioisotope Thermoelectric Generator",
+    parameter: "Cryogenic Carnot Efficiency & Baseload",
+    value: "70 W_e MMRTG coupled to 94 K liquid methane thermal sink yields theoretical Carnot efficiency η_c = 1 − (94/473) ≈ 80.1%",
+    kidFriendlyExplanation: "Power generators love cold weather! When our hot nuclear generator rejects heat into the −179°C cryogenic methane lake, the huge temperature difference generates electricity with world-class efficiency!",
+    sourceUrl: "https://rps.nasa.gov/power-and-propulsion-systems/radioisotope-power-systems/mmrtg/",
+  },
+  {
+    datasetName: "Prebiotic Tholin Chemistry & Prebiotic Nitrogen Bases",
+    missionInstrument: "Cassini INMS (Ion and Neutral Mass Spectrometer) & NASA Ames Lab Studies",
+    parameter: "Complex Organic Aerosols & Amino Acid Precursors",
+    value: "Photolysis of N₂ and CH₄ forms tholin haze particles (MW > 1000 Da) which settle into dunes and hydrolyze into amino acids and nucleotide bases",
+    kidFriendlyExplanation: "Titan's orange sky acts like a natural organic chemistry laboratory! Sunlight cooks methane and nitrogen into complex molecules that could be the ancient precursors to living cells.",
+    sourceUrl: "https://astrobiology.nasa.gov/news/titan-as-a-prebiotic-chemical-laboratory/",
+  },
+];
+
+export const TITAN_HYDROCARBON: MissionEnvironment = {
+  id: "titan_hydrocarbon",
+  name: "Titan",
+  subtitle: "Hydrocarbon Base — Dragonfly-Inspired",
+  emoji: "🪐",
+  backgroundGradient: "from-amber-950 via-yellow-950 to-stone-900",
+  basePowerBudgetMW: 100,
+  baselineSolarEfficiency: 0.01, // Only 1% solar reach through thick orange smog
+  baselineDailyRadiationMSv: 0.12, // Thick atmosphere blocks space radiation effectively
+  citations: titanCitations,
+  turnEvents: titanTurnEvents,
+  kidSummary:
+    "Titan is Saturn's mysterious giant moon! It is the only moon with a thick, dense atmosphere (1.5× Earth's air pressure) and real lakes of liquid methane like Kraken Mare. It's freezing cold (−179°C), but NASA's Dragonfly octocopter can soar easily through the dense air, and our base turns the freezing cryogenic lakes into massive electrical power using thermodynamic heat engines!",
+  primaryPowerSource: "mmrtg_methane_cryo",
+  atmosphericPressureKPa: 146.7,
+  surfaceTempCelsius: "−179°C",
+  gravityG: 0.138,
 };
 
 export const MISSION_ENVIRONMENTS: Record<MissionEnvironmentId, MissionEnvironment> = {
   lunar_south_pole: LUNAR_SOUTH_POLE,
   mars_gale_crater: MARS_GALE_CRATER,
+  europa_under_ice: EUROPA_UNDER_ICE,
+  titan_hydrocarbon: TITAN_HYDROCARBON,
 };
 
 export const TOTAL_TURNS = 10;

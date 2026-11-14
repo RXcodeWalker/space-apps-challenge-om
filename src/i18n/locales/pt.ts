@@ -10,6 +10,7 @@ export const pt: TranslationSchema = {
     targetAges: "7–12 ANOS · SEM CADASTRO",
     sound: "Som",
     muted: "Mudo",
+    ambientAudio: "Áudio Espacial",
     launch: "Lançar",
     launchMission: "INICIAR MISSÃO",
     readyToCommand: "Pronto para Comandar",

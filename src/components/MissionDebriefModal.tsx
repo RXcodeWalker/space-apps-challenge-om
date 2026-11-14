@@ -23,6 +23,8 @@ import FlightRecorderReplay from "./FlightRecorderReplay";
 import JuniorAstronautCertificate from "./JuniorAstronautCertificate";
 import { calculateOutcomeRank } from "../utils/flightRecorder";
 import { DIFFICULTY_PRESETS } from "../data/difficultyTiers";
+import { useTranslation } from "../i18n/LanguageContext";
+import LanguageSelector from "./LanguageSelector";
 
 interface MissionDebriefModalProps {
   isOpen: boolean;
@@ -180,9 +182,10 @@ export default function MissionDebriefModal({
   onSwitchPlanet,
   onShowNasaData,
 }: MissionDebriefModalProps) {
-  if (!isOpen || !gameState) return null;
-
+  const { t } = useTranslation();
   const [showCertificate, setShowCertificate] = useState(false);
+
+  if (!isOpen || !gameState) return null;
 
   const outcomeRank = useMemo(
     () => calculateOutcomeRank(gameState),
@@ -217,12 +220,15 @@ export default function MissionDebriefModal({
             <div className="flex items-center gap-2 text-cyan-300">
               <Award className="w-4 h-4 text-amber-400" />
               <span className="font-bold tracking-wider uppercase">
-                NASA MISSION COMMAND · ENGINEERING DEBRIEF
+                {t("debrief.title")}
               </span>
             </div>
-            <span className="text-slate-400 hidden sm:inline">
-              Destination: {environment.name} ({environment.subtitle})
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="text-slate-400 hidden sm:inline">
+                {t(`destinations.${environment.id === "lunar_south_pole" ? "moon" : "mars"}.name`)}
+              </span>
+              <LanguageSelector compact />
+            </div>
           </div>
 
           {/* Modal Content */}
@@ -435,7 +441,7 @@ export default function MissionDebriefModal({
                 className="flex items-center gap-2 px-4 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-cyan-300 text-xs font-bold transition-colors"
               >
                 <Database className="w-4 h-4 text-cyan-400" />
-                <span>View Real NASA Datasets</span>
+                <span>{t("common.nasaData")}</span>
               </button>
             )}
 
@@ -449,7 +455,7 @@ export default function MissionDebriefModal({
                 className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-black text-xs sm:text-sm shadow-lg shadow-amber-950/60"
               >
                 <Award className="w-4 h-4 text-black" />
-                <span>Astronaut Certificate</span>
+                <span>{t("debrief.viewCertificate")}</span>
               </motion.button>
 
               {/* Switch Planet Button */}
@@ -461,7 +467,7 @@ export default function MissionDebriefModal({
                 className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs sm:text-sm transition-colors border border-slate-600"
               >
                 <Globe className="w-4 h-4 text-cyan-400" />
-                <span>Switch Planet</span>
+                <span>{t("common.switchPlanet")}</span>
               </motion.button>
 
               {/* One-Click Play Again Button */}
@@ -473,7 +479,7 @@ export default function MissionDebriefModal({
                 className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white font-black text-xs sm:text-sm shadow-lg shadow-cyan-900/50"
               >
                 <RotateCcw className="w-4 h-4" />
-                <span>Play Again</span>
+                <span>{t("common.playAgain")}</span>
               </motion.button>
             </div>
           </div>

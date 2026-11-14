@@ -29,16 +29,34 @@ import {
   rollMicrometeoroidStrike,
   generateCadetAutomatedHints,
 } from "../data/difficultyTiers";
+import {
+  type CrewRoleId,
+  type CrewMemberStatus,
+  type CrewSkillStats,
+  type CrewMember,
+  type CrewMoraleEvent,
+  type SpecialistRepairEffects,
+  type SpecialistRepairOption,
+  createInitialCrewMembers,
+  INCIDENT_SPECIALIST_REPAIRS,
+} from "../data/crewData";
 
-// Re-export difficulty types for easy consumption
+// Re-export difficulty & crew types for easy consumption
 export type {
   DifficultyTier,
   DifficultyConfig,
   ThermalFatigueReport,
   MicrometeoroidStrike,
   AutomatedHint,
+  CrewRoleId,
+  CrewMemberStatus,
+  CrewSkillStats,
+  CrewMember,
+  CrewMoraleEvent,
+  SpecialistRepairEffects,
+  SpecialistRepairOption,
 };
-export { DIFFICULTY_PRESETS };
+export { DIFFICULTY_PRESETS, createInitialCrewMembers, INCIDENT_SPECIALIST_REPAIRS };
 
 // ---------------------------------------------------------------------------
 // Core type definitions
@@ -64,13 +82,15 @@ export interface SubsystemState {
 }
 
 export interface CrewState {
-  morale: number;           // 0–100; drops with life support failures & radiation spikes
+  members: CrewMember[];    // 4 distinct NASA astronauts (Botanist, Power Engineer, Medical Officer, Geologist)
+  morale: number;           // 0–100; synchronized team average
   radiationExposureMSv: number; // cumulative mission exposure
   safeRadiationLimitMSv: number; // expedition threshold (45-60 mSv depending on difficulty)
   careerRadiationExposureMSv: number; // NASA career ledger (towards 500 mSv career ceiling)
   careerLimitMSv: number;   // 500 mSv NASA STD-3001 career limit
   foodReserveDays: number;  // days of food remaining
   oxygenBufferPercent: number; // % of nominal O₂ buffer; 0 = emergency
+  recentMoraleEvents?: CrewMoraleEvent[]; // recent crew heroism / sacrifice events
 }
 
 export interface MissionAlert {
@@ -96,6 +116,10 @@ export interface IncidentChoiceRecord {
   choiceLabel: string;
   tradeOffSummary: string;
   engineeringTakeaway: string;
+  specialistRole?: CrewRoleId;
+  specialistName?: string;
+  specialistAction?: string;
+  specialistRiskRewardSummary?: string;
 }
 
 export interface ActiveModifier {
@@ -802,9 +826,23 @@ export function getEffectivePowerBudget(
   const config = DIFFICULTY_PRESETS[difficulty];
   const event = environment.turnEvents[turn - 1];
   const rtgFloor = environment.basePowerBudgetMW * config.rtgReserveFraction;
-  const solar = environment.basePowerBudgetMW * environment.baselineSolarEfficiency;
   const eventDelta = event ? event.powerDeltaMW : 0;
-  const effective = Math.max(rtgFloor, solar + eventDelta + additionalModifierMW);
+
+  let baseGeneration = 0;
+  if (environment.id === "europa_under_ice") {
+    // Under-ice environment: Zero solar flux!
+    // Powered by Cryo-Geothermal wellheads (52 MW) + RTG Nuclear arrays (35 MW) = 87 MW baseline
+    baseGeneration = 87;
+  } else if (environment.id === "titan_hydrocarbon") {
+    // Dense atmosphere & cryogenic methane lakes:
+    // Powered by Dragonfly MMRTG (52 MW) + Cryogenic Methane Lake Carnot Heat Exchanger (32 MW) + trace solar (1 MW) = 85 MW baseline
+    baseGeneration = 85;
+  } else {
+    // Lunar & Mars: Photovoltaic arrays + Fission/RTG baseload
+    baseGeneration = environment.basePowerBudgetMW * environment.baselineSolarEfficiency;
+  }
+
+  const effective = Math.max(rtgFloor, baseGeneration + eventDelta + additionalModifierMW);
   return Math.round(effective);
 }
 

@@ -19,6 +19,8 @@ import {
   LUNAR_SOUTH_POLE,
   MARS_GALE_CRATER,
 } from "../data/nasaConstants";
+import { useTranslation } from "../i18n/LanguageContext";
+import LanguageSelector from "./LanguageSelector";
 
 interface NasaDataModalProps {
   environment?: MissionEnvironment | null;
@@ -89,6 +91,7 @@ export default function NasaDataModal({
   isOpen,
   onClose,
 }: NasaDataModalProps) {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<TabType>(() => {
     if (environment?.id === "mars_gale_crater") return "mars";
     if (environment?.id === "lunar_south_pole") return "lunar";
@@ -132,22 +135,25 @@ export default function NasaDataModal({
               </div>
               <div>
                 <h2 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
-                  <span>NASA Instrument Telemetry & Science Grounding</span>
+                  <span>{t("nasaModal.title")}</span>
                   <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-300 border border-cyan-700/50">
                     REAL DATA
                   </span>
                 </h2>
                 <p className="text-xs text-slate-400 font-mono">
-                  Calibrated against LRO, MSL Curiosity, and NASA Moon-to-Mars specs
+                  {t("nasaModal.subtitle")}
                 </p>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-white/10 rounded-xl transition-colors text-slate-400 hover:text-white"
-            >
-              <X size={20} />
-            </button>
+            <div className="flex items-center gap-2">
+              <LanguageSelector compact />
+              <button
+                onClick={onClose}
+                className="p-2 hover:bg-white/10 rounded-xl transition-colors text-slate-400 hover:text-white"
+              >
+                <X size={20} />
+              </button>
+            </div>
           </div>
 
           {/* Navigation Tabs */}
@@ -171,7 +177,7 @@ export default function NasaDataModal({
                   : "bg-slate-800/80 text-slate-300 hover:bg-slate-700 hover:text-white"
               }`}
             >
-              <span>🌕 Moon (LRO / Artemis)</span>
+              <span>🌕 {t("destinations.moon.name")}</span>
             </button>
             <button
               onClick={() => setActiveTab("mars")}
@@ -181,7 +187,7 @@ export default function NasaDataModal({
                   : "bg-slate-800/80 text-slate-300 hover:bg-slate-700 hover:text-white"
               }`}
             >
-              <span>🔴 Mars (MSL Curiosity)</span>
+              <span>🔴 {t("destinations.mars.name")}</span>
             </button>
           </div>
 

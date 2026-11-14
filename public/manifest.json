@@ -1,0 +1,110 @@
+{
+  "name": "Outpost Commander: Junior Astronaut Mission Trainer",
+  "short_name": "Outpost Commander",
+  "description": "Run an offline-capable NASA lunar or Martian outpost! Grounded in real NASA telemetry, solar physics, and life support systems. Designed for junior astronauts, students, and STEM classrooms.",
+  "id": "/?source=pwa",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": [
+    "window-controls-overlay",
+    "standalone",
+    "minimal-ui",
+    "browser"
+  ],
+  "orientation": "any",
+  "background_color": "#0B1120",
+  "theme_color": "#0B1120",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": [
+    "education",
+    "games",
+    "kids",
+    "science",
+    "simulation"
+  ],
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Lunar Basecamp (Moon)",
+      "short_name": "Moon Base",
+      "description": "Deploy to Lunar South Pole Shackleton Crater",
+      "url": "/?env=moon&source=shortcut",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Gale Crater Base (Mars)",
+      "short_name": "Mars Base",
+      "description": "Deploy to Mars Gale Crater Science Outpost",
+      "url": "/?env=mars&source=shortcut",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/icons/screenshot-desktop.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Outpost Commander Mission Console and 3D Diorama"
+    },
+    {
+      "src": "/icons/screenshot-mobile.png",
+      "sizes": "750x1334",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Mobile and Tablet Tactile Flight Controls"
+    }
+  ]
+}

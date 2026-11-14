@@ -25,6 +25,9 @@ import type { GameState } from "../engine/simulationEngine";
 import type { MissionEnvironment } from "../data/nasaConstants";
 import { soundEffects } from "../utils/soundEffects";
 import { buildFlightRecorderData } from "../utils/flightRecorder";
+import { useTranslation } from "../i18n/LanguageContext";
+import LanguageSelector from "./LanguageSelector";
+
 
 interface JuniorAstronautCertificateProps {
   isOpen: boolean;
@@ -43,6 +46,7 @@ export default function JuniorAstronautCertificate({
   rankTitle,
   rankTier: _rankTier,
 }: JuniorAstronautCertificateProps) {
+  const { t } = useTranslation();
   const [commanderName, setCommanderName] = useState<string>("Commander Alex");
   const [isEditingName, setIsEditingName] = useState<boolean>(false);
   const [downloadSuccess, setDownloadSuccess] = useState<boolean>(false);
@@ -373,6 +377,8 @@ export default function JuniorAstronautCertificate({
 
             {/* Action Buttons: Print & Download */}
             <div className="flex items-center gap-2">
+              <LanguageSelector compact />
+
               <button
                 type="button"
                 onClick={handlePrint}
@@ -380,7 +386,7 @@ export default function JuniorAstronautCertificate({
                 title="Print or Save as PDF"
               >
                 <Printer className="w-4 h-4 text-cyan-400" />
-                <span>Print / PDF</span>
+                <span>{t("certificate.printPdf")}</span>
               </button>
 
               <button
@@ -394,7 +400,7 @@ export default function JuniorAstronautCertificate({
                 ) : (
                   <Download className="w-4 h-4 text-black" />
                 )}
-                <span>{downloadSuccess ? "DOWNLOADED!" : "DOWNLOAD IMAGE"}</span>
+                <span>{downloadSuccess ? "DOWNLOADED!" : t("certificate.downloadPng")}</span>
               </button>
 
               <button
@@ -434,18 +440,18 @@ export default function JuniorAstronautCertificate({
               {/* Certificate Header */}
               <div className="relative z-10 flex flex-col items-center">
                 <div className="flex items-center gap-2 text-cyan-400 font-mono text-[10px] sm:text-xs font-bold tracking-[0.25em] uppercase">
-                  <span>NATIONAL AERONAUTICS AND SPACE ADMINISTRATION</span>
+                  <span>{t("certificate.agency")}</span>
                 </div>
                 <div className="text-slate-400 font-mono text-[8px] sm:text-[10px] tracking-[0.18em] uppercase mt-0.5">
-                  DEEP SPACE HABITATION & SURFACE EXPLORATION COMMAND
+                  {t("certificate.command")}
                 </div>
 
                 <h1 className="text-2xl sm:text-4xl md:text-5xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-amber-200 to-amber-500 font-serif mt-2">
-                  JUNIOR ASTRONAUT MISSION CERTIFICATE
+                  {t("certificate.officialAward")}
                 </h1>
 
                 <p className="text-[11px] sm:text-xs italic text-slate-300 font-serif mt-1">
-                  This official commendation is solemnly conferred upon
+                  {t("certificate.certifies")}
                 </p>
               </div>
 
@@ -459,10 +465,10 @@ export default function JuniorAstronautCertificate({
                 </div>
 
                 <p className="text-xs sm:text-sm text-slate-300 font-sans mt-2 max-w-2xl mx-auto leading-relaxed">
-                  For extraordinary merit and sound engineering decisions as Expedition Commander of the 10-Sol surface mission at
+                  {t("certificate.hasCompleted")}
                 </p>
                 <p className="text-sm sm:text-lg font-black text-amber-400 font-mono uppercase tracking-wide mt-0.5">
-                  {environment.name} · {environment.subtitle}
+                  {t(`destinations.${environment.id === "lunar_south_pole" ? "moon" : "mars"}.name`)} · {t(`destinations.${environment.id === "lunar_south_pole" ? "moon" : "mars"}.subtitle`)}
                 </p>
               </div>
 

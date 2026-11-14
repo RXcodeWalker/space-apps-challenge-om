@@ -3,7 +3,7 @@
 // Clean high-contrast dark space-mission aesthetic:
 // Deep Navy #0B1120, NASA Cobalt #1D4ED8, Telemetry Cyan #06B6D4, Amber #F59E0B
 // ============================================================
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   Rocket,
@@ -19,6 +19,7 @@ import {
   Info,
   Volume2,
   VolumeX,
+  Sliders,
   Flame,
   AlertTriangle,
   Award,
@@ -26,12 +27,15 @@ import {
 import type { MissionEnvironment } from "../data/nasaConstants";
 import { LUNAR_SOUTH_POLE, MARS_GALE_CRATER } from "../data/nasaConstants";
 import { soundEffects, useSoundMuted } from "../utils/soundEffects";
+import { ambientAudio } from "../utils/ambientAudio";
+import AmbientAudioModal from "./AmbientAudioModal";
 import {
   DIFFICULTY_PRESETS,
   type DifficultyTier,
 } from "../data/difficultyTiers";
 import { useTranslation } from "../i18n/LanguageContext";
 import LanguageSelector from "./LanguageSelector";
+import PwaNavButton from "./PwaNavButton";
 
 interface MissionBriefingScreenProps {
   onStart: (environment: MissionEnvironment, difficulty: DifficultyTier) => void;
@@ -113,6 +117,19 @@ export default function MissionBriefingScreen({
   const [selectedId, setSelectedId] = useState<string>(LUNAR_SOUTH_POLE.id);
   const [selectedDifficulty, setSelectedDifficulty] = useState<DifficultyTier>("commander");
   const [isMuted, toggleMute] = useSoundMuted();
+  const [isAudioModalOpen, setIsAudioModalOpen] = useState<boolean>(false);
+
+  // Sync ambient space drone chord selection with chosen planet
+  useEffect(() => {
+    ambientAudio.updateTelemetry({
+      environmentId: selectedId,
+      radiationMultiplier: 1.0,
+      lifeSupportHealth: 100,
+      lifeSupportPowerRatio: 1.0,
+      shieldingHealth: 100,
+      shieldingPowerRatio: 1.0,
+    });
+  }, [selectedId]);
 
   const selectedDestination =
     DESTINATIONS.find((d) => d.env.id === selectedId) ?? DESTINATIONS[0];
@@ -178,6 +195,9 @@ export default function MissionBriefingScreen({
           </div>
 
           <div className="flex items-center gap-2 sm:gap-4 text-xs font-mono">
+            {/* PWA Install / Classroom Offline Pill */}
+            <PwaNavButton />
+
             {/* Multi-Language Selector */}
             <LanguageSelector />
 
@@ -198,6 +218,20 @@ export default function MissionBriefingScreen({
                 <Volume2 className="w-3.5 h-3.5 text-cyan-400" />
               )}
               <span className="hidden sm:inline">{isMuted ? t("common.muted") : t("common.sound")}</span>
+            </button>
+
+            {/* Procedural Space Audio Synthesizer Deck Modal Trigger */}
+            <button
+              type="button"
+              onClick={() => {
+                soundEffects.playButtonClick();
+                setIsAudioModalOpen(true);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-cyan-800/60 hover:border-cyan-400 bg-slate-900/80 hover:bg-slate-800 text-cyan-300 text-xs font-mono font-bold transition-all shadow-sm shadow-cyan-950/40"
+              title="Acoustic Telemetry & Procedural Audio Deck"
+            >
+              <Sliders className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+              <span className="hidden lg:inline">{t("common.ambientAudio") || "Ambient Audio"}</span>
             </button>
 
             <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900/80 border border-slate-800 text-slate-300">
@@ -663,6 +697,13 @@ export default function MissionBriefingScreen({
           <span>{t("common.zeroSignUp")}</span>
         </div>
       </footer>
+
+      {/* Procedural Space Audio Synthesizer Deck Modal */}
+      <AmbientAudioModal
+        isOpen={isAudioModalOpen}
+        onClose={() => setIsAudioModalOpen(false)}
+        environmentName={selectedDestination.env.name}
+      />
     </div>
   );
 }

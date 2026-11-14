@@ -234,9 +234,19 @@ export function calculateThermalFatigue(
   baselineShieldingMW: number,
   cumulativeFatigueWearSoFar: number
 ): ThermalFatigueReport {
-  // Lunar South Pole has ~227°C swing (LRO Diviner); Mars Gale Crater has ~100°C swing (MSL REMS)
-  const isLunar = environmentId === "lunar_south_pole";
-  const solDeltaT = isLunar ? 227 : 100;
+  // Delta T (°C) across different planetary environments:
+  // - Lunar South Pole: ~227°C swing (LRO Diviner, −173°C to +54°C)
+  // - Mars Gale Crater: ~100°C diurnal swing (MSL REMS, −80°C to +20°C)
+  // - Europa Under-Ice: ~160°C cryogenic shear gradient (−173°C crust to −13°C ocean boundary)
+  // - Titan Hydrocarbon: ~200°C cryogenic thermal differential (−179°C surface, dense convective atmosphere)
+  let solDeltaT = 100;
+  if (environmentId === "lunar_south_pole") {
+    solDeltaT = 227;
+  } else if (environmentId === "europa_under_ice") {
+    solDeltaT = 160;
+  } else if (environmentId === "titan_hydrocarbon") {
+    solDeltaT = 200;
+  }
 
   // Active thermal loops and heat pipes depend on shielding/thermal power
   const protectionEfficiency = Math.min(
@@ -267,17 +277,32 @@ export function calculateThermalFatigue(
     warningLevel = "elevated";
   }
 
-  const technicalDiagnosis = isLunar
-    ? `LRO Diviner ΔT: ${solDeltaT}°C. Thermal loop efficiency: ${Math.round(
-        protectionEfficiency * 100
-      )}%. Thermal cycling induced +${(fatigueWearAdded * 100).toFixed(
-        1
-      )}% structural fatigue wear on composite bulkheads and radiator seals.`
-    : `MSL REMS Diurnal ΔT: ${solDeltaT}°C (−80°C to +20°C). Active heat rejection: ${Math.round(
-        protectionEfficiency * 100
-      )}%. CO₂ frost expansion strain added +${(fatigueWearAdded * 100).toFixed(
-        1
-      )}% fatigue wear to habitat seals.`;
+  let technicalDiagnosis = "";
+  if (environmentId === "lunar_south_pole") {
+    technicalDiagnosis = `LRO Diviner ΔT: ${solDeltaT}°C. Thermal loop efficiency: ${Math.round(
+      protectionEfficiency * 100
+    )}%. Thermal cycling induced +${(fatigueWearAdded * 100).toFixed(
+      1
+    )}% structural fatigue wear on composite bulkheads and radiator seals.`;
+  } else if (environmentId === "europa_under_ice") {
+    technicalDiagnosis = `Europa Clipper Cryo-Gradient ΔT: ${solDeltaT}°C (−173°C ice crust to −13°C ocean). Active heating efficiency: ${Math.round(
+      protectionEfficiency * 100
+    )}%. Cryogenic ice-expansion shear added +${(fatigueWearAdded * 100).toFixed(
+      1
+    )}% strain to titanium foundation pilings.`;
+  } else if (environmentId === "titan_hydrocarbon") {
+    technicalDiagnosis = `Dragonfly Atmosphere Convective ΔT: ${solDeltaT}°C (−179°C surface, 1.45 bar air). Thermal loop efficiency: ${Math.round(
+      protectionEfficiency * 100
+    )}%. Cryogenic methane convective cooling added +${(fatigueWearAdded * 100).toFixed(
+      1
+    )}% fatigue wear to outer habitat airlocks.`;
+  } else {
+    technicalDiagnosis = `MSL REMS Diurnal ΔT: ${solDeltaT}°C (−80°C to +20°C). Active heat rejection: ${Math.round(
+      protectionEfficiency * 100
+    )}%. CO₂ frost expansion strain added +${(fatigueWearAdded * 100).toFixed(
+      1
+    )}% fatigue wear to habitat seals.`;
+  }
 
   return {
     solDeltaT,
@@ -336,9 +361,18 @@ export function rollMicrometeoroidStrike(
     {
       subsystemHit: "powerGrid",
       severity: "severe",
-      headline: "MMOD Impact: Photovoltaic Array B Sub-string Perforation",
+      headline:
+        environmentId === "europa_under_ice"
+          ? "Cryo-Geothermal Wellhead Valve Seal Rupture"
+          : environmentId === "titan_hydrocarbon"
+          ? "Cryo-Lake Turbine Intake Manifold Slagging"
+          : "MMOD Impact: Photovoltaic Array B Sub-string Perforation",
       details:
-        "Micrometeorite fragment perforated Solar Array Wing 2 bypass diodes. Power bus voltage fluctuated; 14 MW generation knocked offline until EVA shunt rerouting.",
+        environmentId === "europa_under_ice"
+          ? "Superheated hydrothermal brine pressure burst a primary steam bypass valve. 14 MW generation knocked offline until secondary loop sync."
+          : environmentId === "titan_hydrocarbon"
+          ? "Cryogenic methane slush clogged the shoreline lake heat exchanger. 14 MW generation knocked offline until thermal purge cycle."
+          : "Micrometeorite fragment perforated Solar Array Wing 2 bypass diodes. Power bus voltage fluctuated; 14 MW generation knocked offline until EVA shunt rerouting.",
       powerLoss: 14,
       wearDelta: 0.15,
       o2Leak: 0,

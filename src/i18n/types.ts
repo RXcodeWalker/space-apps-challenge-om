@@ -68,6 +68,7 @@ export interface TranslationSchema {
     targetAges: string;
     sound: string;
     muted: string;
+    ambientAudio?: string;
     launch: string;
     launchMission: string;
     readyToCommand: string;

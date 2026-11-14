@@ -6,7 +6,7 @@
 // 2. Live Trade-off Arrows
 // 3. NASA Incident Alerts & Telemetry
 // ============================================================
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { motion } from "framer-motion";
 import {
   Zap,
@@ -19,6 +19,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { soundEffects } from "../utils/soundEffects";
+import { useTranslation } from "../i18n/LanguageContext";
 
 export interface QuickTutorialOverlayProps {
   isOpen: boolean;
@@ -36,52 +37,53 @@ interface StepConfig {
   borderColor: string;
 }
 
-const STEPS: StepConfig[] = [
-  {
-    targetSelector: '[data-tutorial="power-budget"]',
-    badge: "STEP 1 OF 3",
-    title: "Shared 100 MW Power Budget",
-    icon: <Zap className="w-5 h-5 text-amber-400" />,
-    description:
-      "Every Sol, your outpost generates a fixed 100 MW energy envelope from solar arrays and backup RTGs. Adjust the 3 sliders (or use quick presets) to distribute power without exceeding your budget.",
-    tip: "Keep Net Power at 0 MW (balanced) or positive to keep batteries charged!",
-    accentColor: "from-amber-500/20 to-blue-500/20",
-    borderColor: "border-amber-400/60",
-  },
-  {
-    targetSelector: '[data-tutorial="tradeoff-arrows"]',
-    badge: "STEP 2 OF 3",
-    title: "Live Trade-off Arrows",
-    icon: <Activity className="w-5 h-5 text-cyan-400" />,
-    description:
-      "Every kilowatt matters! Watch the live directional arrows (▲ / ▼) update in real-time as you slide. Green arrows mean safety and surplus, while red arrows warn of oxygen depletion, crop failures, or radiation leaks.",
-    tip: "Check projected deltas before clicking 'Commit Turn'!",
-    accentColor: "from-cyan-500/20 to-emerald-500/20",
-    borderColor: "border-cyan-400/60",
-  },
-  {
-    targetSelector: '[data-tutorial="incident-alerts"]',
-    badge: "STEP 3 OF 3",
-    title: "NASA Incident Alerts",
-    icon: <AlertTriangle className="w-5 h-5 text-rose-400" />,
-    description:
-      "Space is extreme! Solar storms, lunar deep freezes (−173°C), and Mars dust storms trigger mid-mission hazard alerts. You'll make real flight-director directives based on authentic NASA spacecraft data.",
-    tip: "Click 'NASA Data' anytime to inspect genuine LRO and Curiosity sensor records.",
-    accentColor: "from-rose-500/20 to-blue-500/20",
-    borderColor: "border-rose-400/60",
-  },
-];
-
 export const TUTORIAL_STORAGE_KEY = "outpost_commander_tutorial_seen";
 
 export default function QuickTutorialOverlay({
   isOpen,
   onClose,
 }: QuickTutorialOverlayProps) {
+  const { t } = useTranslation();
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
 
-  const step = STEPS[currentStepIndex];
+  const steps: StepConfig[] = useMemo(
+    () => [
+      {
+        targetSelector: '[data-tutorial="power-budget"]',
+        badge: "STEP 1 OF 3",
+        title: t("tutorial.step1Title"),
+        icon: <Zap className="w-5 h-5 text-amber-400" />,
+        description: t("tutorial.step1Body"),
+        tip: "Keep Net Power at 0 MW (balanced) or positive to keep batteries charged!",
+        accentColor: "from-amber-500/20 to-blue-500/20",
+        borderColor: "border-amber-400/60",
+      },
+      {
+        targetSelector: '[data-tutorial="tradeoff-arrows"]',
+        badge: "STEP 2 OF 3",
+        title: t("tutorial.step2Title"),
+        icon: <Activity className="w-5 h-5 text-cyan-400" />,
+        description: t("tutorial.step2Body"),
+        tip: "Check projected deltas before clicking 'Commit Turn'!",
+        accentColor: "from-cyan-500/20 to-emerald-500/20",
+        borderColor: "border-cyan-400/60",
+      },
+      {
+        targetSelector: '[data-tutorial="incident-alerts"]',
+        badge: "STEP 3 OF 3",
+        title: t("tutorial.step3Title"),
+        icon: <AlertTriangle className="w-5 h-5 text-rose-400" />,
+        description: t("tutorial.step3Body"),
+        tip: "Click 'NASA Data' anytime to inspect genuine LRO and Curiosity sensor records.",
+        accentColor: "from-rose-500/20 to-blue-500/20",
+        borderColor: "border-rose-400/60",
+      },
+    ],
+    [t]
+  );
+
+  const step = steps[currentStepIndex];
 
   // Measure and track target element position
   const updateTargetPosition = useCallback(() => {
@@ -121,7 +123,7 @@ export default function QuickTutorialOverlay({
 
   const handleNext = () => {
     soundEffects.playButtonClick();
-    if (currentStepIndex < STEPS.length - 1) {
+    if (currentStepIndex < steps.length - 1) {
       setCurrentStepIndex((prev) => prev + 1);
     } else {
       handleComplete();
@@ -251,7 +253,7 @@ export default function QuickTutorialOverlay({
           <div className="flex items-center justify-between pt-2 border-t border-slate-800/80">
             {/* Step Dots */}
             <div className="flex items-center gap-1.5">
-              {STEPS.map((_, idx) => (
+              {steps.map((_: StepConfig, idx: number) => (
                 <button
                   key={idx}
                   type="button"
@@ -275,7 +277,7 @@ export default function QuickTutorialOverlay({
                 onClick={handleSkip}
                 className="px-3 py-1.5 rounded-xl text-slate-400 hover:text-slate-200 text-xs font-mono font-semibold transition-colors"
               >
-                Skip Tutorial
+                {t("tutorial.skip")}
               </button>
 
               {currentStepIndex > 0 && (
@@ -285,7 +287,7 @@ export default function QuickTutorialOverlay({
                   className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold flex items-center gap-1 border border-slate-700 transition-colors"
                 >
                   <ChevronLeft className="w-3.5 h-3.5" />
-                  <span>Back</span>
+                  <span>{t("tutorial.prev")}</span>
                 </button>
               )}
 
@@ -294,15 +296,15 @@ export default function QuickTutorialOverlay({
                 onClick={handleNext}
                 className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#1D4ED8] to-[#06B6D4] hover:brightness-110 active:scale-95 text-white text-xs font-black flex items-center gap-1.5 shadow-lg shadow-cyan-900/40 transition-all"
               >
-                {currentStepIndex < STEPS.length - 1 ? (
+                {currentStepIndex < steps.length - 1 ? (
                   <>
-                    <span>Next</span>
+                    <span>{t("tutorial.next")}</span>
                     <ChevronRight className="w-3.5 h-3.5" />
                   </>
                 ) : (
                   <>
                     <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Launch Mission!</span>
+                    <span>{t("tutorial.start")}</span>
                   </>
                 )}
               </button>

@@ -31,6 +31,7 @@ import type {
 } from "../engine/simulationEngine";
 import type { MissionEnvironment, TurnEvent } from "../data/nasaConstants";
 import { soundEffects } from "../utils/soundEffects";
+import { ambientAudio } from "../utils/ambientAudio";
 
 export interface Habitat3DDioramaProps {
   environment: MissionEnvironment;
@@ -139,6 +140,11 @@ export default function Habitat3DDiorama({
 
   const handleSelect = (mod: "shield" | "hydroponics" | "power" | "command" | "rover" | null) => {
     soundEffects.playSliderClick(80);
+    if (mod === "shield") {
+      ambientAudio.testGeigerClick();
+    } else if (mod === "command" || mod === "hydroponics") {
+      ambientAudio.triggerAirlock(0.5);
+    }
     setInspectedModule(mod);
     onSelectModule?.(mod);
   };

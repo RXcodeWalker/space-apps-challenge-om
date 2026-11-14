@@ -19,6 +19,7 @@ import {
   RotateCcw,
   Volume2,
   VolumeX,
+  Sliders,
   HelpCircle,
   CheckCircle2,
   AlertTriangle,
@@ -32,7 +33,11 @@ import AlertBanner from "./AlertBanner";
 import IncidentModal from "./IncidentModal";
 import MissionDebriefModal from "./MissionDebriefModal";
 import QuickTutorialOverlay, { TUTORIAL_STORAGE_KEY } from "./QuickTutorialOverlay";
+import LanguageSelector from "./LanguageSelector";
+import AmbientAudioModal from "./AmbientAudioModal";
+import { useTranslation } from "../i18n/LanguageContext";
 import { soundEffects, useSoundMuted } from "../utils/soundEffects";
+import { ambientAudio } from "../utils/ambientAudio";
 
 import type { MissionEnvironment } from "../data/nasaConstants";
 import { TOTAL_TURNS } from "../data/nasaConstants";
@@ -68,6 +73,7 @@ export default function GameScreen({
   onShowNasaData,
   onSwitchPlanet,
 }: GameScreenProps) {
+  const { t } = useTranslation();
   const [gameState, setGameState] = useState<GameState>(() =>
     createInitialGameState(environment, difficulty)
   );
@@ -85,6 +91,7 @@ export default function GameScreen({
 
   // Audio mute state and Tutorial state
   const [isMuted, toggleMute] = useSoundMuted();
+  const [isAudioModalOpen, setIsAudioModalOpen] = useState<boolean>(false);
   const [isTutorialOpen, setIsTutorialOpen] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     try {
@@ -124,9 +131,48 @@ export default function GameScreen({
       if (incident && !alreadyHandled && !dismissedIncidents[currentTurn]) {
         setActiveIncident(incident);
         soundEffects.playIncidentAlert();
+
+        // Trigger procedural audio reactions based on incident nature
+        const lowerId = incident.id.toLowerCase();
+        const lowerTitle = incident.title.toLowerCase();
+        if (
+          lowerId.includes("solar") ||
+          lowerId.includes("radiation") ||
+          lowerId.includes("flare") ||
+          lowerTitle.includes("solar") ||
+          lowerTitle.includes("radiation")
+        ) {
+          ambientAudio.triggerGeigerBurst(3.5, 95);
+        } else {
+          ambientAudio.triggerAirlock(0.75);
+        }
       }
     }
   }, [currentTurn, environment.id, phase, gameState.incidentHistory, dismissedIncidents]);
+
+  // Synchronize ambient procedural audio with real-time habitat telemetry
+  useEffect(() => {
+    const radMultiplier = currentEvent?.radiationSpikeMultiplier ?? 1.0;
+    const baselineLS = gameState.difficulty === "cadet" ? 25 : 35;
+    const baselineRad = gameState.difficulty === "cadet" ? 20 : 30;
+
+    ambientAudio.updateTelemetry({
+      environmentId: environment.id,
+      radiationMultiplier: radMultiplier,
+      lifeSupportHealth: gameState.subsystems.lifeSupport.health,
+      lifeSupportPowerRatio: allocation.lifeSupport / baselineLS,
+      shieldingHealth: gameState.subsystems.radiationShielding.health,
+      shieldingPowerRatio: allocation.radiationShielding / baselineRad,
+    });
+  }, [
+    environment.id,
+    currentEvent?.radiationSpikeMultiplier,
+    gameState.subsystems.lifeSupport.health,
+    gameState.subsystems.radiationShielding.health,
+    allocation.lifeSupport,
+    allocation.radiationShielding,
+    gameState.difficulty,
+  ]);
 
   // Recalculate budget when turn or modifiers change
   useEffect(() => {
@@ -154,6 +200,7 @@ export default function GameScreen({
     (choice: IncidentChoice) => {
       if (!activeIncident) return;
       soundEffects.playButtonClick();
+      ambientAudio.triggerAirlock(0.8);
       const updatedState = applyIncidentChoice(gameState, activeIncident, choice);
       setGameState(updatedState);
       setDismissedIncidents((prev) => ({ ...prev, [currentTurn]: true }));
@@ -178,7 +225,14 @@ export default function GameScreen({
   // Advance Sol Turn
   const handleConfirmTurn = useCallback(() => {
     soundEffects.playTurnChime();
+    ambientAudio.triggerAirlock(0.7);
     const { nextState, result } = processTurn(gameState, allocation);
+
+    // If radiation spike occurred, surge Geiger clicks
+    if (result.event.radiationSpikeMultiplier > 1.6) {
+      ambientAudio.triggerGeigerBurst(3.2, 85);
+    }
+
     setGameState(nextState);
     setLastResult(result);
     setPhase("result");
@@ -256,6 +310,13 @@ export default function GameScreen({
           onShowNasaData={onShowNasaData}
         />
       )}
+
+      {/* Procedural Space Audio & Telemetry Deck Modal */}
+      <AmbientAudioModal
+        isOpen={isAudioModalOpen}
+        onClose={() => setIsAudioModalOpen(false)}
+        environmentName={environment.name}
+      />
 
       <main className="flex-1 max-w-7xl mx-auto w-full px-3 sm:px-6 py-4 sm:py-6 flex flex-col gap-5">
         <AnimatePresence mode="wait">
@@ -482,7 +543,7 @@ export default function GameScreen({
               <div className="flex items-center justify-between p-3 rounded-2xl bg-[#090E1A] border border-cyan-900/40 shadow-lg">
                 <div className="flex items-center gap-3">
                   <span className="text-xs font-mono font-bold tracking-wider text-[#06B6D4] uppercase">
-                    MISSION SOL {lastResult.turn} OF {TOTAL_TURNS}
+                    {t("game.solIndicator", { current: lastResult.turn, total: TOTAL_TURNS })}
                   </span>
                   <span
                     className="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider font-mono flex items-center gap-1"
@@ -493,14 +554,17 @@ export default function GameScreen({
                     }}
                   >
                     <span>{DIFFICULTY_PRESETS[gameState.difficulty].emoji}</span>
-                    <span>{DIFFICULTY_PRESETS[gameState.difficulty].title}</span>
+                    <span>{t(`difficulties.${gameState.difficulty}.title`)}</span>
                   </span>
                   <span className="text-xs text-slate-400 hidden sm:inline">
-                    {environment.name} · {environment.subtitle}
+                    {t(`destinations.${environment.id === "lunar_south_pole" ? "moon" : "mars"}.name`)}
                   </span>
                 </div>
 
                 <div className="flex items-center gap-2">
+                  {/* Multi-Language Selector */}
+                  <LanguageSelector compact />
+
                   {/* Mute/Unmute Toggle */}
                   <button
                     type="button"
@@ -517,7 +581,21 @@ export default function GameScreen({
                     ) : (
                       <Volume2 className="w-3.5 h-3.5 text-cyan-400" />
                     )}
-                    <span className="hidden sm:inline">{isMuted ? "Muted" : "Sound"}</span>
+                    <span className="hidden sm:inline">{isMuted ? t("common.muted") : t("common.sound")}</span>
+                  </button>
+
+                  {/* Procedural Space Audio Synthesizer Deck Modal Trigger */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundEffects.playButtonClick();
+                      setIsAudioModalOpen(true);
+                    }}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-cyan-700/50 hover:border-cyan-400 bg-slate-900/90 hover:bg-slate-800 text-cyan-300 text-xs font-mono font-bold transition-all shadow-sm shadow-cyan-950/50"
+                    title="Acoustic Telemetry & Procedural Audio Deck"
+                  >
+                    <Sliders className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+                    <span className="hidden md:inline">{t("common.ambientAudio") || "Ambient Audio"}</span>
                   </button>
 
                   {/* Tutorial Help Button */}
@@ -528,7 +606,7 @@ export default function GameScreen({
                     title="Review 3-Step Mission Tutorial"
                   >
                     <HelpCircle className="w-3.5 h-3.5 text-[#06B6D4]" />
-                    <span className="hidden sm:inline">Tutorial</span>
+                    <span className="hidden sm:inline">{t("common.howToPlay")}</span>
                   </button>
 
                   {/* NASA Data Header Button */}
@@ -538,7 +616,7 @@ export default function GameScreen({
                     className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-cyan-300 text-xs font-bold font-mono transition-colors"
                   >
                     <Database className="w-3.5 h-3.5 text-[#06B6D4]" />
-                    <span>NASA Data</span>
+                    <span>{t("common.nasaData")}</span>
                   </button>
 
                   {/* View Full Debrief if mission finished */}
@@ -549,7 +627,7 @@ export default function GameScreen({
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 text-white text-xs font-bold font-mono shadow-md"
                     >
                       <Sparkles className="w-3.5 h-3.5" />
-                      <span>Engineering Debrief</span>
+                      <span>{t("debrief.title")}</span>
                     </button>
                   )}
                 </div>
@@ -688,7 +766,7 @@ export default function GameScreen({
                         onClick={handleNextTurn}
                         className="w-full py-4 rounded-xl bg-gradient-to-r from-[#1D4ED8] to-[#06B6D4] text-white font-black text-base flex items-center justify-center gap-2 shadow-lg shadow-blue-900/50"
                       >
-                        <span>Start Sol {lastResult.turn + 1} Operations</span>
+                        <span>{t("game.proceedNextSol", { nextSol: lastResult.turn + 1 })}</span>
                         <ChevronRight className="w-5 h-5" />
                       </motion.button>
                     </div>
@@ -701,7 +779,7 @@ export default function GameScreen({
                         className="flex-1 py-4 rounded-xl bg-gradient-to-r from-blue-600 via-cyan-500 to-emerald-500 text-white font-black text-base flex items-center justify-center gap-2 shadow-lg shadow-cyan-900/50"
                       >
                         <Sparkles className="w-5 h-5" />
-                        <span>Open NASA Engineering Debrief</span>
+                        <span>{t("game.finishMission")}</span>
                       </motion.button>
 
                       <button
@@ -710,7 +788,7 @@ export default function GameScreen({
                         className="px-5 py-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm flex items-center justify-center gap-2 border border-slate-700"
                       >
                         <RotateCcw className="w-4 h-4" />
-                        <span>Play Again</span>
+                        <span>{t("common.playAgain")}</span>
                       </button>
                     </div>
                   )}

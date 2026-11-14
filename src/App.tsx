@@ -8,6 +8,7 @@ import MissionBriefingScreen from "./components/MissionBriefingScreen";
 import GameScreen from "./components/GameScreen";
 import MissionEndScreen from "./components/MissionEndScreen";
 import NasaDataModal from "./components/NasaDataModal";
+import PwaStatusBanner from "./components/PwaStatusBanner";
 
 import type { MissionEnvironment } from "./data/nasaConstants";
 import type { GameState, DifficultyTier } from "./engine/simulationEngine";
@@ -55,7 +56,10 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950">
+    <div className="min-h-screen bg-slate-950 flex flex-col">
+      {/* PWA Offline / Install / Update Banner */}
+      <PwaStatusBanner />
+
       {/* NASA Data Modal (accessible from any phase) */}
       <NasaDataModal
         environment={nasaModalEnv || selectedEnvironment}

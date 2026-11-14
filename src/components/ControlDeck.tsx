@@ -7,7 +7,7 @@
 //  4. Live Consequence Preview with real-time color-coded deltas & arrows
 //  5. High-contrast "Commit & Advance Turn" button
 // ============================================================
-import React, { useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import { motion } from "framer-motion";
 import {
   Shield,
@@ -28,7 +28,9 @@ import {
   VolumeX,
   HelpCircle,
   ShieldAlert,
+  Sliders,
 } from "lucide-react";
+import AmbientAudioModal from "./AmbientAudioModal";
 import { soundEffects, useSoundMuted } from "../utils/soundEffects";
 import type {
   SubsystemState,
@@ -42,6 +44,9 @@ import {
   DIFFICULTY_PRESETS,
   type DifficultyTier,
 } from "../data/difficultyTiers";
+import { useTranslation } from "../i18n/LanguageContext";
+import LanguageSelector from "./LanguageSelector";
+import PwaNavButton from "./PwaNavButton";
 
 export interface ControlDeckProps {
   environment: MissionEnvironment;
@@ -78,7 +83,9 @@ export default function ControlDeck({
   isProcessing = false,
   children,
 }: ControlDeckProps) {
+  const { t } = useTranslation();
   const [isMuted, toggleMute] = useSoundMuted();
+  const [isAudioModalOpen, setIsAudioModalOpen] = useState(false);
   const config = DIFFICULTY_PRESETS[difficulty];
   const baselines = config.baselinePowerDemands;
 
@@ -342,6 +349,9 @@ export default function ControlDeck({
         </div>
 
         <div className="flex items-center gap-2">
+          {/* PWA Install / Classroom Offline Pill */}
+          <PwaNavButton />
+
           {/* Multi-Language Selector */}
           <LanguageSelector compact />
 
@@ -362,6 +372,20 @@ export default function ControlDeck({
               <Volume2 className="w-3.5 h-3.5 text-cyan-400" />
             )}
             <span className="hidden sm:inline">{isMuted ? t("common.muted") : t("common.sound")}</span>
+          </button>
+
+          {/* Procedural Space Audio Synthesizer Deck Modal Trigger */}
+          <button
+            type="button"
+            onClick={() => {
+              soundEffects.playButtonClick();
+              setIsAudioModalOpen(true);
+            }}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-cyan-700/50 hover:border-cyan-400 bg-slate-900/90 hover:bg-slate-800 text-cyan-300 text-xs font-mono font-bold transition-all shadow-sm shadow-cyan-950/50"
+            title="Acoustic Telemetry & Procedural Audio Deck"
+          >
+            <Sliders className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+            <span className="hidden md:inline">{t("common.ambientAudio") || "Ambient Audio"}</span>
           </button>
 
           {/* Tutorial / Help Button */}
@@ -860,6 +884,13 @@ export default function ControlDeck({
           )}
         </motion.button>
       </div>
+
+      {/* Procedural Space Audio Synthesizer Deck Modal */}
+      <AmbientAudioModal
+        isOpen={isAudioModalOpen}
+        onClose={() => setIsAudioModalOpen(false)}
+        environmentName={environment.name}
+      />
     </div>
   );
 }

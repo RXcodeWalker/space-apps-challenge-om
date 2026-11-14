@@ -10,6 +10,7 @@ export const ja: TranslationSchema = {
     targetAges: "対象年齢 7〜12歳 · ログイン不要",
     sound: "サウンド",
     muted: "消音",
+    ambientAudio: "環境音",
     launch: "ミッション開始",
     launchMission: "ミッションを起動する",
     readyToCommand: "司令官待機中",

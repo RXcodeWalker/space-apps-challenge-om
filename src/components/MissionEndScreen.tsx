@@ -19,6 +19,8 @@ import MissionDebriefModal from "./MissionDebriefModal";
 import JuniorAstronautCertificate from "./JuniorAstronautCertificate";
 import { calculateOutcomeRank } from "../utils/flightRecorder";
 import { DIFFICULTY_PRESETS } from "../data/difficultyTiers";
+import { useTranslation } from "../i18n/LanguageContext";
+import LanguageSelector from "./LanguageSelector";
 
 interface MissionEndScreenProps {
   gameState: GameState;
@@ -101,9 +103,10 @@ export default function MissionEndScreen({
   onShowNasaData,
   kidMode,
 }: MissionEndScreenProps) {
+  const { t } = useTranslation();
   const [showDebrief, setShowDebrief] = useState(false);
   const [showCertificate, setShowCertificate] = useState(false);
-  const { finalOutcome, cumulativeScore, history } = gameState;
+  const { finalOutcome, cumulativeScore, history: missionHistory = [] } = gameState;
 
   const outcomeRank = useMemo(() => calculateOutcomeRank(gameState), [gameState]);
 
@@ -162,6 +165,13 @@ export default function MissionEndScreen({
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
       >
+        <div className="flex justify-between items-center px-1">
+          <span className="text-xs font-mono font-bold tracking-wider text-cyan-400 uppercase">
+            {t("common.nasaSpaceApps")}
+          </span>
+          <LanguageSelector compact />
+        </div>
+
         {/* Outcome card */}
         <div
           className={`glass-panel p-6 border ${outcomeConfig.borderColor} ${outcomeConfig.bgColor}`}
@@ -222,7 +232,7 @@ export default function MissionEndScreen({
             {kidMode ? "Mission Log (what happened each turn)" : "Turn-by-Turn Log"}
           </h3>
           <div className="max-h-48 overflow-y-auto">
-            {history.map((result) => (
+            {(missionHistory || []).map((result: TurnResult) => (
               <TurnHistoryRow key={result.turn} result={result} kidMode={kidMode} />
             ))}
           </div>
@@ -262,7 +272,7 @@ export default function MissionEndScreen({
             className="w-full flex items-center justify-center gap-2.5 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:from-amber-400 hover:to-amber-300 text-black font-black py-4 rounded-xl transition-all shadow-xl shadow-amber-950/60 text-sm cursor-pointer transform hover:scale-[1.01]"
           >
             <Award size={20} className="text-black" />
-            <span>Download / Print Junior Astronaut Mission Certificate (PDF & Image)</span>
+            <span>{t("debrief.viewCertificate")}</span>
           </button>
 
           <button
@@ -270,30 +280,30 @@ export default function MissionEndScreen({
             className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white font-black py-3.5 rounded-xl transition-all shadow-lg shadow-cyan-900/40 text-sm cursor-pointer"
           >
             <Sparkles size={18} />
-            <span>View Flight Recorder Replay & Engineering Debrief</span>
+            <span>{t("debrief.flightRecorder")}</span>
           </button>
 
           <div className="flex flex-col sm:flex-row gap-3">
             <button
               onClick={onRetry}
-              className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition-colors"
+              className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition-colors cursor-pointer"
             >
               <RotateCcw size={16} />
-              Retry {environment.name}
+              {t("common.retry")} {t(`destinations.${environment.id === "lunar_south_pole" ? "moon" : "mars"}.name`)}
             </button>
             <button
               onClick={onNewMission}
-              className="flex-1 flex items-center justify-center gap-2 bg-white/10 hover:bg-white/15 text-white font-bold py-3 rounded-xl transition-colors"
+              className="flex-1 flex items-center justify-center gap-2 bg-white/10 hover:bg-white/15 text-white font-bold py-3 rounded-xl transition-colors cursor-pointer"
             >
               <Globe size={16} />
-              Switch Planet
+              {t("common.switchPlanet")}
             </button>
             <button
               onClick={onShowNasaData}
-              className="flex-1 flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-slate-300 font-semibold py-3 rounded-xl transition-colors"
+              className="flex-1 flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-slate-300 font-semibold py-3 rounded-xl transition-colors cursor-pointer"
             >
               <Satellite size={16} />
-              NASA Data
+              {t("common.nasaData")}
             </button>
           </div>
         </div>

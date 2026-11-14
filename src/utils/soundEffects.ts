@@ -9,10 +9,12 @@
 // ============================================================
 
 const MUTE_STORAGE_KEY = "outpost_commander_muted";
+const SFX_VOLUME_STORAGE_KEY = "outpost_commander_sfx_volume";
 
 class SoundEffectsManager {
   private ctx: AudioContext | null = null;
   private isMuted: boolean = false;
+  private sfxVolume: number = 0.8;
   private listeners: Set<(muted: boolean) => void> = new Set();
   private lastSliderClickTime: number = 0;
 
@@ -21,8 +23,13 @@ class SoundEffectsManager {
       try {
         const saved = localStorage.getItem(MUTE_STORAGE_KEY);
         this.isMuted = saved === "true";
+        const savedVol = localStorage.getItem(SFX_VOLUME_STORAGE_KEY);
+        if (savedVol !== null) {
+          this.sfxVolume = parseFloat(savedVol);
+        }
       } catch {
         this.isMuted = false;
+        this.sfxVolume = 0.8;
       }
     }
   }
@@ -30,7 +37,7 @@ class SoundEffectsManager {
   /**
    * Lazily initializes and resumes the Web Audio context upon user interaction
    */
-  private getContext(): AudioContext | null {
+  public getContext(): AudioContext | null {
     if (typeof window === "undefined") return null;
 
     if (!this.ctx) {
@@ -52,6 +59,18 @@ class SoundEffectsManager {
 
   public getIsMuted(): boolean {
     return this.isMuted;
+  }
+
+  public getSfxVolume(): number {
+    return this.sfxVolume;
+  }
+
+  public setSfxVolume(vol: number): void {
+    this.sfxVolume = Math.max(0, Math.min(1, vol));
+    try {
+      localStorage.setItem(SFX_VOLUME_STORAGE_KEY, String(this.sfxVolume));
+    } catch {}
+    this.notifyListeners();
   }
 
   public setMuted(muted: boolean): void {
@@ -102,7 +121,7 @@ class SoundEffectsManager {
       osc.frequency.setValueAtTime(startFreq, ctx.currentTime);
       osc.frequency.exponentialRampToValueAtTime(startFreq * 0.5, ctx.currentTime + 0.02);
 
-      gain.gain.setValueAtTime(0.06, ctx.currentTime);
+      gain.gain.setValueAtTime(0.06 * this.sfxVolume, ctx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.022);
 
       osc.connect(gain);
@@ -143,7 +162,7 @@ class SoundEffectsManager {
 
         // Soft attack to avoid clicks, then exponential decay
         gain.gain.setValueAtTime(0.0001, startTime);
-        gain.gain.linearRampToValueAtTime(gainVal, startTime + 0.02);
+        gain.gain.linearRampToValueAtTime(gainVal * this.sfxVolume, startTime + 0.02);
         gain.gain.exponentialRampToValueAtTime(0.0001, endTime);
 
         osc.connect(gain);
@@ -195,10 +214,10 @@ class SoundEffectsManager {
         filter.type = "lowpass";
         filter.frequency.setValueAtTime(1400, startTime);
 
-        gain1.gain.setValueAtTime(0.09, startTime);
+        gain1.gain.setValueAtTime(0.09 * this.sfxVolume, startTime);
         gain1.gain.exponentialRampToValueAtTime(0.001, endTime);
 
-        gain2.gain.setValueAtTime(0.08, startTime);
+        gain2.gain.setValueAtTime(0.08 * this.sfxVolume, startTime);
         gain2.gain.exponentialRampToValueAtTime(0.001, endTime);
 
         osc1.connect(gain1);
@@ -248,7 +267,7 @@ class SoundEffectsManager {
         osc.frequency.setValueAtTime(freq, startTime);
 
         gain.gain.setValueAtTime(0.0001, startTime);
-        gain.gain.linearRampToValueAtTime(vol, startTime + 0.04);
+        gain.gain.linearRampToValueAtTime(vol * this.sfxVolume, startTime + 0.04);
         gain.gain.exponentialRampToValueAtTime(0.0001, endTime);
 
         osc.connect(gain);
@@ -279,7 +298,7 @@ class SoundEffectsManager {
       osc.frequency.setValueAtTime(640, ctx.currentTime);
       osc.frequency.exponentialRampToValueAtTime(480, ctx.currentTime + 0.04);
 
-      gain.gain.setValueAtTime(0.07, ctx.currentTime);
+      gain.gain.setValueAtTime(0.07 * this.sfxVolume, ctx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.04);
 
       osc.connect(gain);

@@ -10,6 +10,7 @@ export const en: TranslationSchema = {
     targetAges: "AGES 7–12 · NO LOGIN",
     sound: "Sound",
     muted: "Muted",
+    ambientAudio: "Ambient Audio",
     launch: "Launch",
     launchMission: "LAUNCH MISSION",
     readyToCommand: "Ready to Command",
