@@ -18,11 +18,13 @@ import {
   TITAN_HYDROCARBON,
 } from "./data/nasaConstants";
 import type { GameState, DifficultyTier } from "./engine/simulationEngine";
+import type { HistoricScenario } from "./data/scenarioData";
 import {
   parseMissionParamsFromUrl,
   generateMissionSeed,
   normalizeSeed,
 } from "./utils/seededRandom";
+import { soundEffects } from "./utils/soundEffects";
 
 type AppPhase = "menu" | "game" | "end";
 
@@ -55,11 +57,13 @@ export default function App() {
   const [selectedSeed, setSelectedSeed] = useState<string>(() => {
     return urlParams.seed ? normalizeSeed(urlParams.seed) : generateMissionSeed();
   });
+  const [selectedScenario, setSelectedScenario] = useState<HistoricScenario | null>(null);
   const [finalGameState, setFinalGameState] = useState<GameState | null>(null);
   const [isNasaModalOpen, setIsNasaModalOpen] = useState(false);
   const [nasaModalEnv, setNasaModalEnv] = useState<MissionEnvironment | null>(null);
 
   function handleOpenNasaData(env?: MissionEnvironment | null) {
+    soundEffects.playButtonClick();
     if (env) {
       setNasaModalEnv(env);
     }
@@ -69,13 +73,15 @@ export default function App() {
   function handleStartMission(
     env: MissionEnvironment,
     difficulty: DifficultyTier = "commander",
-    seed?: string
+    seed?: string,
+    scenario?: HistoricScenario
   ) {
     setSelectedEnvironment(env);
     setSelectedDifficulty(difficulty);
     if (seed) {
       setSelectedSeed(normalizeSeed(seed));
     }
+    setSelectedScenario(scenario || null);
     setFinalGameState(null);
     setPhase("game");
   }
@@ -94,6 +100,7 @@ export default function App() {
 
   function handleNewMission() {
     setSelectedEnvironment(null);
+    setSelectedScenario(null);
     setFinalGameState(null);
     setPhase("menu");
   }
@@ -124,13 +131,14 @@ export default function App() {
               onShowNasaData={(env) => handleOpenNasaData(env)}
               initialSeed={selectedSeed}
               initialEnvironmentId={selectedEnvironment?.id}
+              initialScenarioId={selectedScenario?.id}
             />
           </motion.div>
         )}
 
         {phase === "game" && selectedEnvironment && (
           <motion.div
-            key={`game-${selectedEnvironment.id}-${selectedSeed}`}
+            key={`game-${selectedEnvironment.id}-${selectedSeed}${selectedScenario ? `-${selectedScenario.id}` : ""}`}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -140,6 +148,7 @@ export default function App() {
               environment={selectedEnvironment}
               difficulty={selectedDifficulty}
               missionSeed={selectedSeed}
+              scenario={selectedScenario || undefined}
               onMissionEnd={handleMissionEnd}
               onShowNasaData={() => handleOpenNasaData(selectedEnvironment)}
               onSwitchPlanet={handleNewMission}
