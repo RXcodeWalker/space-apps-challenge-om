@@ -111,8 +111,9 @@ export const DIFFICULTY_PRESETS: Record<DifficultyTier, DifficultyConfig> = {
 
     baselinePowerDemands: {
       powerGrid: 20,          // Reduced from 25 MW
-      lifeSupport: 28,        // Reduced from 35 MW
-      radiationShielding: 24, // Reduced from 30 MW
+      lifeSupport: 20,        // ECLSS O₂ and water loop
+      radiationShielding: 20, // Reduced from 25 MW
+      foodProduction: 18,     // Greenhouse Bay (reduced from 20 MW baseline)
     },
     rtgReserveFraction: 0.15,
     recoveryMultiplier: 1.5,
@@ -153,8 +154,9 @@ export const DIFFICULTY_PRESETS: Record<DifficultyTier, DifficultyConfig> = {
 
     baselinePowerDemands: {
       powerGrid: 25,
-      lifeSupport: 35,
-      radiationShielding: 30,
+      lifeSupport: 25,
+      radiationShielding: 25,
+      foodProduction: 20, // 20 MW baseline (NASA BVAD agronomy requirement)
     },
     rtgReserveFraction: 0.10,
     recoveryMultiplier: 1.0,
@@ -194,9 +196,10 @@ export const DIFFICULTY_PRESETS: Record<DifficultyTier, DifficultyConfig> = {
     borderColor: "border-amber-500/70",
 
     baselinePowerDemands: {
-      powerGrid: 26,
-      lifeSupport: 37,
-      radiationShielding: 32,
+      powerGrid: 25,
+      lifeSupport: 26,
+      radiationShielding: 26,
+      foodProduction: 22,
     },
     rtgReserveFraction: 0.08,
     recoveryMultiplier: 0.85,
@@ -393,6 +396,19 @@ export function rollMicrometeoroidStrike(
       mitigation:
         "Reallocate power to Radiation & Thermal Shielding to activate the isolated backup heat-pipe loop.",
     },
+    {
+      subsystemHit: "foodProduction",
+      severity: "moderate",
+      headline: "MMOD Strike: Greenhouse Aeroponic Manifold Perforation",
+      details:
+        "Hypervelocity particle pierced Greenhouse Pod outer bulkhead. Automated nutrient misting offline; crops at immediate risk of thermal freeze.",
+      powerLoss: 4,
+      wearDelta: 0.14,
+      o2Leak: 0,
+      pressureDrop: 3.8,
+      mitigation:
+        "Reallocate power to Food Production to activate emergency heating coils and pressurize the backup nutrient injector.",
+    },
   ];
 
   const profileIndex = (sol + pseudoSeed) % strikeProfiles.length;
@@ -456,39 +472,54 @@ export function generateCadetAutomatedHints(
     });
   }
 
-  // 2. Food / Hydroponics check
-  if (crew.foodReserveDays < 8) {
+  // 2. Food / Greenhouse check
+  if (
+    subsystems.foodProduction?.health < 70 ||
+    crew.foodReserveDays < 8 ||
+    allocation.foodProduction < 18
+  ) {
+    const isThermalShockRisk = allocation.foodProduction < 10;
     hints.push({
       id: "hint_cadet_food",
       category: "life_support",
-      title: "Hydroponics Garden Needs Sunshine! 🥗",
-      message: `Only ${crew.foodReserveDays.toFixed(1)} days of food remaining! Hydroponic greenhouse crops need sustained power.`,
-      kidFriendlyMessage:
-        "The space plants in your greenhouse are getting hungry! Give Life Support some extra energy to grow yummy fresh space veggies.",
-      actionRecommendation: "Keep Life Support above 30 MW to boost crop growth",
-      severity: "warning",
+      title: isThermalShockRisk ? "Greenhouse Freezing! ❄️🥗" : "Space Plants Need Light! 🥗",
+      message: isThermalShockRisk
+        ? "Food Production is below 10 MW! Crops will enter Thermal Shock and lose 25% growth progress per Sol."
+        : `Only ${crew.foodReserveDays.toFixed(1)} days of food remaining! Hydroponic greenhouse crops need sustained power (>= 20 MW) to mature.`,
+      kidFriendlyMessage: isThermalShockRisk
+        ? "Brrr! The space greenhouse is freezing cold! Plants need at least 10 MW to stay warm, and 20 MW to grow yummy food. Slide more power to Food Production!"
+        : "The space plants in your greenhouse are getting hungry! Give Food Production some extra energy (at least 20 MW) to grow fresh space veggies.",
+      actionRecommendation: "Keep Food Production at 20 MW or higher to sustain harvest cycles",
+      suggestedAllocation: {
+        foodProduction: Math.min(effectiveBudgetMW, Math.max(20, allocation.foodProduction + 5)),
+      },
+      severity: isThermalShockRisk || crew.foodReserveDays < 3 ? "urgent" : "warning",
     });
   }
 
   // 3. Radiation shield check
-  if (allocation.radiationShielding < 22) {
+  if (allocation.radiationShielding < 20) {
     hints.push({
       id: "hint_cadet_shield",
       category: "radiation",
       title: "Force Field Shield is Low! 🛡️",
-      message: "Radiation Shielding is below the 24 MW safe threshold. Invisible space rays are reaching the habitat.",
+      message: "Radiation Shielding is below the 20 MW safe threshold. Invisible space rays are reaching the habitat.",
       kidFriendlyMessage:
         "Your invisible superhero force field is getting thin! Slide more power to Radiation Shielding so the crew doesn't get space sunburn.",
-      actionRecommendation: "Increase Radiation Shielding to 24 MW or higher",
+      actionRecommendation: "Increase Radiation Shielding to 20 MW or higher",
       suggestedAllocation: {
-        radiationShielding: Math.min(effectiveBudgetMW, 24),
+        radiationShielding: Math.min(effectiveBudgetMW, 20),
       },
       severity: "warning",
     });
   }
 
   // 4. Over-budget helper
-  const totalUsed = allocation.powerGrid + allocation.lifeSupport + allocation.radiationShielding;
+  const totalUsed =
+    allocation.powerGrid +
+    allocation.lifeSupport +
+    allocation.radiationShielding +
+    allocation.foodProduction;
   if (totalUsed > effectiveBudgetMW) {
     const overage = totalUsed - effectiveBudgetMW;
     hints.push({

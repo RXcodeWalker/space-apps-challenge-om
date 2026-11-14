@@ -249,17 +249,21 @@ export default function FlightRecorderReplay({
             </div>
 
             {/* Quick Sol Metrics Pills */}
-            <div className="flex items-center gap-2 shrink-0 font-mono text-[11px] bg-black/40 px-3 py-1.5 rounded-xl border border-white/10">
+            <div className="flex items-center gap-2 shrink-0 font-mono text-[11px] bg-black/40 px-3 py-1.5 rounded-xl border border-white/10 flex-wrap">
               <span className="text-blue-300">
                 Grid: <strong>{activeMilestone.powerAllocation.powerGrid} MW</strong>
               </span>
               <span className="text-slate-600">·</span>
-              <span className="text-emerald-300">
+              <span className="text-cyan-300">
                 ECLSS: <strong>{activeMilestone.powerAllocation.lifeSupport} MW</strong>
               </span>
               <span className="text-slate-600">·</span>
-              <span className="text-cyan-300">
+              <span className="text-indigo-300">
                 Shields: <strong>{activeMilestone.powerAllocation.radiationShielding} MW</strong>
+              </span>
+              <span className="text-slate-600">·</span>
+              <span className="text-emerald-300">
+                Food: <strong>{activeMilestone.powerAllocation.foodProduction} MW</strong>
               </span>
             </div>
           </div>
@@ -522,24 +526,29 @@ function PowerDistributionChart({
   const gridPoints = milestones.map((m, i) => `${getX(i)},${getY(m.powerAllocation.powerGrid)}`).join(" ");
   const lsPoints = milestones.map((m, i) => `${getX(i)},${getY(m.powerAllocation.lifeSupport)}`).join(" ");
   const shieldPoints = milestones.map((m, i) => `${getX(i)},${getY(m.powerAllocation.radiationShielding)}`).join(" ");
+  const foodPoints = milestones.map((m, i) => `${getX(i)},${getY(m.powerAllocation.foodProduction)}`).join(" ");
   const budgetPoints = milestones.map((m, i) => `${getX(i)},${getY(m.effectiveBudgetMW)}`).join(" ");
 
   return (
     <div className="w-full flex flex-col gap-2">
       {/* Legend */}
       <div className="flex flex-wrap items-center justify-between text-[11px] font-mono px-1">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-blue-400" />
+            <span className="text-slate-300">Power Grid (MW)</span>
+          </div>
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-cyan-400" />
+            <span className="text-slate-300">Life Support ECLSS (MW)</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-indigo-400" />
             <span className="text-slate-300">Radiation Shields (MW)</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-            <span className="text-slate-300">Life Support ECLSS (MW)</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-blue-400" />
-            <span className="text-slate-300">Power Grid (MW)</span>
+            <span className="text-slate-300">Food Production (MW)</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-3 h-0.5 border-t border-dashed border-amber-400" />
@@ -644,24 +653,34 @@ function PowerDistributionChart({
             points={gridPoints}
           />
 
-          {/* Life Support (Emerald) */}
+          {/* Life Support (Cyan) */}
           <polyline
             fill="none"
-            stroke="#10B981"
+            stroke="#06B6D4"
             strokeWidth="2.5"
             strokeLinecap="round"
             strokeLinejoin="round"
             points={lsPoints}
           />
 
-          {/* Radiation Shielding (Cyan) */}
+          {/* Radiation Shielding (Indigo) */}
           <polyline
             fill="none"
-            stroke="#06B6D4"
-            strokeWidth="3"
+            stroke="#6366F1"
+            strokeWidth="2.5"
             strokeLinecap="round"
             strokeLinejoin="round"
             points={shieldPoints}
+          />
+
+          {/* Food Production (Emerald) */}
+          <polyline
+            fill="none"
+            stroke="#10B981"
+            strokeWidth="3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            points={foodPoints}
           />
 
           {/* Active Sol Scanning Vertical Guide Line */}
@@ -741,8 +760,8 @@ function PowerDistributionChart({
                   cx={x}
                   cy={getY(m.powerAllocation.radiationShielding)}
                   r={isHovered ? 5 : 3}
-                  fill="#06B6D4"
-                  stroke="#083344"
+                  fill="#6366F1"
+                  stroke="#312E81"
                   strokeWidth="1.5"
                 />
 
@@ -750,6 +769,16 @@ function PowerDistributionChart({
                 <circle
                   cx={x}
                   cy={getY(m.powerAllocation.lifeSupport)}
+                  r={isHovered ? 5 : 3}
+                  fill="#06B6D4"
+                  stroke="#083344"
+                  strokeWidth="1.5"
+                />
+
+                {/* Point nodes for Food */}
+                <circle
+                  cx={x}
+                  cy={getY(m.powerAllocation.foodProduction)}
                   r={isHovered ? 5 : 3}
                   fill="#10B981"
                   stroke="#064E3B"
@@ -1028,22 +1057,27 @@ function SubsystemHealthChart({
   const pgPoints = milestones.map((m, i) => `${getX(i)},${getY(m.subsystemHealth.powerGrid)}`).join(" ");
   const lsPoints = milestones.map((m, i) => `${getX(i)},${getY(m.subsystemHealth.lifeSupport)}`).join(" ");
   const rsPoints = milestones.map((m, i) => `${getX(i)},${getY(m.subsystemHealth.radiationShielding)}`).join(" ");
+  const fpPoints = milestones.map((m, i) => `${getX(i)},${getY(m.subsystemHealth.foodProduction)}`).join(" ");
 
   return (
     <div className="w-full flex flex-col gap-2">
       <div className="flex flex-wrap items-center justify-between text-[11px] font-mono px-1">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-            <span className="text-slate-300">Life Support Health</span>
+            <span className="w-2.5 h-2.5 rounded-full bg-blue-400" />
+            <span className="text-slate-300">Power Grid</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-cyan-400" />
-            <span className="text-slate-300">Shielding Health</span>
+            <span className="text-slate-300">Life Support</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-blue-400" />
-            <span className="text-slate-300">Power Grid Health</span>
+            <span className="w-2.5 h-2.5 rounded-full bg-indigo-400" />
+            <span className="text-slate-300">Shielding</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
+            <span className="text-slate-300">Food Production</span>
           </div>
         </div>
       </div>
@@ -1095,8 +1129,9 @@ function SubsystemHealthChart({
           ))}
 
           <polyline fill="none" stroke="#3B82F6" strokeWidth="2.5" strokeLinecap="round" points={pgPoints} />
-          <polyline fill="none" stroke="#06B6D4" strokeWidth="2.5" strokeLinecap="round" points={rsPoints} />
-          <polyline fill="none" stroke="#10B981" strokeWidth="2.5" strokeLinecap="round" points={lsPoints} />
+          <polyline fill="none" stroke="#06B6D4" strokeWidth="2.5" strokeLinecap="round" points={lsPoints} />
+          <polyline fill="none" stroke="#6366F1" strokeWidth="2.5" strokeLinecap="round" points={rsPoints} />
+          <polyline fill="none" stroke="#10B981" strokeWidth="2.5" strokeLinecap="round" points={fpPoints} />
 
           {milestones.map((m, i) => {
             const x = getX(i);
@@ -1110,8 +1145,9 @@ function SubsystemHealthChart({
                 onMouseLeave={() => onHover(null)}
                 onClick={() => onClickSol(i)}
               >
-                <circle cx={x} cy={getY(m.subsystemHealth.lifeSupport)} r={isHovered ? 5 : 3} fill="#10B981" />
-                <circle cx={x} cy={getY(m.subsystemHealth.radiationShielding)} r={isHovered ? 5 : 3} fill="#06B6D4" />
+                <circle cx={x} cy={getY(m.subsystemHealth.foodProduction)} r={isHovered ? 5 : 3} fill="#10B981" />
+                <circle cx={x} cy={getY(m.subsystemHealth.lifeSupport)} r={isHovered ? 5 : 3} fill="#06B6D4" />
+                <circle cx={x} cy={getY(m.subsystemHealth.radiationShielding)} r={isHovered ? 5 : 3} fill="#6366F1" />
                 <circle cx={x} cy={getY(m.subsystemHealth.powerGrid)} r={isHovered ? 5 : 3} fill="#3B82F6" />
               </g>
             );

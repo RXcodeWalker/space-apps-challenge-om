@@ -17,6 +17,15 @@ import {
   TOTAL_TURNS,
   MIN_SYSTEM_HEALTH,
   MAX_SYSTEM_HEALTH,
+  GREENHOUSE_BASELINE_POWER_MW,
+  GREENHOUSE_THERMAL_SHOCK_THRESHOLD_MW,
+  GREENHOUSE_THERMAL_SHOCK_PROGRESS_PENALTY,
+  HARVEST_CYCLE_SOLS,
+  HARVEST_FOOD_RESERVE_DAYS_BONUS,
+  HARVEST_CREW_MORALE_SURGE,
+  HARVEST_YIELD_KG_PER_CYCLE,
+  STARVATION_HEALTH_PENALTY_PER_TURN,
+  STARVATION_REPAIR_SPEED_PENALTY,
 } from "../data/nasaConstants";
 import {
   DIFFICULTY_PRESETS,
@@ -62,12 +71,13 @@ export { DIFFICULTY_PRESETS, createInitialCrewMembers, INCIDENT_SPECIALIST_REPAI
 // Core type definitions
 // ---------------------------------------------------------------------------
 
-export type SubsystemId = "powerGrid" | "lifeSupport" | "radiationShielding";
+export type SubsystemId = "powerGrid" | "lifeSupport" | "radiationShielding" | "foodProduction";
 
 export interface PowerAllocation {
-  powerGrid: number;        // MW allocated to power grid management & batteries
-  lifeSupport: number;      // MW allocated to O₂, water recycling, hydroponics
+  powerGrid: number;          // MW allocated to power grid management & batteries
+  lifeSupport: number;        // MW allocated to O₂ scrubbers & water recycling (ECLSS)
   radiationShielding: number; // MW allocated to magnetic/water-wall & thermal management
+  foodProduction: number;     // MW allocated to greenhouse LED lights, aeroponic pumps & heaters
 }
 
 export interface SubsystemState {
@@ -88,7 +98,12 @@ export interface CrewState {
   safeRadiationLimitMSv: number; // expedition threshold (45-60 mSv depending on difficulty)
   careerRadiationExposureMSv: number; // NASA career ledger (towards 500 mSv career ceiling)
   careerLimitMSv: number;   // 500 mSv NASA STD-3001 career limit
-  foodReserveDays: number;  // days of food remaining
+  foodReserveDays: number;  // days of food remaining (synced with crewCaloricReserveDays)
+  crewCaloricReserveDays: number; // NASA BVAD baseline: 2,500 kcal/astronaut/day (10,000 kcal/day total for 4 crew)
+  harvestYieldKg: number;   // fresh crop biomass harvested across mission
+  cropGrowthProgressPercent: number; // 0% to 100% maturity cycle (3 Sols under adequate power)
+  cropThermalShock: boolean; // true if greenhouse power < 10 MW this Sol
+  starvationActive: boolean; // true if food reserves hit 0
   oxygenBufferPercent: number; // % of nominal O₂ buffer; 0 = emergency
   recentMoraleEvents?: CrewMoraleEvent[]; // recent crew heroism / sacrifice events
 }
@@ -184,8 +199,7 @@ const MORALE_LOSS_LIFE_SUPPORT_LOW = 8;
 const MORALE_LOSS_RADIATION_HIGH = 6;
 const MORALE_LOSS_FOOD_LOW = 10;
 
-/** Food/oxygen baseline rates. */
-const FOOD_HYDROPONICS_BONUS_PER_MW = 0.08; // extra food days per MW excess in life support
+/** Oxygen baseline rates. */
 const OXYGEN_RECOVERY_PER_MW_EXCESS = 2;    // % O₂ buffer per MW excess
 const OXYGEN_LOSS_PER_MW_DEFICIT = 4;       // % O₂ loss per MW deficit
 
@@ -198,7 +212,12 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 function totalAllocatedMW(allocation: PowerAllocation): number {
-  return allocation.powerGrid + allocation.lifeSupport + allocation.radiationShielding;
+  return (
+    allocation.powerGrid +
+    allocation.lifeSupport +
+    allocation.radiationShielding +
+    allocation.foodProduction
+  );
 }
 
 function initialSubsystems(difficulty: DifficultyTier): Record<SubsystemId, SubsystemState> {
@@ -221,12 +240,12 @@ function initialSubsystems(difficulty: DifficultyTier): Record<SubsystemId, Subs
     },
     lifeSupport: {
       id: "lifeSupport",
-      label: "Life Support",
+      label: "Life Support (ECLSS)",
       health: isCadet ? 95 : isHardcore ? 85 : 90,
       wearAccumulated: isCadet ? 0.01 : isHardcore ? 0.05 : 0.02,
       powerDrawMW: baselines.lifeSupport,
-      statusMessage: "O₂ scrubbers, water recycling, and hydroponics nominal.",
-      kidFriendlyStatus: "Air, water, and food systems are all doing well!",
+      statusMessage: "O₂ scrubbers and closed-loop water recycling nominal.",
+      kidFriendlyStatus: "Air and water systems are running cleanly!",
       thermalFatigueWear: 0,
     },
     radiationShielding: {
@@ -237,6 +256,16 @@ function initialSubsystems(difficulty: DifficultyTier): Record<SubsystemId, Subs
       powerDrawMW: baselines.radiationShielding,
       statusMessage: "Magnetic wall and regolith shielding at standard deflection.",
       kidFriendlyStatus: "Your radiation shield is protecting the crew like a force field!",
+      thermalFatigueWear: 0,
+    },
+    foodProduction: {
+      id: "foodProduction",
+      label: "Hydroponic Bay (Food)",
+      health: isCadet ? 95 : isHardcore ? 80 : 88,
+      wearAccumulated: isCadet ? 0.01 : isHardcore ? 0.06 : 0.03,
+      powerDrawMW: baselines.foodProduction,
+      statusMessage: "Aeroponic nutrient misting, atmospheric heater, and full-spectrum LED arrays nominal.",
+      kidFriendlyStatus: "Your space crops are basking in grow lights and thriving!",
       thermalFatigueWear: 0,
     },
   };
@@ -251,6 +280,7 @@ function initialCrew(difficulty: DifficultyTier): CrewState {
   const careerStartingDose = isHardcore ? 180 : 50;
   const members = createInitialCrewMembers(difficulty);
   const avgMorale = Math.round(members.reduce((sum, m) => sum + m.morale, 0) / members.length);
+  const startingFoodDays = isCadet ? 18 : isHardcore ? 14 : 15;
 
   return {
     members,
@@ -259,7 +289,12 @@ function initialCrew(difficulty: DifficultyTier): CrewState {
     safeRadiationLimitMSv: config.missionRadiationLimitMSv,
     careerRadiationExposureMSv: careerStartingDose,
     careerLimitMSv: config.careerRadiationLimitMSv,
-    foodReserveDays: isCadet ? 18 : isHardcore ? 14 : 15,
+    foodReserveDays: startingFoodDays,
+    crewCaloricReserveDays: startingFoodDays,
+    harvestYieldKg: 40.0,
+    cropGrowthProgressPercent: 0,
+    cropThermalShock: false,
+    starvationActive: false,
     oxygenBufferPercent: 100,
     recentMoraleEvents: [],
   };
@@ -353,11 +388,11 @@ function buildSubsystemStatus(
       kidCritical: "EMERGENCY! Almost no power left! Fix this right away!",
     },
     lifeSupport: {
-      normal: "O₂ scrubbers, water recycler, and hydroponics nominal.",
-      low: "O₂ buffer dropping. CO₂ scrubbing under-powered. Hydroponics stress.",
+      normal: "O₂ scrubbers and water recycling loop nominal.",
+      low: "O₂ buffer dropping. CO₂ scrubbing under-powered.",
       critical: "LIFE SUPPORT CRITICAL — crew O₂ at risk. Immediate power allocation required.",
-      kid: "Air, water, and food systems are all working well!",
-      kidLow: "The crew is running low on fresh air and water — add more power to Life Support!",
+      kid: "Air and water systems are all working well!",
+      kidLow: "The crew is running low on fresh air — add more power to Life Support!",
       kidCritical: "DANGER! The crew needs air NOW! Send more power to Life Support immediately!",
     },
     radiationShielding: {
@@ -367,6 +402,14 @@ function buildSubsystemStatus(
       kid: "Your radiation shield is working like a superhero force field!",
       kidLow: "The shield is getting weak — the crew is absorbing more radiation. Add more power!",
       kidCritical: "DANGER! The shield is almost broken! The crew is in serious danger from radiation!",
+    },
+    foodProduction: {
+      normal: "Aeroponic nutrient misting, atmospheric heater, and LED arrays nominal.",
+      low: "Crop growth stalled. Sub-optimal photon flux; risk of thermal shock.",
+      critical: "GREENHOUSE THERMAL SHOCK — crops dying from sub-zero freeze. Reallocate power immediately.",
+      kid: "Your space crops are basking in grow lights and producing fresh food!",
+      kidLow: "The greenhouse is getting chilly! Give the plants more light and heat.",
+      kidCritical: "FREEZING IN THE GREENHOUSE! Plants are wilting and dying — send power now!",
     },
   };
 
@@ -442,7 +485,7 @@ function computeAlerts(
   }
 
   // Subsystem health drops
-  (["powerGrid", "lifeSupport", "radiationShielding"] as SubsystemId[]).forEach((id) => {
+  (["powerGrid", "lifeSupport", "radiationShielding", "foodProduction"] as SubsystemId[]).forEach((id) => {
     const prev = prevSubsystems[id];
     const next = nextSubsystems[id];
     const drop = prev.health - next.health;
@@ -455,14 +498,18 @@ function computeAlerts(
           "Diverting power from Life Support to Shielding during a storm saves the crew from radiation but risks their air supply — a classic mission survival dilemma.",
         radiationShielding:
           "Powering Life Support and the Grid at the expense of Shielding exposes the crew to cumulative radiation — a risk that grows invisibly every turn.",
+        foodProduction:
+          "Cutting power to the Greenhouse Bay plunges crops into thermal shock: plants freeze, growth halts, and starvation penalties loom.",
       };
       const kidExplanations: Record<SubsystemId, string> = {
         powerGrid:
           "Your power system is almost broken! Without power, NOTHING works — not the air system, not the shields. Power is the most important thing!",
         lifeSupport:
-          "The crew is almost out of fresh air and food! You protected them from radiation, but now they need life support power urgently.",
+          "The crew is almost out of fresh air! You protected them from radiation, but now they need life support power urgently.",
         radiationShielding:
           "The radiation shield is almost gone! The crew has been absorbing dangerous rays that add up over time — like getting too much sunburn, but invisible.",
+        foodProduction:
+          "The space greenhouse is freezing! Your plants are wilting and dying from lack of heat and light. Send power to save the food supply!",
       };
       alerts.push({
         severity: "critical",
@@ -483,6 +530,30 @@ function computeAlerts(
       });
     }
   });
+
+  // Greenhouse Thermal Shock Alert (<10 MW)
+  if (crew.cropThermalShock) {
+    alerts.push({
+      severity: "warning",
+      subsystem: "foodProduction",
+      headline: "❄️ Greenhouse Thermal Shock (<10 MW)",
+      detail: "Crop bay heaters offline under insufficient power (<10 MW). Plants entered thermal shock and lost 25% growth progress this Sol.",
+      tradeOffExplanation: "Extreme planetary night/shadow temperatures require continuous atmospheric heating (>=10 MW) to protect aeroponic root mist from freezing solid.",
+      kidFriendlyExplanation: "Brrr! The space greenhouse is freezing! The plants got cold shock and lost 25% of their growth progress.",
+    });
+  }
+
+  // Crew Starvation Emergency Alert
+  if (crew.starvationActive) {
+    alerts.push({
+      severity: "critical",
+      subsystem: "crew",
+      headline: "🚨 Crew Starvation Emergency (0 Days Food)",
+      detail: "Caloric reserves depleted (0 kcal). Astronauts suffer -15 health per Sol and -20% subsystem repair speed penalty.",
+      tradeOffExplanation: "Astronauts require 2,500 kcal/day (NASA BVAD standard). Starvation impairs cognitive focus and causes rapid physiological breakdown.",
+      kidFriendlyExplanation: "EMERGENCY! The astronauts are starving! With no food left, everyone is weak and systems take longer to fix. Reallocate power to Food Production now!",
+    });
+  }
 
   // O2 alert
   if (crew.oxygenBufferPercent < 25) {
@@ -568,7 +639,10 @@ function computeMissionScore(
   config: DifficultyConfig
 ): number {
   const healthScore =
-    (subsystems.powerGrid.health + subsystems.lifeSupport.health + subsystems.radiationShielding.health) / 3;
+    (subsystems.powerGrid.health +
+      subsystems.lifeSupport.health +
+      subsystems.radiationShielding.health +
+      subsystems.foodProduction.health) / 4;
   const moraleScore = crew.morale;
   const radiationScore = clamp(
     100 - (crew.radiationExposureMSv / config.missionRadiationLimitMSv) * 100,
@@ -579,10 +653,10 @@ function computeMissionScore(
   const o2Score = crew.oxygenBufferPercent;
 
   let baseScore = Math.round(
-    healthScore * 0.35 +
-      moraleScore * 0.2 +
-      radiationScore * 0.2 +
-      foodScore * 0.1 +
+    healthScore * 0.30 +
+      moraleScore * 0.20 +
+      radiationScore * 0.20 +
+      foodScore * 0.15 +
       o2Score * 0.15
   );
 
@@ -591,6 +665,11 @@ function computeMissionScore(
     if (crew.careerRadiationExposureMSv > config.careerRadiationLimitMSv) {
       baseScore = Math.max(0, baseScore - 30);
     }
+  }
+
+  // Starvation emergency penalty
+  if (crew.starvationActive) {
+    baseScore = Math.max(0, baseScore - 25);
   }
 
   return baseScore;
@@ -724,9 +803,12 @@ export function applyIncidentChoice(
     (effects.lifeSupportHealthDelta ?? 0) + (specialistEffects?.lifeSupportHealthDelta ?? 0);
   const shieldingDelta =
     (effects.shieldingHealthDelta ?? 0) + (specialistEffects?.shieldingHealthDelta ?? 0);
+  const foodProductionDelta =
+    ((effects as { foodProductionHealthDelta?: number }).foodProductionHealthDelta ?? 0) +
+    ((specialistEffects as { foodProductionHealthDelta?: number } | undefined)?.foodProductionHealthDelta ?? 0);
 
   // Clone subsystems
-  const newSubsystems = {
+  const newSubsystems: Record<SubsystemId, SubsystemState> = {
     powerGrid: {
       ...state.subsystems.powerGrid,
       health: clamp(
@@ -747,6 +829,14 @@ export function applyIncidentChoice(
       ...state.subsystems.radiationShielding,
       health: clamp(
         state.subsystems.radiationShielding.health + shieldingDelta,
+        MIN_SYSTEM_HEALTH,
+        MAX_SYSTEM_HEALTH
+      ),
+    },
+    foodProduction: {
+      ...state.subsystems.foodProduction,
+      health: clamp(
+        state.subsystems.foodProduction.health + foodProductionDelta,
         MIN_SYSTEM_HEALTH,
         MAX_SYSTEM_HEALTH
       ),
@@ -838,6 +928,11 @@ export function applyIncidentChoice(
 
   const foodDelta = (effects.foodDaysDelta ?? 0) + (specialistEffects?.foodDaysDelta ?? 0);
   const o2Delta = (effects.oxygenBufferDelta ?? 0) + (specialistEffects?.oxygenBufferDelta ?? 0);
+  const updatedFood = clamp(
+    Math.round((state.crew.foodReserveDays + foodDelta) * 10) / 10,
+    0,
+    30
+  );
 
   // Clone crew
   const newCrew: CrewState = {
@@ -846,11 +941,12 @@ export function applyIncidentChoice(
     morale: avgTeamMorale,
     radiationExposureMSv: newMissionRadiation,
     careerRadiationExposureMSv: newCareerRadiation,
-    foodReserveDays: clamp(
-      Math.round((state.crew.foodReserveDays + foodDelta) * 10) / 10,
-      0,
-      30
-    ),
+    foodReserveDays: updatedFood,
+    crewCaloricReserveDays: updatedFood,
+    harvestYieldKg: state.crew.harvestYieldKg ?? 40.0,
+    cropGrowthProgressPercent: state.crew.cropGrowthProgressPercent ?? 0,
+    cropThermalShock: state.crew.cropThermalShock ?? false,
+    starvationActive: updatedFood <= 0,
     oxygenBufferPercent: clamp(
       Math.round((state.crew.oxygenBufferPercent + o2Delta) * 10) / 10,
       0,
@@ -909,19 +1005,22 @@ export function applyIncidentChoice(
 
 export function getDefaultAllocation(
   effectiveBudgetMW: number,
-  difficulty: DifficultyTier = "commander"
+  _difficulty: DifficultyTier = "commander"
 ): PowerAllocation {
-  const config = DIFFICULTY_PRESETS[difficulty];
-  const baselines = config.baselinePowerDemands;
-
-  const lifeSupport = Math.min(baselines.lifeSupport, effectiveBudgetMW * 0.38);
-  const radiationShielding = Math.min(baselines.radiationShielding, effectiveBudgetMW * 0.32);
-  const powerGrid = Math.max(0, effectiveBudgetMW - lifeSupport - radiationShielding);
+  // 4-way balanced allocation (25% each on 100 MW budget)
+  const powerGrid = Math.round(effectiveBudgetMW * 0.25);
+  const lifeSupport = Math.round(effectiveBudgetMW * 0.25);
+  const radiationShielding = Math.round(effectiveBudgetMW * 0.25);
+  const foodProduction = Math.max(
+    0,
+    effectiveBudgetMW - powerGrid - lifeSupport - radiationShielding
+  );
 
   return {
-    powerGrid: Math.round(powerGrid),
-    lifeSupport: Math.round(lifeSupport),
-    radiationShielding: Math.round(radiationShielding),
+    powerGrid,
+    lifeSupport,
+    radiationShielding,
+    foodProduction,
   };
 }
 
@@ -988,7 +1087,17 @@ export function processTurn(
     powerGrid: Math.round(allocation.powerGrid * scaleFactor),
     lifeSupport: Math.round(allocation.lifeSupport * scaleFactor),
     radiationShielding: Math.round(allocation.radiationShielding * scaleFactor),
+    foodProduction: Math.round(allocation.foodProduction * scaleFactor),
   };
+
+  // Check if crew was starving entering this Sol to apply the -20% subsystem repair speed penalty
+  const isStarvingEnteringSol = (gameState.crew.crewCaloricReserveDays ?? gameState.crew.foodReserveDays) <= 0;
+  const effectiveConfig: DifficultyConfig = isStarvingEnteringSol
+    ? {
+        ...config,
+        recoveryMultiplier: config.recoveryMultiplier * (1 - STARVATION_REPAIR_SPEED_PENALTY),
+      }
+    : config;
 
   // 2. HARDCORE MECHANIC: Degradation curves based on actual thermal fatigue (Coffin-Manson)
   let thermalReport: ThermalFatigueReport | undefined = undefined;
@@ -1010,6 +1119,7 @@ export function processTurn(
   const extraShieldWear =
     (event.shieldingWearDelta || 0) +
     (microStrike?.subsystemHit === "radiationShielding" ? microStrike.wearDelta : 0);
+  const extraFoodWear = microStrike?.subsystemHit === "foodProduction" ? microStrike.wearDelta : 0;
 
   // Process each subsystem
   const prevSubsystems = gameState.subsystems;
@@ -1020,7 +1130,7 @@ export function processTurn(
       clampedAllocation.powerGrid,
       1.0,
       extraGridWear,
-      config,
+      effectiveConfig,
       thermalWearPerSubsystem * 0.7
     ),
     lifeSupport: processSubsystem(
@@ -1029,7 +1139,7 @@ export function processTurn(
       clampedAllocation.lifeSupport,
       event.lifeSupportStressFactor,
       extraLsWear,
-      config,
+      effectiveConfig,
       thermalWearPerSubsystem * 0.8
     ),
     radiationShielding: processSubsystem(
@@ -1038,8 +1148,17 @@ export function processTurn(
       clampedAllocation.radiationShielding,
       event.radiationSpikeMultiplier,
       extraShieldWear,
-      config,
+      effectiveConfig,
       thermalWearPerSubsystem * 1.5 // Radiator & shielding loops bear brunt of thermal fatigue
+    ),
+    foodProduction: processSubsystem(
+      "foodProduction",
+      prevSubsystems.foodProduction,
+      clampedAllocation.foodProduction,
+      event.lifeSupportStressFactor,
+      extraFoodWear,
+      effectiveConfig,
+      thermalWearPerSubsystem * 0.75
     ),
   };
 
@@ -1068,9 +1187,52 @@ export function processTurn(
     100
   );
 
-  const foodDelta =
-    lsExcess * FOOD_HYDROPONICS_BONUS_PER_MW * bonusFactor - config.foodConsumptionPerTurn;
-  const newFoodReserve = clamp(gameState.crew.foodReserveDays + foodDelta, 0, 30);
+  // -------------------------------------------------------------------------
+  // Greenhouse Agronomy Dynamics (NASA BVAD Baseline: 2,500 kcal/crew/day)
+  // -------------------------------------------------------------------------
+  const prevCropProgress = gameState.crew.cropGrowthProgressPercent ?? 0;
+  const prevFoodReserve = gameState.crew.foodReserveDays ?? 15;
+  const prevHarvestYield = gameState.crew.harvestYieldKg ?? 40.0;
+  const foodPower = clampedAllocation.foodProduction;
+  const ghHealth = nextSubsystems.foodProduction.health / 100;
+
+  // Thermal Shock: power cut to <10 MW during cold nights or dust storms
+  const isThermalShock = foodPower < GREENHOUSE_THERMAL_SHOCK_THRESHOLD_MW;
+  let progressDelta = 0;
+  if (isThermalShock) {
+    // Crops enter "Thermal Shock" and lose 25% growth progress per Sol
+    progressDelta = -GREENHOUSE_THERMAL_SHOCK_PROGRESS_PENALTY;
+  } else if (foodPower >= GREENHOUSE_BASELINE_POWER_MW) {
+    // 0% to 100% maturity over 3 Sols if powered adequately (>=20 MW)
+    const baseProgress = 100 / HARVEST_CYCLE_SOLS;
+    // Power boost for extra lighting (up to 1.35x rate at max allocation)
+    const powerBoost = Math.min(1.35, 1 + ((foodPower - GREENHOUSE_BASELINE_POWER_MW) / GREENHOUSE_BASELINE_POWER_MW) * 0.35);
+    progressDelta = baseProgress * powerBoost * (0.6 + 0.4 * ghHealth);
+  } else {
+    // Underpowered (10 - 19 MW): stunted crop growth
+    const powerRatio = foodPower / GREENHOUSE_BASELINE_POWER_MW;
+    progressDelta = (100 / HARVEST_CYCLE_SOLS) * powerRatio * 0.7 * (0.6 + 0.4 * ghHealth);
+  }
+
+  let candidateProgress = prevCropProgress + progressDelta;
+  let harvestOccurred = false;
+  let harvestYieldBonus = 0;
+  let harvestReserveBonus = 0;
+
+  if (candidateProgress >= 100) {
+    harvestOccurred = true;
+    candidateProgress = Math.max(0, candidateProgress - 100);
+    harvestYieldBonus = HARVEST_YIELD_KG_PER_CYCLE;
+    harvestReserveBonus = HARVEST_FOOD_RESERVE_DAYS_BONUS;
+  }
+
+  const newCropProgress = clamp(Math.round(candidateProgress * 10) / 10, 0, 100);
+  const newHarvestYieldKg = Math.round((prevHarvestYield + harvestYieldBonus) * 10) / 10;
+
+  // Food reserve consumption: -1 Sol consumption per turn + harvest yield bonus (+4 days)
+  const candidateReserve = prevFoodReserve - config.foodConsumptionPerTurn + harvestReserveBonus;
+  const newFoodReserve = clamp(Math.round(candidateReserve * 10) / 10, 0, 30);
+  const starvationActive = newFoodReserve <= 0;
 
   // -------------------------------------------------------------------------
   // Crew Member Passive Perks & Morale Processing
@@ -1084,10 +1246,12 @@ export function processTurn(
   const isDocActive = (doc?.health ?? 0) >= 50 && doc?.status !== "irradiated";
 
   let moraleDelta = 0;
-  if (lsHealth > 0.75 && nextSubsystems.powerGrid.health > 60) moraleDelta += MORALE_GAIN_GOOD_TURN;
+  if (lsHealth > 0.75 && nextSubsystems.powerGrid.health > 60 && ghHealth > 0.7) moraleDelta += MORALE_GAIN_GOOD_TURN;
   if (lsHealth < 0.5) moraleDelta -= MORALE_LOSS_LIFE_SUPPORT_LOW;
   if (effectiveRadiationMSv > environment.baselineDailyRadiationMSv * 2) moraleDelta -= MORALE_LOSS_RADIATION_HIGH;
-  if (newFoodReserve < 3) moraleDelta -= MORALE_LOSS_FOOD_LOW;
+  if (newFoodReserve < 3 && !starvationActive) moraleDelta -= MORALE_LOSS_FOOD_LOW;
+  if (starvationActive) moraleDelta -= 20; // Starvation depression & fatigue
+  if (harvestOccurred) moraleDelta += HARVEST_CREW_MORALE_SURGE; // +15% morale surge on harvest
   if (microStrike) moraleDelta -= 8; // Crew shaken by hull impact
 
   // Passive perk: Dr. Sarah Chen (Guardian Angel) dampens negative morale by 35%
@@ -1104,12 +1268,27 @@ export function processTurn(
     const nextCareerRad = Math.round((member.careerRadiationMSv + memberDose * 3.5) * 10) / 10;
     const nextMorale = clamp(member.morale + moraleDelta, 0, 100);
 
-    // Natural recovery if habitat conditions are safe
+    // Starvation penalties: -15 health per turn if food reserves hit 0
+    const healthLoss = starvationActive ? STARVATION_HEALTH_PENALTY_PER_TURN : 0;
+    const nextHealth = Math.max(0, member.health - healthLoss);
+
+    // Natural recovery if habitat conditions are safe, or starvation status
     let nextStatus = member.status;
     let nextStatusDesc = member.statusDescription;
-    if (member.status === "fatigued" && lsHealth > 0.7 && newOxygenBuffer > 80) {
+    if (starvationActive) {
+      if (nextHealth <= 25) {
+        nextStatus = "injured";
+        nextStatusDesc = "Critical starvation: severe hypoglycemia and physical exhaustion (-15 HP/turn).";
+      } else {
+        nextStatus = "fatigued";
+        nextStatusDesc = "Malnourished due to empty food reserves (-15 HP/turn).";
+      }
+    } else if (member.status === "fatigued" && lsHealth > 0.7 && newOxygenBuffer > 80 && newFoodReserve >= 3) {
       nextStatus = "nominal";
       nextStatusDesc = "Fully rested and operational after nominal sleep cycle.";
+    } else if (member.status === "injured" && isDocActive && lsHealth > 0.8 && newFoodReserve >= 5) {
+      nextStatus = "fatigued";
+      nextStatusDesc = "Receiving active medical therapy; vitals stabilizing.";
     } else if (member.status === "irradiated" && isDocActive && lsHealth > 0.8) {
       nextStatus = "fatigued";
       nextStatusDesc = "Receiving active radioprotective therapy in medical bay.";
@@ -1120,6 +1299,7 @@ export function processTurn(
 
     return {
       ...member,
+      health: nextHealth,
       morale: nextMorale,
       radiationDoseMSv: nextRad,
       careerRadiationMSv: nextCareerRad,
@@ -1137,6 +1317,23 @@ export function processTurn(
   const totalCareerRad =
     Math.round((gameState.crew.careerRadiationExposureMSv + effectiveRadiationMSv * 3.5) * 10) / 10;
 
+  const recentMoraleEvents = [...(gameState.crew.recentMoraleEvents || [])];
+  if (harvestOccurred) {
+    recentMoraleEvents.unshift({
+      id: `harvest-sol-${turn}`,
+      sol: turn,
+      crewMemberId: "crew-botanist",
+      crewMemberName: "Dr. Mei Lin",
+      crewRole: "botanist",
+      roleIcon: "🌱",
+      title: "Fresh Hydroponic Harvest!",
+      narrative: `Hydroponic Bay completed a crop cycle! ${HARVEST_YIELD_KG_PER_CYCLE} kg of fresh aeroponic produce yielded +${HARVEST_FOOD_RESERVE_DAYS_BONUS} food days and boosted crew morale +${HARVEST_CREW_MORALE_SURGE}%.`,
+      moraleDelta: HARVEST_CREW_MORALE_SURGE,
+      type: "positive",
+      subsystemHelped: "Hydroponic Bay",
+    });
+  }
+
   const nextCrew: CrewState = {
     members: nextMembers,
     morale: avgCrewMorale,
@@ -1145,8 +1342,13 @@ export function processTurn(
     careerRadiationExposureMSv: totalCareerRad,
     careerLimitMSv: config.careerRadiationLimitMSv,
     foodReserveDays: Math.round(newFoodReserve * 10) / 10,
+    crewCaloricReserveDays: Math.round(newFoodReserve * 10) / 10,
+    harvestYieldKg: newHarvestYieldKg,
+    cropGrowthProgressPercent: newCropProgress,
+    cropThermalShock: isThermalShock,
+    starvationActive,
     oxygenBufferPercent: Math.round(newOxygenBuffer * 10) / 10,
-    recentMoraleEvents: gameState.crew.recentMoraleEvents || [],
+    recentMoraleEvents: recentMoraleEvents.slice(0, 10),
   };
 
   // 3. CADET MECHANIC: Automated gentle hints
@@ -1244,7 +1446,7 @@ export function getTradeOffHints(
   }
 
   if (allocation.lifeSupport < baselines.lifeSupport - 4) {
-    hints.push(`Life Support is under-powered by ${baselines.lifeSupport - allocation.lifeSupport} MW — crew O₂ and food production will suffer.`);
+    hints.push(`Life Support is under-powered by ${baselines.lifeSupport - allocation.lifeSupport} MW — crew O₂ buffer and atmospheric scrubbing will suffer.`);
   }
 
   if (allocation.radiationShielding < baselines.radiationShielding - 4) {
@@ -1255,15 +1457,23 @@ export function getTradeOffHints(
     hints.push(`Power Grid is under-resourced by ${baselines.powerGrid - allocation.powerGrid} MW — battery reserves may not replenish adequately.`);
   }
 
-  const overloads = (["powerGrid", "lifeSupport", "radiationShielding"] as SubsystemId[]).filter((id) => {
+  if (allocation.foodProduction < baselines.foodProduction - 4) {
+    if (allocation.foodProduction < GREENHOUSE_THERMAL_SHOCK_THRESHOLD_MW) {
+      hints.push(`Food Production is critically low (<${GREENHOUSE_THERMAL_SHOCK_THRESHOLD_MW} MW) — aeroponic crops will enter Thermal Shock and lose 25% growth progress!`);
+    } else {
+      hints.push(`Food Production is under-resourced by ${baselines.foodProduction - allocation.foodProduction} MW — crop growth cycles will stall.`);
+    }
+  }
+
+  const overloads = (["powerGrid", "lifeSupport", "radiationShielding", "foodProduction"] as SubsystemId[]).filter((id) => {
     return allocation[id] > baselines[id] * OVERLOAD_THRESHOLD_FRACTION;
   });
   if (overloads.length > 0) {
-    hints.push(`${overloads.map((id) => ({ powerGrid: "Power Grid", lifeSupport: "Life Support", radiationShielding: "Radiation Shielding" }[id])).join(" & ")} are in overload — this causes accelerated hardware wear!`);
+    hints.push(`${overloads.map((id) => ({ powerGrid: "Power Grid", lifeSupport: "Life Support", radiationShielding: "Radiation Shielding", foodProduction: "Hydroponic Bay" }[id])).join(" & ")} are in overload — this causes accelerated hardware wear!`);
   }
 
   if (hints.length === 0) {
-    hints.push("Allocation looks balanced. All three systems near their baseline requirements.");
+    hints.push("Allocation looks balanced. All four systems near their baseline requirements.");
   }
 
   return hints;

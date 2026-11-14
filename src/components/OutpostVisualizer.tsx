@@ -74,28 +74,30 @@ export default function OutpostVisualizer({
   const hasSolarFlare = (currentEvent?.radiationSpikeMultiplier ?? 1) > 2;
 
   // Visual state calculations based on allocation & health
-  // 1. Life support / Hydroponics:
-  // Baseline is 35 MW. If allocation >= 33 or health > 75 -> thriving.
-  const lsAllocated = allocation.lifeSupport;
-  const lsHealth = subsystems.lifeSupport.health;
-  const isLifeSupportThriving = lsAllocated >= 32 && lsHealth >= 65;
-  const isLifeSupportStressed = lsAllocated < 25 || lsHealth < 50;
-  const isLifeSupportCritical = lsAllocated < 15 || lsHealth < 30;
+  // 1. Greenhouse Agronomy / Food Production:
+  // Lush glowing green when ≥25 MW, dim yellow when 10–24 MW, wilting brown with warning alert when <10 MW
+  const foodAllocated = allocation.foodProduction;
+  const isGreenhouseLush = foodAllocated >= 25;
+  const isGreenhouseDim = foodAllocated >= 10 && foodAllocated < 25;
+  const isGreenhouseThermalShock = foodAllocated < 10;
 
-  // 2. Shielding:
-  // Baseline is 30 MW.
+  // 3. Shielding:
+  // Baseline is 25-30 MW.
   const shieldAllocated = allocation.radiationShielding;
   const shieldHealth = subsystems.radiationShielding.health;
   const shieldIntensity = Math.min(1.0, Math.max(0.1, (shieldAllocated / 30) * (shieldHealth / 100)));
-  const isShieldStrong = shieldAllocated >= 28 && shieldHealth >= 70;
+  const isShieldStrong = shieldAllocated >= 25 && shieldHealth >= 70;
   const isShieldCritical = shieldAllocated < 15 || shieldHealth < 35;
 
-  // 3. Power & Battery:
+  // 4. Power & Battery:
   // Baseline is 25 MW.
   const powerAllocated = allocation.powerGrid;
   const powerHealth = subsystems.powerGrid.health;
   const totalAllocated =
-    allocation.powerGrid + allocation.lifeSupport + allocation.radiationShielding;
+    allocation.powerGrid +
+    allocation.lifeSupport +
+    allocation.radiationShielding +
+    allocation.foodProduction;
   const isOverBudget = totalAllocated > effectiveBudgetMW;
   const isBatteryCharging = powerAllocated >= 25 && !isOverBudget;
   const isPowerCritical = powerAllocated < 15 || powerHealth < 35 || isOverBudget;
@@ -326,9 +328,9 @@ export default function OutpostVisualizer({
               <stop
                 offset="0%"
                 stopColor={
-                  isLifeSupportCritical
+                  isGreenhouseThermalShock
                     ? "#78350F"
-                    : isLifeSupportStressed
+                    : isGreenhouseDim
                     ? "#D97706"
                     : "#10B981"
                 }
@@ -336,9 +338,9 @@ export default function OutpostVisualizer({
               <stop
                 offset="100%"
                 stopColor={
-                  isLifeSupportCritical
+                  isGreenhouseThermalShock
                     ? "#451A03"
-                    : isLifeSupportStressed
+                    : isGreenhouseDim
                     ? "#92400E"
                     : "#047857"
                 }
@@ -644,7 +646,7 @@ export default function OutpostVisualizer({
 
           {/* 3. HABITAT MODULE ARCHITECTURE (Cross-Section) */}
 
-          {/* LEFT POD: Hydroponics Bio-Dome (Life Support) */}
+          {/* LEFT POD: Hydroponics & Greenhouse Bio-Dome (Food Production) */}
           <g
             className="cursor-pointer transition-transform hover:opacity-95"
             onClick={() => interactive && setInspectedModule("hydroponics")}
@@ -655,9 +657,22 @@ export default function OutpostVisualizer({
             {/* Transparent bio-dome shell */}
             <path
               d="M 300 345 A 55 55 0 0 1 410 345 Z"
-              fill="rgba(16, 185, 129, 0.12)"
-              stroke={isLifeSupportThriving ? "#10B981" : isLifeSupportStressed ? "#F59E0B" : "#EF4444"}
-              strokeWidth="3"
+              fill={
+                isGreenhouseLush
+                  ? "rgba(16, 185, 129, 0.16)"
+                  : isGreenhouseDim
+                  ? "rgba(245, 158, 11, 0.14)"
+                  : "rgba(239, 68, 68, 0.12)"
+              }
+              stroke={
+                isGreenhouseLush
+                  ? "#10B981"
+                  : isGreenhouseDim
+                  ? "#F59E0B"
+                  : "#EF4444"
+              }
+              strokeWidth={isGreenhouseLush ? "3.5" : "2.5"}
+              strokeDasharray={isGreenhouseThermalShock ? "6,4" : undefined}
             />
             <line x1="355" y1="290" x2="355" y2="345" stroke="#94A3B8" strokeWidth="1.5" opacity="0.6" />
             <line x1="320" y1="315" x2="390" y2="315" stroke="#94A3B8" strokeWidth="1.5" opacity="0.6" />
@@ -668,9 +683,9 @@ export default function OutpostVisualizer({
             {/* Tray 2 */}
             <rect x="325" y="318" width="60" height="6" rx="2" fill="#334155" />
 
-            {/* Plants (Color & Vitality dynamically driven) */}
-            {isLifeSupportThriving ? (
-              // Healthy Lush Plants
+            {/* Plants (Lush green >= 25 MW, Dim yellow 10-24 MW, Wilting brown < 10 MW with alert) */}
+            {isGreenhouseLush ? (
+              // Healthy Lush Glowing Green Plants (>=25 MW)
               <g fill={`url(#hydroGrad-${filterId})`}>
                 <circle cx="325" cy="326" r="6" />
                 <circle cx="340" cy="325" r="7" />
@@ -682,39 +697,48 @@ export default function OutpostVisualizer({
                 <circle cx="355" cy="312" r="6" />
                 <circle cx="375" cy="313" r="5" />
 
-                {/* Pink/Magenta LED Grow light glow */}
-                <line x1="320" y1="305" x2="390" y2="305" stroke="#EC4899" strokeWidth="2.5" opacity="0.75" />
+                {/* Bright Pink/Magenta LED Grow light glow */}
+                <line x1="320" y1="305" x2="390" y2="305" stroke="#EC4899" strokeWidth="3" opacity="0.9" />
               </g>
-            ) : isLifeSupportStressed ? (
-              // Wilted, Yellowing Plants
+            ) : isGreenhouseDim ? (
+              // Dim Yellowing Plants (10-24 MW)
               <g fill="#D97706">
                 <ellipse cx="325" cy="328" rx="5" ry="3.5" />
                 <ellipse cx="340" cy="328" rx="6" ry="4" />
                 <ellipse cx="355" cy="327" rx="6" ry="4" />
                 <ellipse cx="370" cy="328" rx="6" ry="4" />
                 <ellipse cx="385" cy="328" rx="5" ry="3.5" />
-                {/* Dim grow light */}
-                <line x1="320" y1="305" x2="390" y2="305" stroke="#F59E0B" strokeWidth="1" opacity="0.4" />
+                {/* Dim yellow grow light */}
+                <line x1="320" y1="305" x2="390" y2="305" stroke="#F59E0B" strokeWidth="1.5" opacity="0.45" />
               </g>
             ) : (
-              // Critical / Dead Brown Stubs
-              <g fill="#78350F">
-                <line x1="330" y1="332" x2="330" y2="328" stroke="#78350F" strokeWidth="3" />
-                <line x1="355" y1="332" x2="355" y2="327" stroke="#78350F" strokeWidth="3" />
-                <line x1="380" y1="332" x2="380" y2="328" stroke="#78350F" strokeWidth="3" />
+              // Critical Wilting Brown Plants with Warning Alert (<10 MW)
+              <g>
+                <g fill="#78350F">
+                  <line x1="330" y1="332" x2="330" y2="328" stroke="#78350F" strokeWidth="3" />
+                  <line x1="355" y1="332" x2="355" y2="327" stroke="#78350F" strokeWidth="3" />
+                  <line x1="380" y1="332" x2="380" y2="328" stroke="#78350F" strokeWidth="3" />
+                </g>
+                {/* Cold Frost / Thermal Shock Warning Badge */}
+                <g transform="translate(355, 276)">
+                  <rect x="-42" y="-10" width="84" height="18" rx="5" fill="#7F1D1D" stroke="#EF4444" strokeWidth="1.5" />
+                  <text x="0" y="2" textAnchor="middle" fill="#FECACA" fontSize="8" fontWeight="bold" fontFamily="monospace">
+                    ⚠️ SHOCK &lt;10MW
+                  </text>
+                </g>
               </g>
             )}
 
-            {/* Life Support Indicator LED */}
+            {/* Greenhouse Indicator LED */}
             <circle
               cx="310"
               cy="355"
               r="4"
-              fill={isLifeSupportThriving ? "#10B981" : isLifeSupportStressed ? "#F59E0B" : "#EF4444"}
+              fill={isGreenhouseLush ? "#10B981" : isGreenhouseDim ? "#F59E0B" : "#EF4444"}
               className="animate-pulse"
             />
             <text x="322" y="358" fill="#CBD5E1" fontSize="9" fontWeight="bold" fontFamily="monospace">
-              O₂ HYDRO-BAY
+              GREENHOUSE ({foodAllocated}MW)
             </text>
           </g>
 
@@ -843,23 +867,23 @@ export default function OutpostVisualizer({
 
         {/* Floating Quick Visual Status Chips (Immediate cause & effect for 7-12 yo) */}
         <div className="absolute top-3 left-3 flex flex-col gap-1.5 pointer-events-none">
-          {/* Hydroponics Chip */}
+          {/* Hydroponics / Greenhouse Chip */}
           <div
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold backdrop-blur-md border shadow-md ${
-              isLifeSupportThriving
+              isGreenhouseLush
                 ? "bg-emerald-950/80 border-emerald-500/50 text-emerald-300"
-                : isLifeSupportStressed
+                : isGreenhouseDim
                 ? "bg-amber-950/80 border-amber-500/50 text-amber-300"
-                : "bg-rose-950/80 border-rose-500/50 text-rose-300"
+                : "bg-rose-950/80 border-rose-500/50 text-rose-300 animate-pulse"
             }`}
           >
             <Leaf className="w-3.5 h-3.5" />
             <span>
-              {isLifeSupportThriving
-                ? "Plants: Thriving 🌱"
-                : isLifeSupportStressed
-                ? "Plants: Wilting ⚠️"
-                : "Plants: Starving 🚨"}
+              {isGreenhouseLush
+                ? "Greenhouse: Lush (≥25 MW) 🌱"
+                : isGreenhouseDim
+                ? "Greenhouse: Dim (10-24 MW) 🌾"
+                : "Greenhouse: Thermal Shock (<10 MW) ❄️"}
             </span>
           </div>
 
@@ -924,10 +948,10 @@ export default function OutpostVisualizer({
                   </div>
                   <div>
                     <p className="font-bold text-white text-sm">
-                      Hydroponics & O₂ Bay ({allocation.lifeSupport} MW allocated)
+                      Hydroponic Bay ({allocation.foodProduction} MW) & ECLSS ({allocation.lifeSupport} MW)
                     </p>
                     <p className="text-slate-300 text-xs">
-                      {subsystems.lifeSupport.kidFriendlyStatus}
+                      {subsystems.foodProduction.statusMessage}
                     </p>
                   </div>
                 </>
@@ -1009,7 +1033,7 @@ export default function OutpostVisualizer({
             <div className="flex items-center gap-2">
               {onInspectRootCause && (
                 (inspectedModule === "power" && (isPowerCritical || isOverBudget)) ||
-                (inspectedModule === "hydroponics" && (isLifeSupportStressed || isLifeSupportCritical)) ||
+                (inspectedModule === "hydroponics" && (isGreenhouseThermalShock || isGreenhouseDim || subsystems.foodProduction.health < 45)) ||
                 (inspectedModule === "shield" && isShieldCritical)
               ) && (
                 <button

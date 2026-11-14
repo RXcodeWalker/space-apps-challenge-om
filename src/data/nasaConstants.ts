@@ -722,3 +722,21 @@ export const TOTAL_TURNS = 10;
 export const TOTAL_POWER_MW = 100;
 export const MIN_SYSTEM_HEALTH = 0;
 export const MAX_SYSTEM_HEALTH = 100;
+
+// ---------------------------------------------------------------------------
+// NASA Advanced Life Support Baseline Values and Assumptions Document (BVAD)
+// Parameters for Surface Habitat Agronomy & Food Production Systems
+// ---------------------------------------------------------------------------
+export const NASA_BVAD_ASTRONAUT_CALORIES_PER_DAY = 2500; // NASA standard adult metabolic demand
+export const OUTPOST_CREW_SIZE = 4; // Expedition crew complement
+export const DAILY_CREW_CALORIC_DEMAND = NASA_BVAD_ASTRONAUT_CALORIES_PER_DAY * OUTPOST_CREW_SIZE; // 10,000 kcal/day total
+export const GREENHOUSE_BASELINE_POWER_MW = 20; // 20 MW baseline (LED grow lights, aeroponic pumps, atmospheric heaters)
+export const GREENHOUSE_THERMAL_SHOCK_THRESHOLD_MW = 10; // <10 MW triggers thermal shock (freezing root zone)
+export const GREENHOUSE_THERMAL_SHOCK_PROGRESS_PENALTY = 25; // 25% growth progress loss per Sol in shock
+export const HARVEST_CYCLE_SOLS = 3; // 3 Sols from 0% to 100% maturity under adequate power
+export const HARVEST_FOOD_RESERVE_DAYS_BONUS = 4; // +4 days food reserve reset/bonus per harvest
+export const HARVEST_CREW_MORALE_SURGE = 15; // +15% crew morale surge upon harvesting fresh vegetables
+export const HARVEST_YIELD_KG_PER_CYCLE = 16.0; // 16 kg fresh edible biomass per harvest cycle
+export const STARVATION_HEALTH_PENALTY_PER_TURN = 15; // -15 crew health/turn when food reserve reaches 0
+export const STARVATION_REPAIR_SPEED_PENALTY = 0.20; // -20% subsystem repair speed when starving
+

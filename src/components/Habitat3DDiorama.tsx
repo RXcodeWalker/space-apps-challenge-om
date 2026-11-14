@@ -81,19 +81,27 @@ export default function Habitat3DDiorama({
   // Subsystem condition metrics
   const lsAllocated = allocation.lifeSupport;
   const lsHealth = subsystems.lifeSupport.health;
-  const isLifeSupportThriving = lsAllocated >= 32 && lsHealth >= 65;
-  const isLifeSupportStressed = lsAllocated < 25 || lsHealth < 50;
+  const isLifeSupportThriving = lsAllocated >= 25 && lsHealth >= 65;
+  const isLifeSupportStressed = lsAllocated < 20 || lsHealth < 50;
+
+  // Food Production & Greenhouse agronomy states
+  const foodAllocated = allocation.foodProduction;
+  const isGreenhouseLush = foodAllocated >= 25;
+  const isGreenhouseDim = foodAllocated >= 10 && foodAllocated < 25;
 
   const shieldAllocated = allocation.radiationShielding;
   const shieldHealth = subsystems.radiationShielding.health;
-  const isShieldStrong = shieldAllocated >= 28 && shieldHealth >= 70;
+  const isShieldStrong = shieldAllocated >= 25 && shieldHealth >= 70;
   const isShieldCritical = shieldAllocated < 15 || shieldHealth < 35;
   const shieldIntensity = Math.min(1.0, Math.max(0.12, (shieldAllocated / 30) * (shieldHealth / 100)));
 
   const powerAllocated = allocation.powerGrid;
   const powerHealth = subsystems.powerGrid.health;
   const totalAllocated =
-    allocation.powerGrid + allocation.lifeSupport + allocation.radiationShielding;
+    allocation.powerGrid +
+    allocation.lifeSupport +
+    allocation.radiationShielding +
+    allocation.foodProduction;
   const isOverBudget = totalAllocated > effectiveBudgetMW;
   const isBatteryCharging = powerAllocated >= 25 && !isOverBudget;
   const isPowerCritical = powerAllocated < 15 || powerHealth < 35 || isOverBudget;
@@ -470,7 +478,7 @@ export default function Habitat3DDiorama({
     // Translucent glass dome
     const bioDomeGeom = new THREE.SphereGeometry(3.0, 24, 18, 0, Math.PI * 2, 0, Math.PI / 2);
     const bioDomeMat = new THREE.MeshPhysicalMaterial({
-      color: isLifeSupportThriving ? 0x10b981 : isLifeSupportStressed ? 0xf59e0b : 0xef4444,
+      color: isGreenhouseLush ? 0x10b981 : isGreenhouseDim ? 0xf59e0b : 0xef4444,
       transmission: 0.78,
       opacity: 0.88,
       transparent: true,
@@ -482,17 +490,17 @@ export default function Habitat3DDiorama({
     bioDome.position.y = 0.3;
     hydroGroup.add(bioDome);
 
-    // Plant trays inside
-    const plantColor = isLifeSupportThriving
+    // Plant trays inside: Lush green >=25 MW, Dim yellow 10-24 MW, Wilting brown <10 MW
+    const plantColor = isGreenhouseLush
       ? 0x22c55e
-      : isLifeSupportStressed
+      : isGreenhouseDim
       ? 0xd97706
       : 0x78350f;
     const plantMat = new THREE.MeshStandardMaterial({
       color: plantColor,
       roughness: 0.4,
       emissive: plantColor,
-      emissiveIntensity: isLifeSupportThriving ? 0.3 : 0.05,
+      emissiveIntensity: isGreenhouseLush ? 0.35 : isGreenhouseDim ? 0.1 : 0.02,
     });
 
     for (let ring = 0; ring < 3; ring++) {
@@ -509,8 +517,10 @@ export default function Habitat3DDiorama({
       }
     }
 
-    // Grow Light (Magenta LED internally)
-    const growLight = new THREE.PointLight(0xec4899, isLifeSupportThriving ? 1.5 : 0.4, 6);
+    // Grow Light (Bright Magenta when lush, dim yellow when stressed, red/dim when cold shock)
+    const growLightColor = isGreenhouseLush ? 0xec4899 : isGreenhouseDim ? 0xf59e0b : 0xef4444;
+    const growLightIntensity = isGreenhouseLush ? 1.6 : isGreenhouseDim ? 0.5 : 0.05;
+    const growLight = new THREE.PointLight(growLightColor, growLightIntensity, 6);
     growLight.position.set(0, 2.2, 0);
     hydroGroup.add(growLight);
 

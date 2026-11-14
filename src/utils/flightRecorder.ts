@@ -462,6 +462,7 @@ export function buildFlightRecorderData(
   let totalGrid = 0;
   let totalLS = 0;
   let totalShield = 0;
+  let totalFood = 0;
 
   history.forEach((turnResult, index) => {
     const sol = turnResult.turn || index + 1;
@@ -491,6 +492,7 @@ export function buildFlightRecorderData(
     totalGrid += turnResult.allocation.powerGrid;
     totalLS += turnResult.allocation.lifeSupport;
     totalShield += turnResult.allocation.radiationShielding;
+    totalFood += turnResult.allocation.foodProduction;
 
     const matchedIncident = incidentHistory.find((i) => i.sol === sol);
 
@@ -516,7 +518,8 @@ export function buildFlightRecorderData(
       totalAllocatedMW:
         turnResult.allocation.powerGrid +
         turnResult.allocation.lifeSupport +
-        turnResult.allocation.radiationShielding,
+        turnResult.allocation.radiationShielding +
+        turnResult.allocation.foodProduction,
       crewVitals: {
         morale: turnResult.crew.morale,
         oxygenBufferPercent: turnResult.crew.oxygenBufferPercent,
@@ -528,6 +531,7 @@ export function buildFlightRecorderData(
         powerGrid: turnResult.subsystems.powerGrid.health,
         lifeSupport: turnResult.subsystems.lifeSupport.health,
         radiationShielding: turnResult.subsystems.radiationShielding.health,
+        foodProduction: turnResult.subsystems.foodProduction.health,
       },
       incidentChoiceLabel: matchedIncident?.choiceLabel,
       incidentTakeaway: matchedIncident?.engineeringTakeaway,
@@ -541,6 +545,7 @@ export function buildFlightRecorderData(
     powerGrid: Math.round(totalGrid / count),
     lifeSupport: Math.round(totalLS / count),
     radiationShielding: Math.round(totalShield / count),
+    foodProduction: Math.round(totalFood / count),
   };
 
   // Generate citation text for the certificate based on the actual history

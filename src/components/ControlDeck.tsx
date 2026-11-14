@@ -41,7 +41,15 @@ import type {
   CrewState,
 } from "../engine/simulationEngine";
 import type { MissionEnvironment, TurnEvent } from "../data/nasaConstants";
-import { TOTAL_TURNS } from "../data/nasaConstants";
+import {
+  TOTAL_TURNS,
+  GREENHOUSE_BASELINE_POWER_MW,
+  GREENHOUSE_THERMAL_SHOCK_THRESHOLD_MW,
+  GREENHOUSE_THERMAL_SHOCK_PROGRESS_PENALTY,
+  HARVEST_CYCLE_SOLS,
+  HARVEST_FOOD_RESERVE_DAYS_BONUS,
+  DAILY_CREW_CALORIC_DEMAND,
+} from "../data/nasaConstants";
 import {
   DIFFICULTY_PRESETS,
   type DifficultyTier,
@@ -97,7 +105,10 @@ export default function ControlDeck({
   const baselines = config.baselinePowerDemands;
 
   const totalAllocated =
-    allocation.powerGrid + allocation.lifeSupport + allocation.radiationShielding;
+    allocation.powerGrid +
+    allocation.lifeSupport +
+    allocation.radiationShielding +
+    allocation.foodProduction;
   const netPowerMW = effectiveBudgetMW - totalAllocated;
   const isOverBudget = netPowerMW < 0;
 
@@ -106,14 +117,12 @@ export default function ControlDeck({
     const stressFactor = currentEvent?.lifeSupportStressFactor ?? 1.0;
     const radMultiplier = currentEvent?.radiationSpikeMultiplier ?? 1.0;
 
-    // 1. Life support & O2/Food
+    // 1. Life support (O2 & atmospheric loop)
     const lsExcess = Math.max(0, allocation.lifeSupport - baselines.lifeSupport);
     const lsDeficit = Math.max(0, baselines.lifeSupport - allocation.lifeSupport);
     const o2Delta = Math.round(
       (lsExcess * 2 - lsDeficit * 4 * config.oxygenLossRateMultiplier) * stressFactor
     );
-    const foodDeltaDays =
-      Math.round((lsExcess * 0.08 - config.foodConsumptionPerTurn) * 10) / 10;
     const lsHealthDelta = Math.round(
       (lsExcess * 1.4 * config.recoveryMultiplier -
         lsDeficit * 2.5 * config.deficitPenaltyMultiplier) *
@@ -150,11 +159,58 @@ export default function ControlDeck({
         pgDeficit * 2.5 * config.deficitPenaltyMultiplier
     );
 
-    // 4. Crew Morale Projection
+    // 4. Hydroponic Bay / Food Production & Agronomy
+    const ghExcess = Math.max(0, allocation.foodProduction - baselines.foodProduction);
+    const ghDeficit = Math.max(0, baselines.foodProduction - allocation.foodProduction);
+    const foodHealthDelta = Math.round(
+      ghExcess * 1.4 * config.recoveryMultiplier -
+        ghDeficit * 2.5 * config.deficitPenaltyMultiplier
+    );
+
+    const isThermalShock = allocation.foodProduction < GREENHOUSE_THERMAL_SHOCK_THRESHOLD_MW;
+    let growthDeltaPercent = 0;
+    if (isThermalShock) {
+      growthDeltaPercent = -GREENHOUSE_THERMAL_SHOCK_PROGRESS_PENALTY;
+    } else if (allocation.foodProduction >= GREENHOUSE_BASELINE_POWER_MW) {
+      const baseProgress = 100 / HARVEST_CYCLE_SOLS;
+      const powerBoost = Math.min(
+        1.35,
+        1 + ((allocation.foodProduction - GREENHOUSE_BASELINE_POWER_MW) / GREENHOUSE_BASELINE_POWER_MW) * 0.35
+      );
+      growthDeltaPercent = Math.round(baseProgress * powerBoost * 10) / 10;
+    } else {
+      const powerRatio = allocation.foodProduction / GREENHOUSE_BASELINE_POWER_MW;
+      growthDeltaPercent = Math.round((100 / HARVEST_CYCLE_SOLS) * powerRatio * 0.7 * 10) / 10;
+    }
+
+    const currentCropProgress = crew.cropGrowthProgressPercent ?? 0;
+    const projectedCropProgress = Math.max(0, Math.min(100, currentCropProgress + growthDeltaPercent));
+    const willHarvest = currentCropProgress + growthDeltaPercent >= 100;
+
+    let harvestStatusText = "Stalled (Thermal Shock ❄️)";
+    let solsToHarvest = -1;
+    if (willHarvest) {
+      harvestStatusText = "Ready this Sol! 🌾";
+      solsToHarvest = 0;
+    } else if (growthDeltaPercent > 0) {
+      solsToHarvest = Math.max(1, Math.ceil((100 - currentCropProgress) / growthDeltaPercent));
+      harvestStatusText = `~${solsToHarvest} Sol${solsToHarvest > 1 ? "s" : ""}`;
+    }
+
+    const foodDeltaDays = willHarvest
+      ? HARVEST_FOOD_RESERVE_DAYS_BONUS - config.foodConsumptionPerTurn
+      : -config.foodConsumptionPerTurn;
+    const projectedFoodReserveDays = Math.max(
+      0,
+      Math.min(30, Math.round(((crew.foodReserveDays ?? 15) + foodDeltaDays) * 10) / 10)
+    );
+    const projectedTotalKcal = Math.round(projectedFoodReserveDays * DAILY_CREW_CALORIC_DEMAND);
+
+    // 5. Crew Morale Projection
     let moraleTrend: "up" | "down" | "flat" = "flat";
-    if (lsHealthDelta >= 0 && shieldHealthDelta >= 0 && !isOverBudget) {
+    if (lsHealthDelta >= 0 && shieldHealthDelta >= 0 && foodHealthDelta >= 0 && !isOverBudget && !isThermalShock) {
       moraleTrend = "up";
-    } else if (lsDeficit > 8 || rsDeficit > 8 || isOverBudget) {
+    } else if (lsDeficit > 8 || rsDeficit > 8 || ghDeficit > 8 || isOverBudget || isThermalShock) {
       moraleTrend = "down";
     }
 
@@ -165,6 +221,16 @@ export default function ControlDeck({
       shieldHealthDelta,
       projectedDoseMSv,
       gridHealthDelta,
+      foodHealthDelta,
+      isThermalShock,
+      growthDeltaPercent,
+      currentCropProgress,
+      projectedCropProgress,
+      willHarvest,
+      solsToHarvest,
+      harvestStatusText,
+      projectedFoodReserveDays,
+      projectedTotalKcal,
       moraleTrend,
     };
   }, [
@@ -175,6 +241,7 @@ export default function ControlDeck({
     isOverBudget,
     baselines,
     config,
+    crew,
   ]);
 
   // Tactile slider / stepper helper
@@ -199,38 +266,42 @@ export default function ControlDeck({
     [allocation, handleUpdate]
   );
 
-  // Quick preset allocations
+  // Quick preset allocations (4-way operational configurations)
   const applyPreset = useCallback(
-    (type: "balanced" | "lifeSupport" | "shield" | "batteries") => {
+    (type: "balanced" | "stormDefense" | "harvestPush" | "maxReserves") => {
       soundEffects.playSliderClick(50);
-      let next: PowerAllocation;
+      let target: PowerAllocation;
       if (type === "balanced") {
-        const ls = Math.min(baselines.lifeSupport, Math.round(effectiveBudgetMW * 0.38));
-        const rs = Math.min(baselines.radiationShielding, Math.round(effectiveBudgetMW * 0.34));
-        const pg = Math.max(0, effectiveBudgetMW - ls - rs);
-        next = { lifeSupport: ls, radiationShielding: rs, powerGrid: pg };
-      } else if (type === "lifeSupport") {
-        const ls = Math.min(effectiveBudgetMW, baselines.lifeSupport + 12);
-        const rem = effectiveBudgetMW - ls;
-        const rs = Math.round(rem * 0.55);
-        const pg = Math.max(0, rem - rs);
-        next = { lifeSupport: ls, radiationShielding: rs, powerGrid: pg };
-      } else if (type === "shield") {
-        const rs = Math.min(effectiveBudgetMW, baselines.radiationShielding + 14);
-        const rem = effectiveBudgetMW - rs;
-        const ls = Math.round(rem * 0.6);
-        const pg = Math.max(0, rem - ls);
-        next = { lifeSupport: ls, radiationShielding: rs, powerGrid: pg };
+        target = { powerGrid: 25, lifeSupport: 25, radiationShielding: 25, foodProduction: 25 };
+      } else if (type === "stormDefense") {
+        target = { powerGrid: 15, lifeSupport: 20, radiationShielding: 55, foodProduction: 10 };
+      } else if (type === "harvestPush") {
+        target = { powerGrid: 15, lifeSupport: 25, radiationShielding: 15, foodProduction: 45 };
       } else {
-        const pg = Math.min(effectiveBudgetMW, baselines.powerGrid + 14);
-        const rem = effectiveBudgetMW - pg;
-        const ls = Math.round(rem * 0.55);
-        const rs = Math.max(0, rem - ls);
-        next = { lifeSupport: ls, radiationShielding: rs, powerGrid: pg };
+        target = { powerGrid: 50, lifeSupport: 20, radiationShielding: 15, foodProduction: 15 };
       }
-      onAllocationChange(next);
+
+      if (effectiveBudgetMW === 100) {
+        onAllocationChange(target);
+        return;
+      }
+
+      // Proportional scale if budget deviates from 100 MW (e.g. storm or eclipse)
+      const scale = effectiveBudgetMW / 100;
+      let pg = Math.round(target.powerGrid * scale);
+      let ls = Math.round(target.lifeSupport * scale);
+      let rs = Math.round(target.radiationShielding * scale);
+      let fp = Math.round(target.foodProduction * scale);
+      const diff = effectiveBudgetMW - (pg + ls + rs + fp);
+      fp += diff;
+      onAllocationChange({
+        powerGrid: Math.max(0, pg),
+        lifeSupport: Math.max(0, ls),
+        radiationShielding: Math.max(0, rs),
+        foodProduction: Math.max(0, fp),
+      });
     },
-    [effectiveBudgetMW, onAllocationChange, baselines]
+    [effectiveBudgetMW, onAllocationChange]
   );
 
   return (
@@ -464,6 +535,7 @@ export default function ControlDeck({
           </div>
 
           {/* Quick preset chips */}
+          {/* Quick preset chips */}
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-[11px] font-mono text-slate-500 mr-1 hidden sm:inline">
               Presets:
@@ -472,27 +544,31 @@ export default function ControlDeck({
               type="button"
               onClick={() => applyPreset("balanced")}
               className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px] font-bold text-slate-300 transition-colors"
+              title="Balanced: 25 Power / 25 ECLSS / 25 Shields / 25 Food"
             >
               ⚖️ Balanced
             </button>
             <button
               type="button"
-              onClick={() => applyPreset("lifeSupport")}
+              onClick={() => applyPreset("stormDefense")}
+              className="px-2.5 py-1 rounded-lg bg-indigo-950/60 border border-indigo-700/50 hover:bg-indigo-900/60 text-[11px] font-bold text-indigo-300 transition-colors"
+              title="Storm Defense: 15 Power / 20 ECLSS / 55 Shields / 10 Food"
+            >
+              🛡️ Storm Defense
+            </button>
+            <button
+              type="button"
+              onClick={() => applyPreset("harvestPush")}
               className="px-2.5 py-1 rounded-lg bg-emerald-950/60 border border-emerald-700/50 hover:bg-emerald-900/60 text-[11px] font-bold text-emerald-300 transition-colors"
+              title="Harvest Push: 15 Power / 25 ECLSS / 15 Shields / 45 Food"
             >
-              🌱 Life Support Boost
+              🌾 Harvest Push
             </button>
             <button
               type="button"
-              onClick={() => applyPreset("shield")}
-              className="px-2.5 py-1 rounded-lg bg-cyan-950/60 border border-cyan-700/50 hover:bg-cyan-900/60 text-[11px] font-bold text-cyan-300 transition-colors"
-            >
-              🛡️ Storm Shield
-            </button>
-            <button
-              type="button"
-              onClick={() => applyPreset("batteries")}
+              onClick={() => applyPreset("maxReserves")}
               className="px-2.5 py-1 rounded-lg bg-blue-950/60 border border-blue-700/50 hover:bg-blue-900/60 text-[11px] font-bold text-blue-300 transition-colors"
+              title="Maximum Reserves: 50 Power / 20 ECLSS / 15 Shields / 15 Food"
             >
               🔋 Max Reserves
             </button>
@@ -501,25 +577,6 @@ export default function ControlDeck({
 
         {/* Dynamic Multi-segment Power Bar */}
         <div className="w-full h-4 bg-slate-900 rounded-full overflow-hidden border border-slate-800 flex shadow-inner">
-          {/* Life Support segment */}
-          <div
-            className="h-full bg-emerald-500 transition-all duration-200"
-            style={{
-              width: `${Math.min(100, (allocation.lifeSupport / effectiveBudgetMW) * 100)}%`,
-            }}
-            title={`Life Support: ${allocation.lifeSupport} MW`}
-          />
-          {/* Shielding segment */}
-          <div
-            className="h-full bg-[#06B6D4] transition-all duration-200"
-            style={{
-              width: `${Math.min(
-                100,
-                (allocation.radiationShielding / effectiveBudgetMW) * 100
-              )}%`,
-            }}
-            title={`Shielding: ${allocation.radiationShielding} MW`}
-          />
           {/* Battery / Grid segment */}
           <div
             className="h-full bg-[#1D4ED8] transition-all duration-200"
@@ -529,7 +586,37 @@ export default function ControlDeck({
                 (allocation.powerGrid / effectiveBudgetMW) * 100
               )}%`,
             }}
-            title={`Battery / Grid: ${allocation.powerGrid} MW`}
+            title={`Power Grid: ${allocation.powerGrid} MW`}
+          />
+          {/* Life Support segment */}
+          <div
+            className="h-full bg-[#06B6D4] transition-all duration-200"
+            style={{
+              width: `${Math.min(100, (allocation.lifeSupport / effectiveBudgetMW) * 100)}%`,
+            }}
+            title={`Life Support (ECLSS): ${allocation.lifeSupport} MW`}
+          />
+          {/* Shielding segment */}
+          <div
+            className="h-full bg-[#6366F1] transition-all duration-200"
+            style={{
+              width: `${Math.min(
+                100,
+                (allocation.radiationShielding / effectiveBudgetMW) * 100
+              )}%`,
+            }}
+            title={`Shielding: ${allocation.radiationShielding} MW`}
+          />
+          {/* Food Production segment */}
+          <div
+            className="h-full bg-emerald-500 transition-all duration-200"
+            style={{
+              width: `${Math.min(
+                100,
+                (allocation.foodProduction / effectiveBudgetMW) * 100
+              )}%`,
+            }}
+            title={`Food Production (Greenhouse): ${allocation.foodProduction} MW`}
           />
           {/* Over-budget indicator if over */}
           {isOverBudget && (
@@ -581,155 +668,9 @@ export default function ControlDeck({
         )}
       </div>
 
-      {/* 3. THREE LARGE TACTILE POWER ALLOCATION CONTROLS */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* CHANNEL 1: LIFE SUPPORT */}
-        <div className="rounded-2xl bg-[#0B1120] border-2 border-emerald-900/50 hover:border-emerald-600/60 transition-all p-4 flex flex-col justify-between shadow-xl">
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
-                  <Leaf className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="font-black text-sm text-white">Life Support</h3>
-                  <p className="text-[11px] text-emerald-300">O₂, Water & Crops</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <span className="text-xl sm:text-2xl font-black font-mono text-emerald-400">
-                  {allocation.lifeSupport}
-                </span>
-                <span className="text-xs text-slate-400 font-mono ml-1">MW</span>
-              </div>
-            </div>
-
-            <p className="text-xs text-slate-300 mb-3 bg-white/5 p-2 rounded-xl">
-              Baseline demand: <strong>{baselines.lifeSupport} MW</strong>. Keeps oxygen flowing and
-              hydroponic plants healthy.
-            </p>
-
-            {/* Slider */}
-            <div className="mb-4">
-              <input
-                type="range"
-                min="0"
-                max={effectiveBudgetMW}
-                step="1"
-                value={allocation.lifeSupport}
-                onChange={(e) => handleUpdate("lifeSupport", Number(e.target.value))}
-                className="w-full h-3 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500 focus:outline-none"
-              />
-              <div className="flex justify-between text-[10px] font-mono text-slate-500 mt-1">
-                <span>0 MW</span>
-                <span className="text-emerald-400 font-bold">{baselines.lifeSupport} MW Target</span>
-                <span>{effectiveBudgetMW} MW</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Stepper Buttons for Kids / Tablets */}
-          <div className="flex items-center gap-2 pt-2 border-t border-slate-800">
-            <button
-              type="button"
-              onClick={() => handleStep("lifeSupport", -5)}
-              className="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 font-bold text-xs flex items-center justify-center gap-1 transition-all"
-            >
-              <Minus className="w-3.5 h-3.5" /> -5 MW
-            </button>
-            <button
-              type="button"
-              onClick={() => handleStep("lifeSupport", +5)}
-              className="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold text-xs flex items-center justify-center gap-1 transition-all shadow-md"
-            >
-              <Plus className="w-3.5 h-3.5" /> +5 MW
-            </button>
-          </div>
-
-          {/* Life Support Root Cause Trigger if in deficit or low health */}
-          {onInspectRootCause && (allocation.lifeSupport < baselines.lifeSupport - 4 || subsystems.lifeSupport.health < 45) && (
-            <button
-              type="button"
-              onClick={() => {
-                soundEffects.playButtonClick();
-                onInspectRootCause("life_support");
-              }}
-              className="mt-2.5 py-1.5 px-2.5 rounded-xl bg-red-950/70 hover:bg-red-900/70 border border-red-500/50 text-red-200 text-[11px] font-mono font-bold flex items-center justify-center gap-1.5 transition-all shadow-md"
-              title="Why is Life Support in danger? Inspect NASA ECLSS Root Cause"
-            >
-              <Search className="w-3.5 h-3.5 text-red-400" />
-              <span>Inspect Life Support Root Cause</span>
-            </button>
-          )}
-        </div>
-
-        {/* CHANNEL 2: RADIATION & THERMAL SHIELD */}
-        <div className="rounded-2xl bg-[#0B1120] border-2 border-cyan-900/50 hover:border-cyan-500/60 transition-all p-4 flex flex-col justify-between shadow-xl">
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center">
-                  <Shield className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="font-black text-sm text-white">Radiation Shield</h3>
-                  <p className="text-[11px] text-cyan-300">Force-Field & Water Wall</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <span className="text-xl sm:text-2xl font-black font-mono text-[#06B6D4]">
-                  {allocation.radiationShielding}
-                </span>
-                <span className="text-xs text-slate-400 font-mono ml-1">MW</span>
-              </div>
-            </div>
-
-            <p className="text-xs text-slate-300 mb-3 bg-white/5 p-2 rounded-xl">
-              Baseline demand: <strong>{baselines.radiationShielding} MW</strong>. Repels cosmic rays, solar flares,
-              and extreme cold.
-            </p>
-
-            {/* Slider */}
-            <div className="mb-4">
-              <input
-                type="range"
-                min="0"
-                max={effectiveBudgetMW}
-                step="1"
-                value={allocation.radiationShielding}
-                onChange={(e) =>
-                  handleUpdate("radiationShielding", Number(e.target.value))
-                }
-                className="w-full h-3 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[#06B6D4] focus:outline-none"
-              />
-              <div className="flex justify-between text-[10px] font-mono text-slate-500 mt-1">
-                <span>0 MW</span>
-                <span className="text-cyan-400 font-bold">{baselines.radiationShielding} MW Target</span>
-                <span>{effectiveBudgetMW} MW</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Stepper Buttons */}
-          <div className="flex items-center gap-2 pt-2 border-t border-slate-800">
-            <button
-              type="button"
-              onClick={() => handleStep("radiationShielding", -5)}
-              className="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 font-bold text-xs flex items-center justify-center gap-1 transition-all"
-            >
-              <Minus className="w-3.5 h-3.5" /> -5 MW
-            </button>
-            <button
-              type="button"
-              onClick={() => handleStep("radiationShielding", +5)}
-              className="flex-1 py-2 rounded-xl bg-[#06B6D4] hover:bg-cyan-400 active:scale-95 text-slate-950 font-bold text-xs flex items-center justify-center gap-1 transition-all shadow-md"
-            >
-              <Plus className="w-3.5 h-3.5" /> +5 MW
-            </button>
-          </div>
-        </div>
-
-        {/* CHANNEL 3: BATTERY CHARGING & GRID RESERVE */}
+      {/* 3. FOUR LARGE TACTILE POWER ALLOCATION CONTROLS */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* CHANNEL 1: POWER GRID & BATTERY RESERVES */}
         <div className="rounded-2xl bg-[#0B1120] border-2 border-blue-900/50 hover:border-blue-600/60 transition-all p-4 flex flex-col justify-between shadow-xl">
           <div>
             <div className="flex items-center justify-between mb-2">
@@ -738,8 +679,8 @@ export default function ControlDeck({
                   <Battery className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="font-black text-sm text-white">Battery Reserves</h3>
-                  <p className="text-[11px] text-blue-300">Solar Array & Backup RTG</p>
+                  <h3 className="font-black text-sm text-white">Power Grid</h3>
+                  <p className="text-[11px] text-blue-300">Battery & Solar Bus</p>
                 </div>
               </div>
               <div className="text-right">
@@ -808,6 +749,223 @@ export default function ControlDeck({
             </button>
           )}
         </div>
+
+        {/* CHANNEL 2: LIFE SUPPORT (ECLSS) */}
+        <div className="rounded-2xl bg-[#0B1120] border-2 border-cyan-900/50 hover:border-cyan-500/60 transition-all p-4 flex flex-col justify-between shadow-xl">
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center">
+                  <Activity className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-black text-sm text-white">Life Support</h3>
+                  <p className="text-[11px] text-cyan-300">O₂ & Water Loop (ECLSS)</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="text-xl sm:text-2xl font-black font-mono text-[#06B6D4]">
+                  {allocation.lifeSupport}
+                </span>
+                <span className="text-xs text-slate-400 font-mono ml-1">MW</span>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-300 mb-3 bg-white/5 p-2 rounded-xl">
+              Baseline demand: <strong>{baselines.lifeSupport} MW</strong>. Powers CO₂ scrubbers and
+              closed-loop potable water recovery.
+            </p>
+
+            {/* Slider */}
+            <div className="mb-4">
+              <input
+                type="range"
+                min="0"
+                max={effectiveBudgetMW}
+                step="1"
+                value={allocation.lifeSupport}
+                onChange={(e) => handleUpdate("lifeSupport", Number(e.target.value))}
+                className="w-full h-3 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[#06B6D4] focus:outline-none"
+              />
+              <div className="flex justify-between text-[10px] font-mono text-slate-500 mt-1">
+                <span>0 MW</span>
+                <span className="text-cyan-400 font-bold">{baselines.lifeSupport} MW Target</span>
+                <span>{effectiveBudgetMW} MW</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Stepper Buttons for Kids / Tablets */}
+          <div className="flex items-center gap-2 pt-2 border-t border-slate-800">
+            <button
+              type="button"
+              onClick={() => handleStep("lifeSupport", -5)}
+              className="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 font-bold text-xs flex items-center justify-center gap-1 transition-all"
+            >
+              <Minus className="w-3.5 h-3.5" /> -5 MW
+            </button>
+            <button
+              type="button"
+              onClick={() => handleStep("lifeSupport", +5)}
+              className="flex-1 py-2 rounded-xl bg-[#06B6D4] hover:bg-cyan-400 active:scale-95 text-slate-950 font-bold text-xs flex items-center justify-center gap-1 transition-all shadow-md"
+            >
+              <Plus className="w-3.5 h-3.5" /> +5 MW
+            </button>
+          </div>
+
+          {/* Life Support Root Cause Trigger if in deficit or low health */}
+          {onInspectRootCause && (allocation.lifeSupport < baselines.lifeSupport - 4 || subsystems.lifeSupport.health < 45) && (
+            <button
+              type="button"
+              onClick={() => {
+                soundEffects.playButtonClick();
+                onInspectRootCause("life_support");
+              }}
+              className="mt-2.5 py-1.5 px-2.5 rounded-xl bg-red-950/70 hover:bg-red-900/70 border border-red-500/50 text-red-200 text-[11px] font-mono font-bold flex items-center justify-center gap-1.5 transition-all shadow-md"
+              title="Why is Life Support in danger? Inspect NASA ECLSS Root Cause"
+            >
+              <Search className="w-3.5 h-3.5 text-red-400" />
+              <span>Inspect Life Support Root Cause</span>
+            </button>
+          )}
+        </div>
+
+        {/* CHANNEL 3: RADIATION & THERMAL SHIELD */}
+        <div className="rounded-2xl bg-[#0B1120] border-2 border-indigo-900/50 hover:border-indigo-500/60 transition-all p-4 flex flex-col justify-between shadow-xl">
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center">
+                  <Shield className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-black text-sm text-white">Radiation Shield</h3>
+                  <p className="text-[11px] text-indigo-300">Magnetic Field & Regolith</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="text-xl sm:text-2xl font-black font-mono text-indigo-400">
+                  {allocation.radiationShielding}
+                </span>
+                <span className="text-xs text-slate-400 font-mono ml-1">MW</span>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-300 mb-3 bg-white/5 p-2 rounded-xl">
+              Baseline demand: <strong>{baselines.radiationShielding} MW</strong>. Repels cosmic rays, solar flares,
+              and extreme cold.
+            </p>
+
+            {/* Slider */}
+            <div className="mb-4">
+              <input
+                type="range"
+                min="0"
+                max={effectiveBudgetMW}
+                step="1"
+                value={allocation.radiationShielding}
+                onChange={(e) =>
+                  handleUpdate("radiationShielding", Number(e.target.value))
+                }
+                className="w-full h-3 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500 focus:outline-none"
+              />
+              <div className="flex justify-between text-[10px] font-mono text-slate-500 mt-1">
+                <span>0 MW</span>
+                <span className="text-indigo-400 font-bold">{baselines.radiationShielding} MW Target</span>
+                <span>{effectiveBudgetMW} MW</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Stepper Buttons */}
+          <div className="flex items-center gap-2 pt-2 border-t border-slate-800">
+            <button
+              type="button"
+              onClick={() => handleStep("radiationShielding", -5)}
+              className="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 font-bold text-xs flex items-center justify-center gap-1 transition-all"
+            >
+              <Minus className="w-3.5 h-3.5" /> -5 MW
+            </button>
+            <button
+              type="button"
+              onClick={() => handleStep("radiationShielding", +5)}
+              className="flex-1 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-bold text-xs flex items-center justify-center gap-1 transition-all shadow-md"
+            >
+              <Plus className="w-3.5 h-3.5" /> +5 MW
+            </button>
+          </div>
+        </div>
+
+        {/* CHANNEL 4: HYDROPONIC BAY / FOOD PRODUCTION */}
+        <div className="rounded-2xl bg-[#0B1120] border-2 border-emerald-900/50 hover:border-emerald-500/60 transition-all p-4 flex flex-col justify-between shadow-xl">
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                  <Leaf className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-black text-sm text-white">Hydroponic Bay</h3>
+                  <p className="text-[11px] text-emerald-300">Food Production & Crops</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="text-xl sm:text-2xl font-black font-mono text-emerald-400">
+                  {allocation.foodProduction}
+                </span>
+                <span className="text-xs text-slate-400 font-mono ml-1">MW</span>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-300 mb-3 bg-white/5 p-2 rounded-xl">
+              Baseline demand: <strong>{baselines.foodProduction} MW</strong>. Powers LED growth arrays, aeroponic
+              nutrient misting, and thermal heaters.
+            </p>
+
+            {/* Slider */}
+            <div className="mb-4">
+              <input
+                type="range"
+                min="0"
+                max={effectiveBudgetMW}
+                step="1"
+                value={allocation.foodProduction}
+                onChange={(e) => handleUpdate("foodProduction", Number(e.target.value))}
+                className="w-full h-3 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500 focus:outline-none"
+              />
+              <div className="flex justify-between text-[10px] font-mono text-slate-500 mt-1">
+                <span>0 MW</span>
+                <span className="text-emerald-400 font-bold">{baselines.foodProduction} MW Target</span>
+                <span>{effectiveBudgetMW} MW</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Stepper Buttons */}
+          <div className="flex items-center gap-2 pt-2 border-t border-slate-800">
+            <button
+              type="button"
+              onClick={() => handleStep("foodProduction", -5)}
+              className="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 font-bold text-xs flex items-center justify-center gap-1 transition-all"
+            >
+              <Minus className="w-3.5 h-3.5" /> -5 MW
+            </button>
+            <button
+              type="button"
+              onClick={() => handleStep("foodProduction", +5)}
+              className="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold text-xs flex items-center justify-center gap-1 transition-all shadow-md"
+            >
+              <Plus className="w-3.5 h-3.5" /> +5 MW
+            </button>
+          </div>
+
+          {/* Thermal Shock Alert Badge if < 10 MW */}
+          {allocation.foodProduction < GREENHOUSE_THERMAL_SHOCK_THRESHOLD_MW && (
+            <div className="mt-2.5 py-1.5 px-2.5 rounded-xl bg-rose-950/70 border border-rose-500/60 text-rose-300 text-[10px] font-mono font-bold flex items-center gap-1.5 animate-pulse">
+              <span>❄️ THERMAL SHOCK RISK (&lt;10 MW)</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* 4. LIVE CONSEQUENCE PREVIEW (Trade-off projection before advancing) */}
@@ -828,11 +986,11 @@ export default function ControlDeck({
         </div>
 
         {/* Delta Badges with Up/Down arrows */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {/* Delta 1: O2 & Food */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* Delta 1: O2 Buffer */}
           <div className="rounded-xl bg-slate-900/90 border border-slate-800 p-3 flex items-center justify-between">
             <div>
-              <p className="text-[11px] font-semibold text-slate-400">O₂ & Food Buffer</p>
+              <p className="text-[11px] font-semibold text-slate-400">O₂ Buffer (ECLSS)</p>
               <p className="text-sm font-black text-white mt-0.5">
                 {projections.o2Delta > 0
                   ? `+${projections.o2Delta}% O₂ Surplus`
@@ -841,14 +999,14 @@ export default function ControlDeck({
                   : "0% O₂ Stable"}
               </p>
               <p className="text-[10px] text-slate-400">
-                Food: {projections.foodDeltaDays >= 0 ? "+" : ""}
-                {projections.foodDeltaDays} days/sol
+                ECLSS: {projections.lsHealthDelta >= 0 ? "+" : ""}
+                {projections.lsHealthDelta}%
               </p>
             </div>
             <div
               className={`p-2 rounded-xl flex items-center justify-center ${
                 projections.o2Delta > 0
-                  ? "bg-emerald-500/20 text-emerald-400"
+                  ? "bg-cyan-500/20 text-cyan-400"
                   : projections.o2Delta < 0
                   ? "bg-rose-500/20 text-rose-400"
                   : "bg-slate-800 text-slate-400"
@@ -882,7 +1040,7 @@ export default function ControlDeck({
             <div
               className={`p-2 rounded-xl flex items-center justify-center ${
                 projections.shieldHealthDelta > 0
-                  ? "bg-cyan-500/20 text-cyan-400"
+                  ? "bg-indigo-500/20 text-indigo-400"
                   : projections.shieldHealthDelta < 0
                   ? "bg-rose-500/20 text-rose-400"
                   : "bg-slate-800 text-slate-400"
@@ -930,6 +1088,41 @@ export default function ControlDeck({
               )}
             </div>
           </div>
+
+          {/* Delta 4: Crop Harvest & Food Reserves */}
+          <div className="rounded-xl bg-slate-900/90 border border-slate-800 p-3 flex items-center justify-between">
+            <div>
+              <p className="text-[11px] font-semibold text-slate-400">Crop Harvest & Food</p>
+              <p className="text-sm font-black text-white mt-0.5">
+                {projections.isThermalShock
+                  ? `${projections.growthDeltaPercent}% Thermal Shock ❄️`
+                  : `+${projections.growthDeltaPercent}% Growth/Sol`}
+              </p>
+              <p className="text-[10px] text-slate-400">
+                Harvest: <strong className="text-emerald-300">{projections.harvestStatusText}</strong>
+              </p>
+              <p className="text-[9px] text-slate-500 font-mono">
+                {projections.projectedFoodReserveDays} Sols (~{projections.projectedTotalKcal.toLocaleString()} kcal)
+              </p>
+            </div>
+            <div
+              className={`p-2 rounded-xl flex items-center justify-center ${
+                !projections.isThermalShock && projections.growthDeltaPercent >= 25
+                  ? "bg-emerald-500/20 text-emerald-400"
+                  : projections.isThermalShock
+                  ? "bg-rose-500/20 text-rose-400"
+                  : "bg-amber-500/20 text-amber-400"
+              }`}
+            >
+              {!projections.isThermalShock && projections.growthDeltaPercent > 0 ? (
+                <ArrowUpRight className="w-5 h-5" />
+              ) : projections.isThermalShock ? (
+                <ArrowDownRight className="w-5 h-5" />
+              ) : (
+                <ArrowFlat className="w-5 h-5" />
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Real-time Guidance / Takeaway Note */}
@@ -941,18 +1134,27 @@ export default function ControlDeck({
                 Warning: You allocated more than the {effectiveBudgetMW} MW available!
                 Reduce power on one system so your grid doesn't brown out.
               </span>
+            ) : allocation.foodProduction < GREENHOUSE_THERMAL_SHOCK_THRESHOLD_MW ? (
+              <span className="text-rose-400 font-bold">
+                ❄️ Thermal Shock Hazard! Food Production is under {GREENHOUSE_THERMAL_SHOCK_THRESHOLD_MW} MW.
+                Aeroponic crops will freeze and lose 25% growth progress this Sol!
+              </span>
             ) : allocation.lifeSupport < baselines.lifeSupport - 4 ? (
               <span className="text-amber-300">
-                Life Support is under-budget (&lt;{baselines.lifeSupport} MW)! Crew will consume backup oxygen tanks and crops will wilt.
+                Life Support is under-budget (&lt;{baselines.lifeSupport} MW)! Crew will consume backup oxygen tanks.
               </span>
             ) : allocation.radiationShielding < baselines.radiationShielding - 4 ? (
               <span className="text-amber-300">
                 Shielding is thin (&lt;{baselines.radiationShielding} MW)! Space radiation will penetrate the habitat.
                 {difficulty === "flight_director" && " ⚠️ Low active thermal loop power accelerates structural thermal fatigue!"}
               </span>
+            ) : allocation.foodProduction < baselines.foodProduction - 4 ? (
+              <span className="text-amber-300">
+                Food Production is below baseline (&lt;{baselines.foodProduction} MW)! Crop maturity cycle is running at reduced speed.
+              </span>
             ) : (
               <span className="text-emerald-300">
-                Power is well distributed! Systems will hold steady through Sol {currentTurn}.
+                Power is well distributed across all 4 subsystems! Systems will hold steady through Sol {currentTurn}.
                 {difficulty === "flight_director" && " Thermal loop active; fatigue minimized."}
               </span>
             )}

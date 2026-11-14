@@ -528,12 +528,14 @@ export default function GameScreen({
                         soundEffects.playTurnChime();
                         const neededLs = 28;
                         const rem = Math.max(0, effectiveBudget - neededLs);
-                        const sh = Math.min(allocation.radiationShielding, Math.round(rem * 0.52));
-                        const pg = Math.max(0, rem - sh);
+                        const fp = Math.min(allocation.foodProduction || 20, Math.round(rem * 0.28));
+                        const sh = Math.min(allocation.radiationShielding || 25, Math.round((rem - fp) * 0.5));
+                        const pg = Math.max(0, rem - fp - sh);
                         setAllocation({
                           lifeSupport: neededLs,
                           radiationShielding: sh,
                           powerGrid: pg,
+                          foodProduction: fp,
                         });
                       }}
                       className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:brightness-110 active:scale-95 text-white font-black text-xs flex items-center gap-2 shrink-0 shadow-lg shadow-emerald-900/50 transition-all border border-emerald-300/40"
@@ -813,7 +815,8 @@ export default function GameScreen({
                       const totalAlloc =
                         lastResult.allocation.powerGrid +
                         lastResult.allocation.lifeSupport +
-                        lastResult.allocation.radiationShielding;
+                        lastResult.allocation.radiationShielding +
+                        lastResult.allocation.foodProduction;
                       const hasBrownout =
                         totalAlloc > lastResult.powerBudgetMW ||
                         lastResult.subsystems.powerGrid.health < 35 ||
@@ -887,12 +890,20 @@ export default function GameScreen({
                   </div>
 
                   {/* Sol Outcome Subsystem Metrics */}
-                  <div className="grid grid-cols-3 gap-2.5 pt-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2">
                     <div className="bg-slate-900/80 p-3 rounded-xl border border-slate-800">
                       <p className="text-[10px] font-mono text-slate-400 uppercase">
-                        Life Support
+                        Power Grid
                       </p>
-                      <p className="text-base sm:text-lg font-black text-emerald-400 font-mono">
+                      <p className="text-base sm:text-lg font-black text-blue-400 font-mono">
+                        {lastResult.subsystems.powerGrid.health.toFixed(0)}%
+                      </p>
+                    </div>
+                    <div className="bg-slate-900/80 p-3 rounded-xl border border-slate-800">
+                      <p className="text-[10px] font-mono text-slate-400 uppercase">
+                        Life Support (ECLSS)
+                      </p>
+                      <p className="text-base sm:text-lg font-black text-cyan-400 font-mono">
                         {lastResult.subsystems.lifeSupport.health.toFixed(0)}%
                       </p>
                     </div>
@@ -900,16 +911,16 @@ export default function GameScreen({
                       <p className="text-[10px] font-mono text-slate-400 uppercase">
                         Shield Integrity
                       </p>
-                      <p className="text-base sm:text-lg font-black text-cyan-400 font-mono">
+                      <p className="text-base sm:text-lg font-black text-indigo-400 font-mono">
                         {lastResult.subsystems.radiationShielding.health.toFixed(0)}%
                       </p>
                     </div>
                     <div className="bg-slate-900/80 p-3 rounded-xl border border-slate-800">
                       <p className="text-[10px] font-mono text-slate-400 uppercase">
-                        Power Reserves
+                        Hydroponic Bay
                       </p>
-                      <p className="text-base sm:text-lg font-black text-blue-400 font-mono">
-                        {lastResult.subsystems.powerGrid.health.toFixed(0)}%
+                      <p className="text-base sm:text-lg font-black text-emerald-400 font-mono">
+                        {lastResult.subsystems.foodProduction.health.toFixed(0)}%
                       </p>
                     </div>
                   </div>
