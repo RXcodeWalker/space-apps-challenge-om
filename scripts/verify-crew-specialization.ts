@@ -59,10 +59,10 @@ console.log("✓ Verified all 10 NASA incidents contain rich risk-vs-reward opti
 console.log("\nTesting prompt scenario: 'Send Botanist on an EVA during high solar flux to salvage crops?'");
 let gameState = createInitialGameState(LUNAR_SOUTH_POLE, "commander");
 
-const speIncident = LUNAR_INCIDENT_CARDS.find((c) => c.id === "lunar_solar_storm_spe");
-if (!speIncident) throw new Error("Could not find lunar_solar_storm_spe card");
+const speIncident = LUNAR_INCIDENT_CARDS.find((c) => c.id === "lunar_x_class_spe" || c.id === "lunar_solar_storm_spe");
+if (!speIncident) throw new Error("Could not find lunar SPE incident card");
 
-const botanistRepair = INCIDENT_SPECIALIST_REPAIRS["lunar_solar_storm_spe"]["botanist"];
+const botanistRepair = INCIDENT_SPECIALIST_REPAIRS[speIncident.id]["botanist"];
 console.log(`Action Prompt: "${botanistRepair.actionPrompt}"`);
 console.log(`Reward: ${botanistRepair.rewardDescription}`);
 console.log(`Risk: ${botanistRepair.riskDescription}`);

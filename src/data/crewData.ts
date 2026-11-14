@@ -1107,3 +1107,73 @@ export const INCIDENT_SPECIALIST_REPAIRS: Record<string, Record<CrewRoleId, Spec
     },
   },
 };
+
+// Aliases matching incidentCards IDs across Moon and Mars
+INCIDENT_SPECIALIST_REPAIRS["lunar_x_class_spe"] = INCIDENT_SPECIALIST_REPAIRS["lunar_solar_storm_spe"];
+INCIDENT_SPECIALIST_REPAIRS["lunar_dust_electrostatic"] = INCIDENT_SPECIALIST_REPAIRS["lunar_dust_electrostatic_abrasion"];
+INCIDENT_SPECIALIST_REPAIRS["lunar_shadow_oscillation"] = INCIDENT_SPECIALIST_REPAIRS["lunar_radiator_frost_lock"];
+INCIDENT_SPECIALIST_REPAIRS["mars_regional_dust_storm"] = INCIDENT_SPECIALIST_REPAIRS["mars_global_dust_storm"];
+INCIDENT_SPECIALIST_REPAIRS["mars_dust_devil_vortex"] = INCIDENT_SPECIALIST_REPAIRS["mars_moxie_electrolyzer_fault"];
+INCIDENT_SPECIALIST_REPAIRS["mars_co2_compressor_freezing"] = INCIDENT_SPECIALIST_REPAIRS["mars_methane_plume_hazard"];
+INCIDENT_SPECIALIST_REPAIRS["mars_subsurface_perchlorates"] = INCIDENT_SPECIALIST_REPAIRS["mars_perchlorate_water_leach"];
+INCIDENT_SPECIALIST_REPAIRS["mars_gcr_high_flux"] = INCIDENT_SPECIALIST_REPAIRS["mars_atmospheric_sublimation_chill"];
+
+// Europa Specialist Repairs
+INCIDENT_SPECIALIST_REPAIRS["europa_jovian_radiation_storm"] = {
+  botanist: {
+    crewRole: "botanist",
+    actionTitle: "Deep Water Ballast Hydroponic Shielding",
+    actionPrompt: "Send Botanist to submerge fragile bioluminescent algae cultures into deep sub-ice water ballasts?",
+    tacticalSummary: "Mei secures seed cultures under 2 meters of Jovian ocean ice.",
+    riskDescription: "-15 Botanist Morale from working near high-pressure sub-ice airlocks.",
+    rewardDescription: "+15 Food Reserve Days, +12% O₂ Buffer.",
+    effects: { moraleDelta: -15, foodDaysDelta: 15, oxygenBufferDelta: 12, lifeSupportHealthDelta: 12 },
+    moraleEvent: { title: "Sub-Ice Seed Vault Secured", narrative: "Dr. Mei Lin secured all botanical strains in the subterranean ice well before Jovian radiation crested.", type: "positive" },
+    engineeringTakeaway: "Sub-surface ice water mass is a superb passive barrier against Jupiter's trapped radiation belt."
+  },
+  power_engineer: {
+    crewRole: "power_engineer",
+    actionTitle: "Superconducting Magnetic Siphon Overclock",
+    actionPrompt: "Order Power Engineer to harness Jovian auroral flux into the superconducting shield coils?",
+    tacticalSummary: "Marcus taps Jupiter's massive magnetosphere to boost the base shield.",
+    riskDescription: "-12 Power Engineer Morale, -10 Health from electromagnetic shock.",
+    rewardDescription: "+25% Shield Health, +15 MW Induction Power.",
+    effects: { healthDelta: -10, moraleDelta: -12, shieldingHealthDelta: 25, powerDeltaMW: 15 },
+    moraleEvent: { title: "Jovian Magnetic Flux Harnessed", narrative: "Commander Vance coupled the station inductors into Jupiter's magnetosphere, creating an impenetrable force field!", type: "heroic" },
+    engineeringTakeaway: "Planetary magnetic fields can be inductively coupled to power outpost defensive coils."
+  },
+  medical_officer: {
+    crewRole: "medical_officer",
+    actionTitle: "Jovian Magnetosphere Bio-Dosimetry Protocol",
+    actionPrompt: "Have Medical Officer administer targeted DNA repair enzymes and cellular radioprotection?",
+    tacticalSummary: "Sarah administers specialized rad-blockers for high-energy Jovian electrons.",
+    riskDescription: "-10 Sarah Morale, depletes enzyme reserves.",
+    rewardDescription: "Halves crew Jovian radiation absorption, +15 Team Morale.",
+    effects: { moraleDelta: -10, teamMoraleDelta: 15, shieldingHealthDelta: 8 },
+    moraleEvent: { title: "DNA Radioprotection Protocol Active", narrative: "Dr. Sarah Chen dosed the crew with radioprotective antioxidants, neutralizing ionizing Jovian particle damage.", type: "positive" },
+    engineeringTakeaway: "Specialized pharmaceutical enzyme therapies defend against energetic Jovian trapped electron cascades."
+  },
+  geologist: {
+    crewRole: "geologist",
+    actionTitle: "Sub-Ice Cryo-Anchor & Ice Sheet Reinforcement",
+    actionPrompt: "Send Geologist into the sub-ice crevasse to anchor radiation-dense ice slab baffles?",
+    tacticalSummary: "Alex cuts and packs high-density Jovian ice slabs above the module.",
+    riskDescription: "+1.2 mSv Radiation Dose, -18 Morale from freezing abyss excursion.",
+    rewardDescription: "+28% Shielding Health, permanent ice shielding barrier.",
+    effects: { moraleDelta: -18, radiationDeltaMSv: 1.2, shieldingHealthDelta: 28 },
+    moraleEvent: { title: "Glacial Ice Shielding Slabs Locked in Place", narrative: "Dr. Alex Rivera worked suspended over Europa's abyssal ocean to lock 10-ton ice slabs over the habitat roof.", type: "heroic" },
+    engineeringTakeaway: "Europa's thick water ice shell provides hundreds of tons of natural radiation shielding if properly anchored."
+  }
+};
+
+INCIDENT_SPECIALIST_REPAIRS["europa_hydrothermal_vent_surge_card"] = INCIDENT_SPECIALIST_REPAIRS["lunar_ice_drill_surge"];
+INCIDENT_SPECIALIST_REPAIRS["europa_ice_crust_tension_fracture"] = INCIDENT_SPECIALIST_REPAIRS["lunar_micrometeorite_puncture"];
+INCIDENT_SPECIALIST_REPAIRS["europa_cryo_brine_salinity_short"] = INCIDENT_SPECIALIST_REPAIRS["mars_subsurface_perchlorates"];
+INCIDENT_SPECIALIST_REPAIRS["europa_deep_ocean_biosignature_echo"] = INCIDENT_SPECIALIST_REPAIRS["mars_methane_plume_hazard"];
+
+// Titan Specialist Repairs
+INCIDENT_SPECIALIST_REPAIRS["titan_methane_monsoon_flash_flood"] = INCIDENT_SPECIALIST_REPAIRS["mars_global_dust_storm"];
+INCIDENT_SPECIALIST_REPAIRS["titan_dragonfly_icing_in_supercooled_fog"] = INCIDENT_SPECIALIST_REPAIRS["lunar_radiator_frost_lock"];
+INCIDENT_SPECIALIST_REPAIRS["titan_cryo_rankine_lake_heat_exchanger_slagging"] = INCIDENT_SPECIALIST_REPAIRS["mars_atmospheric_sublimation_chill"];
+INCIDENT_SPECIALIST_REPAIRS["titan_tholin_electrostatic_arc"] = INCIDENT_SPECIALIST_REPAIRS["lunar_dust_electrostatic_abrasion"];
+INCIDENT_SPECIALIST_REPAIRS["titan_prebiotic_amino_acid_discovery"] = INCIDENT_SPECIALIST_REPAIRS["mars_methane_plume_hazard"];
