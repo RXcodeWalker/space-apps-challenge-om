@@ -2,7 +2,8 @@
 ### NASA International Space Apps Challenge 2026
 **Theme:** *Build a Junior Astronaut Mission Trainer*  
 **Target Explorers:** Junior Commanders (Ages 7–12+), Students & Space Enthusiasts  
-**Live Deployments:** Zero-configuration instant deployment on Vercel & Netlify  
+**Live Application:** [astronaut.beyondthebasics.me](https://astronaut.beyondthebasics.me)  
+**Cloud Deployment:** Zero-configuration instant deployment on Vercel & Netlify  
 
 ---
 
