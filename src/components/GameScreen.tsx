@@ -296,6 +296,65 @@ export default function GameScreen({
     }
   }, [onSwitchPlanet, onMissionEnd, gameState]);
 
+  // Root Cause Anomaly Drill-Down Handlers
+  const handleInspectAlertRootCause = useCallback(
+    (alert: Parameters<typeof resolveRootCauseForAlert>[0]) => {
+      soundEffects.playButtonClick();
+      const evalCtx: RootCauseEvaluationContext = {
+        environment,
+        currentTurn: lastResult ? lastResult.turn : currentTurn,
+        allocation: lastResult ? lastResult.allocation : allocation,
+        effectiveBudgetMW: lastResult ? lastResult.powerBudgetMW : effectiveBudget,
+        subsystems: lastResult ? lastResult.subsystems : gameState.subsystems,
+        crew: lastResult ? lastResult.crew : gameState.crew,
+        currentEvent: lastResult ? lastResult.event : currentEvent,
+        alerts: lastResult ? lastResult.alerts : [],
+      };
+      const profile = resolveRootCauseForAlert(alert, evalCtx);
+      setSelectedRootCauseProfile(profile);
+    },
+    [environment, lastResult, currentTurn, allocation, effectiveBudget, gameState, currentEvent]
+  );
+
+  const handleInspectTypeRootCause = useCallback(
+    (type: RootCauseFailureType) => {
+      soundEffects.playButtonClick();
+      const evalCtx: RootCauseEvaluationContext = {
+        environment,
+        currentTurn: lastResult ? lastResult.turn : currentTurn,
+        allocation: lastResult ? lastResult.allocation : allocation,
+        effectiveBudgetMW: lastResult ? lastResult.powerBudgetMW : effectiveBudget,
+        subsystems: lastResult ? lastResult.subsystems : gameState.subsystems,
+        crew: lastResult ? lastResult.crew : gameState.crew,
+        currentEvent: lastResult ? lastResult.event : currentEvent,
+        alerts: lastResult ? lastResult.alerts : [],
+      };
+      let profile = BROWNOUT_OVERBUDGET;
+      if (type === "brownout") {
+        const total =
+          evalCtx.allocation.powerGrid +
+          evalCtx.allocation.lifeSupport +
+          evalCtx.allocation.radiationShielding;
+        profile =
+          total > evalCtx.effectiveBudgetMW
+            ? BROWNOUT_OVERBUDGET
+            : BROWNOUT_BATTERY_DEPLETION;
+      } else if (type === "life_support") {
+        profile = LIFE_SUPPORT_FAILURE;
+      } else {
+        profile = RADIATION_SHIELD_FAILURE;
+      }
+      setSelectedRootCauseProfile(profile);
+    },
+    [environment, lastResult, currentTurn, allocation, effectiveBudget, gameState, currentEvent]
+  );
+
+  const handleApplyCounterfactualAllocation = useCallback((newAlloc: PowerAllocation) => {
+    soundEffects.playVictoryChord();
+    setAllocation(newAlloc);
+    setSelectedRootCauseProfile(null);
+  }, []);
+
   // Last incident chosen this sol (if any)
   const currentSolIncidentChoice = gameState.incidentHistory?.find(
     (h) => h.sol === currentTurn

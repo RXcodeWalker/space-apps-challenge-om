@@ -360,8 +360,96 @@ export default function OutpostVisualizer({
           {/* BACKGROUND: Sky & Stars / Celestial Bodies */}
           <rect x="0" y="0" width="1000" height="380" fill={`url(#skyGrad-${filterId})`} />
 
-          {/* Stars (on Moon) or Dust Haze (on Mars) */}
-          {!isMars ? (
+          {/* Stars, Sky & Celestial Bodies */}
+          {isMars ? (
+            <g>
+              {/* Mars Sun (smaller & pale) & Moons */}
+              <circle cx="840" cy="80" r="18" fill="#FEF08A" opacity={hasDustStorm ? 0.35 : 0.85} />
+              {/* Distant Phobos & Deimos */}
+              <circle cx="750" cy="65" r="4" fill="#D6D3D1" />
+              <circle cx="770" cy="55" r="2.5" fill="#A8A29E" />
+              {/* Atmospheric dust haze lines */}
+              <path
+                d="M 0 160 Q 250 140 500 165 T 1000 150"
+                fill="none"
+                stroke="#C2410C"
+                strokeWidth="24"
+                opacity={hasDustStorm ? "0.45" : "0.15"}
+              />
+            </g>
+          ) : isEuropa ? (
+            <g>
+              {/* Massive Subterranean Ice Cavern Roof Vault */}
+              <path
+                d="M 0 0 L 1000 0 L 1000 75 Q 750 35 500 65 Q 250 35 0 85 Z"
+                fill="#082f49"
+                opacity="0.85"
+              />
+              {/* Crystalline Ice Fissures in Ceiling */}
+              <path
+                d="M 120 0 L 140 40 L 180 65 M 480 0 L 510 35 L 530 60 M 820 0 L 850 45 L 890 75"
+                stroke="#38bdf8"
+                strokeWidth="2"
+                opacity="0.8"
+                fill="none"
+              />
+              {/* Jupiter glimpsed through surface ice rift */}
+              <circle cx="850" cy="95" r="38" fill="#d97706" />
+              <path d="M 814 84 Q 850 88 886 84" stroke="#b45309" strokeWidth="4" fill="none" />
+              <path d="M 812 95 Q 850 98 888 95" stroke="#78350f" strokeWidth="5" fill="none" />
+              <path d="M 814 106 Q 850 108 886 106" stroke="#92400e" strokeWidth="3" fill="none" />
+              <ellipse cx="862" cy="103" rx="6" ry="3.5" fill="#ef4444" opacity="0.9" />
+              {/* Jovian Magnetospheric Aurora glow */}
+              <circle
+                cx="850"
+                cy="95"
+                r="45"
+                fill="none"
+                stroke="#38bdf8"
+                strokeWidth="1.5"
+                opacity="0.6"
+                strokeDasharray="4 2"
+              />
+            </g>
+          ) : isTitan ? (
+            <g>
+              {/* Dense Photochemical Tholin Smog Haze */}
+              <rect x="0" y="0" width="1000" height="380" fill="#78350f" opacity="0.25" />
+              <path
+                d="M 0 110 Q 300 80 600 120 T 1000 95"
+                fill="none"
+                stroke="#d97706"
+                strokeWidth="30"
+                opacity="0.25"
+              />
+              {/* Saturn faintly shining through golden atmosphere */}
+              <circle cx="850" cy="85" r="22" fill="#eab308" opacity="0.75" />
+              <ellipse
+                cx="850"
+                cy="85"
+                rx="48"
+                ry="12"
+                fill="none"
+                stroke="#fef08a"
+                strokeWidth="3.5"
+                opacity="0.75"
+                transform="rotate(-18 850 85)"
+              />
+              {/* Hydrocarbon Lake Shoreline (Kraken Mare) */}
+              <path
+                d="M 680 340 Q 820 330 1000 345 L 1000 380 L 680 380 Z"
+                fill="#0f172a"
+                opacity="0.9"
+              />
+              <path
+                d="M 700 350 Q 850 345 980 355"
+                stroke="#0284c7"
+                strokeWidth="1.5"
+                opacity="0.6"
+                fill="none"
+              />
+            </g>
+          ) : (
             <g opacity="0.7">
               {/* Earth visible in Moon's sky */}
               <circle cx="860" cy="90" r="32" fill="#1D4ED8" />
@@ -386,33 +474,28 @@ export default function OutpostVisualizer({
               <circle cx="790" cy="120" r="1.5" fill="#FFFFFF" />
               <circle cx="940" cy="40" r="1.5" fill="#93C5FD" />
             </g>
-          ) : (
-            <g>
-              {/* Mars Sun (smaller & pale) & Moons */}
-              <circle cx="840" cy="80" r="18" fill="#FEF08A" opacity={hasDustStorm ? 0.35 : 0.85} />
-              {/* Distant Phobos & Deimos */}
-              <circle cx="750" cy="65" r="4" fill="#D6D3D1" />
-              <circle cx="770" cy="55" r="2.5" fill="#A8A29E" />
-
-              {/* Atmospheric dust haze lines */}
-              <path
-                d="M 0 160 Q 250 140 500 165 T 1000 150"
-                fill="none"
-                stroke="#C2410C"
-                strokeWidth="24"
-                opacity={hasDustStorm ? "0.45" : "0.15"}
-              />
-            </g>
           )}
 
-          {/* Distant Hills / Crater Rim */}
+          {/* Distant Hills / Horizon */}
           <path
             d={
               isMars
                 ? "M 0 340 Q 180 270 360 310 T 740 280 T 1000 320 L 1000 380 L 0 380 Z"
+                : isEuropa
+                ? "M 0 330 Q 200 290 400 325 T 800 285 T 1000 315 L 1000 380 L 0 380 Z"
+                : isTitan
+                ? "M 0 335 Q 240 285 460 320 T 780 275 T 1000 310 L 1000 380 L 0 380 Z"
                 : "M 0 330 Q 220 280 440 315 T 820 270 T 1000 310 L 1000 380 L 0 380 Z"
             }
-            fill={isMars ? "#5C2010" : "#242D3D"}
+            fill={
+              isMars
+                ? "#5C2010"
+                : isEuropa
+                ? "#0c4a6e"
+                : isTitan
+                ? "#78350f"
+                : "#242D3D"
+            }
             opacity="0.85"
           />
 
@@ -912,6 +995,10 @@ export default function OutpostVisualizer({
                     <p className="text-slate-300 text-xs">
                       {isMars
                         ? "Curiosity/Perseverance class 6-wheel rover surveying Gale Crater mudstones & perchlorate deposits."
+                        : isEuropa
+                        ? "Autonomous Sub-Surface Ocean Cryo-Diver exploring hydrothermal vents and testing for biosignatures."
+                        : isTitan
+                        ? "NASA Dragonfly nuclear octocopter performing autonomous flights over prebiotic hydrocarbon lakes and dunes."
                         : "Artemis lunar rover mining ice from Permanently Shadowed Regions (PSRs) at −173°C."}
                     </p>
                   </div>

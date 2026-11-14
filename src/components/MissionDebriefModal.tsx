@@ -354,6 +354,67 @@ export default function MissionDebriefModal({
               </div>
             )}
 
+            {/* EXPEDITION CREW STATUS & FLIGHT SURGEON CITATION */}
+            {gameState.crew.members && gameState.crew.members.length > 0 && (
+              <div className="rounded-2xl bg-slate-900/90 border border-slate-800 p-4 shadow-lg flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">👨‍🚀</span>
+                    <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-200">
+                      Expedition Crew Roster & Final Vitals
+                    </h3>
+                  </div>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-950 border border-blue-500/40 text-blue-300">
+                    4 Astronauts Deployed
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                  {gameState.crew.members.map((member) => {
+                    const statusColor =
+                      member.status === "nominal"
+                        ? "text-emerald-400 bg-emerald-950/80 border-emerald-500/40"
+                        : member.status === "heroic"
+                        ? "text-cyan-400 bg-cyan-950/80 border-cyan-500/40"
+                        : member.status === "irradiated"
+                        ? "text-purple-400 bg-purple-950/80 border-purple-500/40"
+                        : member.status === "fatigued"
+                        ? "text-amber-400 bg-amber-950/80 border-amber-500/40"
+                        : "text-red-400 bg-red-950/80 border-red-500/40";
+
+                    return (
+                      <div
+                        key={member.id}
+                        className="bg-black/40 p-3 rounded-xl border border-white/5 flex flex-col justify-between gap-2"
+                      >
+                        <div className="flex items-start justify-between gap-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-base">{member.avatar}</span>
+                            <div>
+                              <p className="text-xs font-bold text-white truncate">{member.name}</p>
+                              <p className="text-[10px] text-slate-400 font-mono">"{member.callsign}"</p>
+                            </div>
+                          </div>
+                          <span
+                            className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border uppercase ${statusColor}`}
+                          >
+                            {member.status}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-1 text-[10px] font-mono text-slate-300 pt-1 border-t border-white/5">
+                          <span>Health: <strong className="text-white">{member.health}%</strong></span>
+                          <span>Morale: <strong className="text-white">{member.morale}%</strong></span>
+                          <span>Dose: <strong className="text-amber-300">{member.radiationDoseMSv.toFixed(1)} mSv</strong></span>
+                          <span>Repairs: <strong className="text-emerald-300">{member.repairsConducted}</strong></span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* 2. SOL-BY-SOL MISSION REPLAY & FLIGHT RECORDER */}
             <FlightRecorderReplay gameState={gameState} environment={environment} />
 
