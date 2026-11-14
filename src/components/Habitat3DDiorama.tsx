@@ -68,6 +68,8 @@ export default function Habitat3DDiorama({
   const [fps, setFps] = useState<number>(60);
 
   const isMars = environment.id === "mars_gale_crater";
+  const isEuropa = environment.id === "europa_under_ice";
+  const isTitan = environment.id === "titan_hydrocarbon";
 
   // Environmental events
   const hasDustStorm =
@@ -163,11 +165,23 @@ export default function Habitat3DDiorama({
       ? hasDustStorm
         ? 0x8a3818
         : 0x5a2312
+      : isEuropa
+      ? 0x020a1c
+      : isTitan
+      ? 0x652b0b
       : 0x050814;
     scene.background = new THREE.Color(skyColor);
     scene.fog = new THREE.FogExp2(
       skyColor,
-      isMars ? (hasDustStorm ? 0.028 : 0.012) : 0.005
+      isMars
+        ? hasDustStorm
+          ? 0.028
+          : 0.012
+        : isEuropa
+        ? 0.018
+        : isTitan
+        ? 0.024
+        : 0.005
     );
 
     // 2. Camera & OrbitControls
@@ -199,14 +213,16 @@ export default function Habitat3DDiorama({
 
     // 3. Lighting (Sun & Ambient)
     const ambientLight = new THREE.AmbientLight(
-      isMars ? 0xfecdd3 : 0xdbeafe,
+      isMars ? 0xfecdd3 : isEuropa ? 0xbae6fd : isTitan ? 0xfde047 : 0xdbeafe,
       lightingMode === "night" ? 0.2 : lightingMode === "twilight" ? 0.5 : 0.85
     );
     scene.add(ambientLight);
 
     const sunLight = new THREE.DirectionalLight(
-      isMars ? 0xffedd5 : 0xffffff,
-      lightingMode === "night" ? 0.05 : lightingMode === "twilight" ? 1.2 : 2.6
+      isMars ? 0xffedd5 : isEuropa ? 0xa5f3fc : isTitan ? 0xfef08a : 0xffffff,
+      isEuropa
+        ? 0.55
+        : lightingMode === "night" ? 0.05 : lightingMode === "twilight" ? 1.2 : 2.6
     );
     if (lightingMode === "twilight") {
       sunLight.position.set(-35, 4, -15); // Low grazing twilight angle
@@ -227,14 +243,53 @@ export default function Habitat3DDiorama({
 
     // Secondary fill light
     const fillLight = new THREE.DirectionalLight(
-      isMars ? 0x9a3412 : 0x1e3a8a,
+      isMars ? 0x9a3412 : isEuropa ? 0x0284c7 : isTitan ? 0xca8a04 : 0x1e3a8a,
       0.6
     );
     fillLight.position.set(-20, -5, -20);
     scene.add(fillLight);
 
-    // 4. Celestial Elements: Earth (Moon view) or Phobos/Sun (Mars view)
-    if (!isMars) {
+    // 4. Celestial Elements: Earth (Moon view), Phobos/Sun (Mars), Jupiter (Europa), Saturn (Titan)
+    if (isEuropa) {
+      // Jupiter looming massive in the sky through ice rift
+      const jupiterGeom = new THREE.SphereGeometry(6.5, 32, 32);
+      const jupiterMat = new THREE.MeshStandardMaterial({
+        color: 0xd97706,
+        roughness: 0.8,
+        metalness: 0.1,
+        emissive: 0x78350f,
+        emissiveIntensity: 0.25,
+      });
+      const jupiterMesh = new THREE.Mesh(jupiterGeom, jupiterMat);
+      jupiterMesh.position.set(38, 28, -55);
+      scene.add(jupiterMesh);
+    } else if (isTitan) {
+      // Saturn with rings in Titan's hazy sky
+      const saturnGeom = new THREE.SphereGeometry(3.6, 32, 32);
+      const saturnMat = new THREE.MeshStandardMaterial({
+        color: 0xeab308,
+        roughness: 0.7,
+        metalness: 0.1,
+        emissive: 0x854d0e,
+        emissiveIntensity: 0.2,
+      });
+      const saturnMesh = new THREE.Mesh(saturnGeom, saturnMat);
+      saturnMesh.position.set(38, 28, -55);
+      scene.add(saturnMesh);
+
+      // Saturn Ring
+      const ringGeom = new THREE.RingGeometry(4.5, 7.8, 32);
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: 0xfef08a,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.65,
+      });
+      const ringMesh = new THREE.Mesh(ringGeom, ringMat);
+      ringMesh.rotation.x = Math.PI / 3;
+      ringMesh.position.copy(saturnMesh.position);
+      scene.add(ringMesh);
+    } else if (!isMars) {
       // Earth visible in lunar sky
       const earthGeom = new THREE.SphereGeometry(3.2, 32, 32);
       const earthMat = new THREE.MeshStandardMaterial({
@@ -297,10 +352,14 @@ export default function Habitat3DDiorama({
     // Terrain material with Frost / Regolith color
     const terrainBaseColor = isMars
       ? new THREE.Color(0xa84323) // Mars iron-oxide red
+      : isEuropa
+      ? new THREE.Color(0xa5f3fc) // Europa ice-blue crust
+      : isTitan
+      ? new THREE.Color(0x44260f) // Titan dark hydrocarbon sand
       : new THREE.Color(0x374151); // Lunar dark grey regolith
 
     // If frost is accumulating, blend terrain with glistening white/cyan ice
-    if (frostFactor > 0.2) {
+    if (frostFactor > 0.2 && !isEuropa) {
       terrainBaseColor.lerp(new THREE.Color(0x93c5fd), frostFactor * 0.45);
     }
 

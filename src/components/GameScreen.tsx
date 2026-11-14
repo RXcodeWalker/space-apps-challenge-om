@@ -790,6 +790,7 @@ export default function GameScreen({
                 effectiveBudgetMW={lastResult.powerBudgetMW}
                 currentEvent={lastResult.event}
                 crew={lastResult.crew}
+                onInspectRootCause={handleInspectTypeRootCause}
               />
 
               {/* Turn Outcome & Mission Alerts */}
@@ -806,6 +807,76 @@ export default function GameScreen({
                         Score: {lastResult.missionScorePercent}/100
                       </span>
                     </div>
+
+                    {/* Interactive Anomaly Root Cause Investigation Card */}
+                    {(() => {
+                      const totalAlloc =
+                        lastResult.allocation.powerGrid +
+                        lastResult.allocation.lifeSupport +
+                        lastResult.allocation.radiationShielding;
+                      const hasBrownout =
+                        totalAlloc > lastResult.powerBudgetMW ||
+                        lastResult.subsystems.powerGrid.health < 35 ||
+                        lastResult.alerts.some(
+                          (a) =>
+                            a.subsystem === "power" ||
+                            a.headline.toLowerCase().includes("over-budget") ||
+                            a.headline.toLowerCase().includes("brownout")
+                        );
+                      const hasLifeSupportFailure =
+                        lastResult.subsystems.lifeSupport.health < 40 ||
+                        lastResult.crew.oxygenBufferPercent < 45 ||
+                        lastResult.alerts.some(
+                          (a) =>
+                            a.subsystem === "lifeSupport" ||
+                            a.subsystem === "crew" ||
+                            a.headline.toLowerCase().includes("life support") ||
+                            a.headline.toLowerCase().includes("oxygen") ||
+                            a.headline.toLowerCase().includes("o₂")
+                        );
+
+                      if (!hasBrownout && !hasLifeSupportFailure) return null;
+
+                      return (
+                        <motion.div
+                          initial={{ opacity: 0, y: -6 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="mb-4 p-4 rounded-2xl bg-gradient-to-r from-red-950/90 via-rose-950/70 to-slate-900 border-2 border-red-500/80 shadow-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-red-500/20 text-red-400 border border-red-500/40 flex items-center justify-center shrink-0 shadow-lg shadow-red-950/50">
+                              <AlertTriangle className="w-5 h-5 animate-pulse" />
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-mono font-black text-red-300 uppercase tracking-wider">
+                                  CRITICAL MISSION ANOMALY DETECTED
+                                </span>
+                                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-red-900/60 text-red-200 border border-red-500/40 font-bold uppercase">
+                                  {hasBrownout ? "Bus Undervoltage Brownout" : "Life Support Failure"}
+                                </span>
+                              </div>
+                              <p className="text-xs text-slate-200 mt-0.5">
+                                {hasBrownout
+                                  ? "Main distribution bus overloaded! Protective relays tripped across habitat modules."
+                                  : "Life support systems experienced severe starvation. Crew oxygen buffer depleted."}
+                              </p>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleInspectTypeRootCause(hasBrownout ? "brownout" : "life_support")
+                            }
+                            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 hover:brightness-110 active:scale-95 text-white font-mono font-black text-xs flex items-center gap-2 shrink-0 shadow-lg shadow-red-950/80 border border-red-300/40 transition-all"
+                          >
+                            <Search className="w-4 h-4" />
+                            <span>Inspect Root Cause</span>
+                          </button>
+                        </motion.div>
+                      );
+                    })()}
 
                     <h2 className="text-xl sm:text-2xl font-black text-white">
                       {lastResult.event.label}
@@ -990,7 +1061,11 @@ export default function GameScreen({
                       Active Telemetry Alerts
                     </span>
                   </div>
-                  <AlertBanner alerts={lastResult.alerts} kidMode={true} />
+                  <AlertBanner
+                    alerts={lastResult.alerts}
+                    kidMode={true}
+                    onInspectRootCause={handleInspectAlertRootCause}
+                  />
 
                   {/* Mini History */}
                   {gameState.history.length > 1 && (
