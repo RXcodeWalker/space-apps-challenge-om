@@ -115,6 +115,20 @@ class SpaceDroneSoundtrack {
     [73.42, 110.0, 220.0, 261.63, 329.63], // D2, A2, A3, C4, E4   (Dm9 Gale crater)
   ];
 
+  private europaChords = [
+    [46.25, 92.5, 185.0, 277.18, 369.99],  // F#1, F#2, F#3, C#4, F#4 (F#m deep ice abyssal)
+    [73.42, 110.0, 220.0, 293.66, 369.99], // D2, A2, A3, D4, F#4    (Dmaj7 glacial blue)
+    [61.74, 92.5, 185.0, 246.94, 369.99],  // B1, F#2, F#3, B3, F#4   (Bm9 ocean cavern)
+    [55.0, 110.0, 220.0, 277.18, 329.63],  // A1, A2, A3, C#4, E4    (Amaj Jovian aura)
+  ];
+
+  private titanChords = [
+    [48.99, 98.0, 196.0, 293.66, 349.23],  // G1, G2, G3, D4, F4     (Gm7 hydrocarbon lake)
+    [38.89, 77.78, 155.56, 233.08, 311.13],// Eb1, Eb2, Eb3, Bb3, Eb4 (Ebmaj7 thick atmosphere)
+    [65.41, 98.0, 196.0, 261.63, 311.13],  // C2, G2, G3, C4, Eb4    (Cm7 cryogenic methane)
+    [43.65, 87.31, 174.61, 261.63, 349.23],// F1, F2, F3, C4, F4     (Fsus2 tholin dunes)
+  ];
+
   private currentChordList = this.lunarChords;
   private activeNodes: { oscs: OscillatorNode[]; gain: GainNode }[] = [];
 
@@ -136,9 +150,19 @@ class SpaceDroneSoundtrack {
   }
 
   public setEnvironment(envId: string): void {
-    this.currentChordList = envId === "mars_gale_crater" ? this.marsChords : this.lunarChords;
-    const targetFreq = envId === "mars_gale_crater" ? 420 : 520;
-    this.filter.frequency.linearRampToValueAtTime(targetFreq, this.ctx.currentTime + 3.0);
+    if (envId === "europa_under_ice") {
+      this.currentChordList = this.europaChords;
+      this.filter.frequency.linearRampToValueAtTime(580, this.ctx.currentTime + 3.0);
+    } else if (envId === "titan_hydrocarbon") {
+      this.currentChordList = this.titanChords;
+      this.filter.frequency.linearRampToValueAtTime(360, this.ctx.currentTime + 3.0);
+    } else if (envId === "mars_gale_crater") {
+      this.currentChordList = this.marsChords;
+      this.filter.frequency.linearRampToValueAtTime(420, this.ctx.currentTime + 3.0);
+    } else {
+      this.currentChordList = this.lunarChords;
+      this.filter.frequency.linearRampToValueAtTime(520, this.ctx.currentTime + 3.0);
+    }
   }
 
   public start(): void {
