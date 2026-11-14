@@ -63,9 +63,10 @@ assert(commState.difficulty === "commander", "Difficulty correctly set to comman
 assert(commState.subsystems.lifeSupport.powerDrawMW === 35, "Commander baseline demand is 35 MW");
 assert(commState.crew.foodReserveDays === 15, "Commander starts with 15 food days");
 
-const commTurn1 = processTurn(commState, { powerGrid: 25, lifeSupport: 35, radiationShielding: 30 });
+// Lunar South Pole Sol 1 budget is ~77 MW. Allocate 75 MW (within budget, full 35 MW to life support):
+const commTurn1 = processTurn(commState, { powerGrid: 20, lifeSupport: 35, radiationShielding: 20 });
 console.log("commTurn1 lifeSupport health:", commTurn1.result.subsystems.lifeSupport.health);
-assert(commTurn1.result.subsystems.lifeSupport.health >= 85, "Standard baseline turn maintains nominal health (~90%)");
+assert(commTurn1.result.subsystems.lifeSupport.health >= 88, "Standard baseline turn maintains nominal health (~90%)");
 
 console.log("\n=== 3. TESTING FLIGHT DIRECTOR TIER (HARDCORE / REALISTIC) ===");
 const fdState = createInitialGameState(LUNAR_SOUTH_POLE, "flight_director");

@@ -42,8 +42,6 @@ import {
   DIFFICULTY_PRESETS,
   type DifficultyTier,
 } from "../data/difficultyTiers";
-import { useTranslation } from "../i18n/LanguageContext";
-import LanguageSelector from "./LanguageSelector";
 
 export interface ControlDeckProps {
   environment: MissionEnvironment;
@@ -236,7 +234,7 @@ export default function ControlDeck({
           <div>
             <div className="flex items-center gap-2">
               <span className="text-xs font-mono font-bold tracking-wider text-[#06B6D4] uppercase">
-                MISSION SOL {currentTurn} OF {totalTurns}
+                {t("game.solIndicator", { current: currentTurn, total: totalTurns })}
               </span>
               <span
                 className="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider font-mono flex items-center gap-1"
@@ -247,14 +245,16 @@ export default function ControlDeck({
                 }}
               >
                 <span>{config.emoji}</span>
-                <span>{config.title}</span>
+                <span>{t(`difficulties.${difficulty}.title`)}</span>
               </span>
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-semibold hidden sm:inline">
-                {environment.name}
+                {t(`destinations.${environment.id === "lunar_south_pole" ? "moon" : "mars"}.name`)}
               </span>
             </div>
             <p className="text-sm font-black text-white leading-tight">
-              {currentEvent?.label ?? `Sol ${currentTurn} Operations`}
+              {currentEvent?.id && t(`events.${currentEvent.id}.label`) !== `events.${currentEvent.id}.label`
+                ? t(`events.${currentEvent.id}.label`)
+                : (currentEvent?.label ?? `Sol ${currentTurn}`)}
             </p>
           </div>
         </div>
@@ -266,10 +266,10 @@ export default function ControlDeck({
           </div>
           <div>
             <p className="text-[10px] font-mono text-slate-400 uppercase">
-              Crew Morale & O₂
+              {t("game.crewMorale")} & {t("game.oxygenBuffer")}
             </p>
             <p className="text-xs sm:text-sm font-black text-white flex items-center gap-1.5">
-              <span>{crew.morale}% Morale</span>
+              <span>{crew.morale}% {t("game.crewMorale")}</span>
               <span className="text-slate-500">·</span>
               <span className="text-emerald-400">{crew.oxygenBufferPercent}% O₂</span>
             </p>
@@ -284,7 +284,7 @@ export default function ControlDeck({
             </div>
             <div>
               <p className="text-[10px] font-mono text-amber-300 uppercase tracking-tight">
-                500 mSv Career Limit
+                {t("game.safeLimit", { limit: 500 })}
               </p>
               <p className="text-xs sm:text-sm font-black font-mono text-white">
                 <span
@@ -325,7 +325,7 @@ export default function ControlDeck({
           </div>
           <div>
             <p className="text-[10px] font-mono uppercase text-slate-400">
-              Net Power Balance
+              {t("game.powerBudget")}
             </p>
             <p className="text-xs sm:text-sm font-black font-mono">
               {isOverBudget ? (
@@ -342,6 +342,9 @@ export default function ControlDeck({
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Multi-Language Selector */}
+          <LanguageSelector compact />
+
           {/* Mute/Unmute Toggle */}
           <button
             type="button"
@@ -358,7 +361,7 @@ export default function ControlDeck({
             ) : (
               <Volume2 className="w-3.5 h-3.5 text-cyan-400" />
             )}
-            <span className="hidden sm:inline">{isMuted ? "Muted" : "Sound"}</span>
+            <span className="hidden sm:inline">{isMuted ? t("common.muted") : t("common.sound")}</span>
           </button>
 
           {/* Tutorial / Help Button */}
@@ -370,7 +373,7 @@ export default function ControlDeck({
               title="Launch 3-Step Mission Tutorial"
             >
               <HelpCircle className="w-3.5 h-3.5 text-[#06B6D4]" />
-              <span className="hidden sm:inline">Tutorial</span>
+              <span className="hidden sm:inline">{t("common.howToPlay")}</span>
             </button>
           )}
 
@@ -382,7 +385,7 @@ export default function ControlDeck({
             title="Inspect Real NASA Science Instrument Data"
           >
             <Database className="w-3.5 h-3.5 text-[#06B6D4]" />
-            <span>NASA Data</span>
+            <span>{t("common.nasaData")}</span>
           </button>
         </div>
       </div>
@@ -847,11 +850,11 @@ export default function ControlDeck({
           {isProcessing ? (
             <span className="flex items-center gap-2">
               <span className="animate-spin">⚙️</span>
-              Simulating Sol {currentTurn}...
+              {t("game.simulating")}
             </span>
           ) : (
             <>
-              <span>Commit & Advance to Sol {currentTurn < totalTurns ? currentTurn + 1 : "Evaluation"}</span>
+              <span>{t("game.lockInAllocation", { sol: currentTurn })}</span>
               <ChevronRight className="w-5 h-5" />
             </>
           )}
