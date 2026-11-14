@@ -22,6 +22,7 @@ import {
   Box,
   Layers,
   Atom,
+  Search,
 } from "lucide-react";
 import Habitat3DDiorama from "./Habitat3DDiorama";
 import RegolithChemistryViewer from "./RegolithChemistryViewer";
@@ -245,6 +246,18 @@ export default function OutpostVisualizer({
                 <stop offset="50%" stopColor="#4A1E14" />
                 <stop offset="100%" stopColor="#75351E" />
               </linearGradient>
+            ) : isEuropa ? (
+              <linearGradient id={`skyGrad-${filterId}`} x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="#020617" />
+                <stop offset="40%" stopColor="#082f49" />
+                <stop offset="100%" stopColor="#0e7490" />
+              </linearGradient>
+            ) : isTitan ? (
+              <linearGradient id={`skyGrad-${filterId}`} x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="#451a03" />
+                <stop offset="50%" stopColor="#78350f" />
+                <stop offset="100%" stopColor="#9a3412" />
+              </linearGradient>
             ) : (
               <linearGradient id={`skyGrad-${filterId}`} x1="0%" y1="0%" x2="0%" y2="100%">
                 <stop offset="0%" stopColor="#04060E" />
@@ -259,6 +272,18 @@ export default function OutpostVisualizer({
                 <stop offset="0%" stopColor="#A84323" />
                 <stop offset="30%" stopColor="#7A2D14" />
                 <stop offset="100%" stopColor="#3E1508" />
+              </linearGradient>
+            ) : isEuropa ? (
+              <linearGradient id={`groundGrad-${filterId}`} x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="#e0f2fe" />
+                <stop offset="35%" stopColor="#38bdf8" />
+                <stop offset="100%" stopColor="#0369a1" />
+              </linearGradient>
+            ) : isTitan ? (
+              <linearGradient id={`groundGrad-${filterId}`} x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="#d97706" />
+                <stop offset="35%" stopColor="#78350f" />
+                <stop offset="100%" stopColor="#1c1917" />
               </linearGradient>
             ) : (
               <linearGradient id={`groundGrad-${filterId}`} x1="0%" y1="0%" x2="0%" y2="100%">

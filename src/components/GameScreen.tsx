@@ -107,6 +107,7 @@ export default function GameScreen({
   const [isMuted, toggleMute] = useSoundMuted();
   const [isAudioModalOpen, setIsAudioModalOpen] = useState<boolean>(false);
   const [isCrewModalOpen, setIsCrewModalOpen] = useState<boolean>(false);
+  const [selectedRootCauseProfile, setSelectedRootCauseProfile] = useState<RootCauseProfile | null>(null);
   const [isTutorialOpen, setIsTutorialOpen] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     try {
