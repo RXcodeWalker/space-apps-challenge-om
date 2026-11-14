@@ -4,7 +4,7 @@
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 
-import MissionBriefScreen from "./components/MissionBriefScreen";
+import MissionBriefingScreen from "./components/MissionBriefingScreen";
 import GameScreen from "./components/GameScreen";
 import MissionEndScreen from "./components/MissionEndScreen";
 import NasaDataModal from "./components/NasaDataModal";
@@ -65,7 +65,7 @@ export default function App() {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3 }}
           >
-            <MissionBriefScreen
+            <MissionBriefingScreen
               onStart={handleStartMission}
               onShowNasaData={(env) => setNasaModalEnv(env)}
             />
