@@ -42,6 +42,7 @@ export interface OutpostVisualizerProps {
   currentEvent?: TurnEvent;
   crew?: CrewState;
   interactive?: boolean;
+  onInspectRootCause?: (type: "brownout" | "life_support" | "radiation_shield") => void;
 }
 
 type InspectedModule = "shield" | "hydroponics" | "power" | "command" | "rover" | null;
@@ -54,12 +55,15 @@ export default function OutpostVisualizer({
   currentEvent,
   crew,
   interactive = true,
+  onInspectRootCause,
 }: OutpostVisualizerProps) {
   const [viewMode, setViewMode] = useState<"3d" | "2d" | "chemistry">("3d");
   const [inspectedModule, setInspectedModule] = useState<InspectedModule>(null);
   const filterId = useId();
 
   const isMars = environment.id === "mars_gale_crater";
+  const isEuropa = environment.id === "europa_under_ice";
+  const isTitan = environment.id === "titan_hydrocarbon";
 
   // Check event types
   const hasDustStorm =
@@ -201,7 +205,15 @@ export default function OutpostVisualizer({
       {/* REGOLITH CHEMISTRY / MOL* VIEW */}
       {viewMode === "chemistry" && (
         <RegolithChemistryViewer
-          initialMolecule={isMars ? "perchlorate" : "silicate"}
+          initialMolecule={
+            isMars
+              ? "perchlorate"
+              : isEuropa
+              ? "magnesium_sulfate"
+              : isTitan
+              ? "methane"
+              : "silicate"
+          }
           onClose={() => setViewMode("3d")}
         />
       )}
@@ -882,13 +894,39 @@ export default function OutpostVisualizer({
               )}
             </div>
 
-            <button
-              type="button"
-              onClick={() => setInspectedModule(null)}
-              className="text-slate-400 hover:text-white px-2 py-1 rounded bg-slate-800 text-[11px]"
-            >
-              Close ✕
-            </button>
+            <div className="flex items-center gap-2">
+              {onInspectRootCause && (
+                (inspectedModule === "power" && (isPowerCritical || isOverBudget)) ||
+                (inspectedModule === "hydroponics" && (isLifeSupportStressed || isLifeSupportCritical)) ||
+                (inspectedModule === "shield" && isShieldCritical)
+              ) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    soundEffects.playButtonClick();
+                    onInspectRootCause(
+                      inspectedModule === "power"
+                        ? "brownout"
+                        : inspectedModule === "hydroponics"
+                        ? "life_support"
+                        : "radiation_shield"
+                    );
+                  }}
+                  className="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-red-600 to-amber-600 hover:brightness-110 active:scale-95 text-white font-mono font-bold text-xs flex items-center gap-1.5 shadow-md shadow-red-950/50 border border-red-300/40 shrink-0"
+                >
+                  <Search size={12} />
+                  <span>Inspect Root Cause</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setInspectedModule(null)}
+                className="text-slate-400 hover:text-white px-2 py-1 rounded bg-slate-800 text-[11px]"
+              >
+                Close ✕
+              </button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

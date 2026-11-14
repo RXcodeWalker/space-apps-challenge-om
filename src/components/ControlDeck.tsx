@@ -29,6 +29,7 @@ import {
   HelpCircle,
   ShieldAlert,
   Sliders,
+  Search,
 } from "lucide-react";
 import AmbientAudioModal from "./AmbientAudioModal";
 import CrewPanel from "./CrewPanel";
@@ -790,6 +791,22 @@ export default function ControlDeck({
               <Plus className="w-3.5 h-3.5" /> +5 MW
             </button>
           </div>
+
+          {/* Battery Grid Root Cause Trigger if in low health or overbudget */}
+          {onInspectRootCause && (subsystems.powerGrid.health < 45 || isOverBudget) && (
+            <button
+              type="button"
+              onClick={() => {
+                soundEffects.playButtonClick();
+                onInspectRootCause("brownout");
+              }}
+              className="mt-2.5 py-1.5 px-2.5 rounded-xl bg-amber-950/70 hover:bg-amber-900/70 border border-amber-500/50 text-amber-200 text-[11px] font-mono font-bold flex items-center justify-center gap-1.5 transition-all shadow-md"
+              title="Why is the Power Grid failing? Inspect NASA Power Brownout Root Cause"
+            >
+              <Search className="w-3.5 h-3.5 text-amber-400" />
+              <span>Inspect Power Grid Root Cause</span>
+            </button>
+          )}
         </div>
       </div>
 

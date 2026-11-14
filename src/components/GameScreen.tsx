@@ -25,6 +25,7 @@ import {
   AlertTriangle,
   Flame,
   ShieldAlert,
+  Search,
 } from "lucide-react";
 
 import OutpostVisualizer from "./OutpostVisualizer";
@@ -33,6 +34,17 @@ import AlertBanner from "./AlertBanner";
 import IncidentModal from "./IncidentModal";
 import CrewPanel from "./CrewPanel";
 import MissionDebriefModal from "./MissionDebriefModal";
+import RootCauseModal from "./RootCauseModal";
+import {
+  type RootCauseProfile,
+  type RootCauseFailureType,
+  type RootCauseEvaluationContext,
+  resolveRootCauseForAlert,
+  BROWNOUT_OVERBUDGET,
+  LIFE_SUPPORT_FAILURE,
+  RADIATION_SHIELD_FAILURE,
+  BROWNOUT_BATTERY_DEPLETION,
+} from "../data/rootCauseData";
 import QuickTutorialOverlay, { TUTORIAL_STORAGE_KEY } from "./QuickTutorialOverlay";
 import LanguageSelector from "./LanguageSelector";
 import AmbientAudioModal from "./AmbientAudioModal";
@@ -94,6 +106,7 @@ export default function GameScreen({
   // Audio mute state and Tutorial state
   const [isMuted, toggleMute] = useSoundMuted();
   const [isAudioModalOpen, setIsAudioModalOpen] = useState<boolean>(false);
+  const [isCrewModalOpen, setIsCrewModalOpen] = useState<boolean>(false);
   const [isTutorialOpen, setIsTutorialOpen] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     try {
@@ -197,13 +210,18 @@ export default function GameScreen({
     setAllocation(next);
   }, []);
 
-  // Handle Incident Directive Choice
+  // Handle Incident Directive Choice & Optional Crew Specialist Deployment
   const handleSelectIncidentChoice = useCallback(
-    (choice: IncidentChoice) => {
+    (choice: IncidentChoice, specialistRepair?: SpecialistRepairOption) => {
       if (!activeIncident) return;
       soundEffects.playButtonClick();
       ambientAudio.triggerAirlock(0.8);
-      const updatedState = applyIncidentChoice(gameState, activeIncident, choice);
+      const updatedState = applyIncidentChoice(
+        gameState,
+        activeIncident,
+        choice,
+        specialistRepair
+      );
       setGameState(updatedState);
       setDismissedIncidents((prev) => ({ ...prev, [currentTurn]: true }));
       setActiveIncident(null);
@@ -291,8 +309,29 @@ export default function GameScreen({
         <IncidentModal
           incident={activeIncident}
           isOpen={activeIncident !== null}
+          crewMembers={gameState.crew.members}
           onSelectChoice={handleSelectIncidentChoice}
         />
+      )}
+
+      {/* Crew Dossier & Morale Center Modal */}
+      {isCrewModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto bg-black/85 backdrop-blur-md">
+          <div className="relative w-full max-w-4xl my-auto">
+            <div className="flex justify-end mb-2">
+              <button
+                type="button"
+                onClick={() => setIsCrewModalOpen(false)}
+                className="px-3 py-1.5 rounded-xl bg-slate-800 text-slate-300 hover:text-white font-mono text-xs font-bold border border-slate-700 transition-colors"
+              >
+                ✕ Close Crew Dossier
+              </button>
+            </div>
+            <CrewPanel
+              crew={phase === "result" && lastResult ? lastResult.crew : gameState.crew}
+            />
+          </div>
+        </div>
       )}
 
       {/* 3-Step Spotlight Quick Tutorial */}
@@ -520,6 +559,7 @@ export default function GameScreen({
                 onCommitTurn={handleConfirmTurn}
                 onShowNasaData={onShowNasaData}
                 onOpenTutorial={() => setIsTutorialOpen(true)}
+                onOpenCrewRoster={() => setIsCrewModalOpen(true)}
                 currentEvent={currentEvent}
               >
                 {/* Live Responsive Habitat Cross-Section Visualizer */}
@@ -629,6 +669,20 @@ export default function GameScreen({
                   >
                     <Database className="w-3.5 h-3.5 text-[#06B6D4]" />
                     <span>{t("common.nasaData")}</span>
+                  </button>
+
+                  {/* Astronaut Specialists & Crew Morale Button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundEffects.playButtonClick();
+                      setIsCrewModalOpen(true);
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-emerald-300 text-xs font-bold font-mono transition-colors"
+                    title="Inspect 4 Astronaut Specialists, Roles & Morale Vitals"
+                  >
+                    <span>👨‍🚀</span>
+                    <span className="hidden sm:inline">Crew Roster (4)</span>
                   </button>
 
                   {/* View Full Debrief if mission finished */}
@@ -768,6 +822,46 @@ export default function GameScreen({
                       ))}
                     </div>
                   )}
+
+                  {/* Specialist Emergency Repair Debrief Card (if crew member was deployed this Sol) */}
+                  {gameState.incidentHistory?.find((h) => h.sol === lastResult.turn)?.specialistAction && (
+                    <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-950/70 via-teal-950/50 to-slate-900 border-2 border-emerald-500/50 flex flex-col gap-2 shadow-lg">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-mono font-bold text-emerald-300 uppercase flex items-center gap-1.5">
+                          <Sparkles className="w-4 h-4 text-emerald-400" />
+                          <span>Specialist Emergency Repair Debrief</span>
+                        </span>
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-900/80 text-emerald-200 border border-emerald-500/40 font-bold uppercase">
+                          {gameState.incidentHistory.find((h) => h.sol === lastResult.turn)?.specialistRole}
+                        </span>
+                      </div>
+                      <h4 className="text-sm font-black text-white">
+                        {gameState.incidentHistory.find((h) => h.sol === lastResult.turn)?.specialistName}:{" "}
+                        {gameState.incidentHistory.find((h) => h.sol === lastResult.turn)?.specialistAction}
+                      </h4>
+                      <p className="text-xs text-slate-200 font-mono">
+                        {gameState.incidentHistory.find((h) => h.sol === lastResult.turn)?.specialistRiskRewardSummary}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* 4 Astronaut Specialists Vitals & Morale Center */}
+                  <div className="pt-2">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-mono font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                        <span>👨‍🚀</span>
+                        <span>4 Astronaut Specialists & Morale Telemetry</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setIsCrewModalOpen(true)}
+                        className="text-[11px] text-cyan-400 hover:text-cyan-300 font-mono font-bold"
+                      >
+                        View Full Dossiers →
+                      </button>
+                    </div>
+                    <CrewPanel crew={lastResult.crew} />
+                  </div>
 
                   {/* Proceed Button or Debrief Trigger */}
                   {lastResult.outcome === "ongoing" ? (

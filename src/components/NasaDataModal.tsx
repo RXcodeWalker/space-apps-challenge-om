@@ -14,10 +14,12 @@ import {
   CheckCircle2,
   Sparkles,
 } from "lucide-react";
-import type { MissionEnvironment } from "../data/nasaConstants";
+import type { MissionEnvironment, NasaCitation } from "../data/nasaConstants";
 import {
   LUNAR_SOUTH_POLE,
   MARS_GALE_CRATER,
+  EUROPA_UNDER_ICE,
+  TITAN_HYDROCARBON,
 } from "../data/nasaConstants";
 import { useTranslation } from "../i18n/LanguageContext";
 import LanguageSelector from "./LanguageSelector";
@@ -317,7 +319,7 @@ export default function NasaDataModal({
                     Primary NASA Instruments & Ground Truth Datasets
                   </h3>
 
-                  {currentEnv.citations.map((citation, i) => (
+                  {currentEnv.citations.map((citation: NasaCitation, i: number) => (
                     <div
                       key={i}
                       className="bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col gap-2 hover:border-cyan-500/30 transition-colors"
