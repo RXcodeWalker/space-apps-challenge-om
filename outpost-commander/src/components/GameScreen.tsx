@@ -17,6 +17,9 @@ import {
   Radio,
   Sparkles,
   RotateCcw,
+  Volume2,
+  VolumeX,
+  HelpCircle,
 } from "lucide-react";
 
 import OutpostVisualizer from "./OutpostVisualizer";
@@ -24,6 +27,8 @@ import ControlDeck from "./ControlDeck";
 import AlertBanner from "./AlertBanner";
 import IncidentModal from "./IncidentModal";
 import MissionDebriefModal from "./MissionDebriefModal";
+import QuickTutorialOverlay, { TUTORIAL_STORAGE_KEY } from "./QuickTutorialOverlay";
+import { soundEffects, useSoundMuted } from "../utils/soundEffects";
 
 import type { MissionEnvironment } from "../data/nasaConstants";
 import { TOTAL_TURNS } from "../data/nasaConstants";
@@ -70,6 +75,17 @@ export default function GameScreen({
   // End-of-Mission Engineering Debrief State
   const [showDebriefModal, setShowDebriefModal] = useState<boolean>(false);
 
+  // Audio mute state and Tutorial state
+  const [isMuted, toggleMute] = useSoundMuted();
+  const [isTutorialOpen, setIsTutorialOpen] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return localStorage.getItem(TUTORIAL_STORAGE_KEY) !== "true";
+    } catch {
+      return false;
+    }
+  });
+
   const currentTurn = gameState.currentTurn + 1;
 
   // Active power modifiers from incidents
@@ -98,6 +114,7 @@ export default function GameScreen({
 
       if (incident && !alreadyHandled && !dismissedIncidents[currentTurn]) {
         setActiveIncident(incident);
+        soundEffects.playIncidentAlert();
       }
     }
   }, [currentTurn, environment.id, phase, gameState.incidentHistory, dismissedIncidents]);
@@ -126,6 +143,7 @@ export default function GameScreen({
   const handleSelectIncidentChoice = useCallback(
     (choice: IncidentChoice) => {
       if (!activeIncident) return;
+      soundEffects.playButtonClick();
       const updatedState = applyIncidentChoice(gameState, activeIncident, choice);
       setGameState(updatedState);
       setDismissedIncidents((prev) => ({ ...prev, [currentTurn]: true }));
@@ -144,6 +162,7 @@ export default function GameScreen({
 
   // Advance Sol Turn
   const handleConfirmTurn = useCallback(() => {
+    soundEffects.playTurnChime();
     const { nextState, result } = processTurn(gameState, allocation);
     setGameState(nextState);
     setLastResult(result);
@@ -151,6 +170,7 @@ export default function GameScreen({
 
     // Check for mission completion or early critical threshold
     if (result.outcome !== "ongoing") {
+      soundEffects.playVictoryChord();
       setTimeout(() => {
         setShowDebriefModal(true);
       }, 1400);
@@ -158,6 +178,7 @@ export default function GameScreen({
   }, [gameState, allocation]);
 
   const handleNextTurn = useCallback(() => {
+    soundEffects.playTurnChime();
     setPhase("allocate");
     setLastResult(null);
   }, []);
@@ -202,6 +223,12 @@ export default function GameScreen({
           onSelectChoice={handleSelectIncidentChoice}
         />
       )}
+
+      {/* 3-Step Spotlight Quick Tutorial */}
+      <QuickTutorialOverlay
+        isOpen={isTutorialOpen}
+        onClose={() => setIsTutorialOpen(false)}
+      />
 
       {/* End-of-Mission Engineering Debrief Modal */}
       {showDebriefModal && (
@@ -258,6 +285,7 @@ export default function GameScreen({
                 onAllocationChange={handleAllocationChange}
                 onCommitTurn={handleConfirmTurn}
                 onShowNasaData={onShowNasaData}
+                onOpenTutorial={() => setIsTutorialOpen(true)}
                 currentEvent={currentEvent}
               >
                 {/* Live Responsive Habitat Cross-Section Visualizer */}
@@ -297,6 +325,36 @@ export default function GameScreen({
                 </div>
 
                 <div className="flex items-center gap-2">
+                  {/* Mute/Unmute Toggle */}
+                  <button
+                    type="button"
+                    onClick={toggleMute}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold font-mono transition-colors ${
+                      isMuted
+                        ? "bg-rose-950/40 border-rose-600/40 text-rose-300 hover:bg-rose-900/40"
+                        : "bg-slate-900 hover:bg-slate-800 border-slate-700 text-slate-300 hover:text-cyan-300"
+                    }`}
+                    title={isMuted ? "Audio Muted (Click to Unmute)" : "Audio Active (Click to Mute)"}
+                  >
+                    {isMuted ? (
+                      <VolumeX className="w-3.5 h-3.5 text-rose-400" />
+                    ) : (
+                      <Volume2 className="w-3.5 h-3.5 text-cyan-400" />
+                    )}
+                    <span className="hidden sm:inline">{isMuted ? "Muted" : "Sound"}</span>
+                  </button>
+
+                  {/* Tutorial Help Button */}
+                  <button
+                    type="button"
+                    onClick={() => setIsTutorialOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-cyan-300 text-xs font-bold font-mono transition-colors"
+                    title="Review 3-Step Mission Tutorial"
+                  >
+                    <HelpCircle className="w-3.5 h-3.5 text-[#06B6D4]" />
+                    <span className="hidden sm:inline">Tutorial</span>
+                  </button>
+
                   {/* NASA Data Header Button */}
                   <button
                     type="button"

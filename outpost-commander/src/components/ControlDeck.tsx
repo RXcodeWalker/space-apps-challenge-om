@@ -24,7 +24,11 @@ import {
   Sparkles,
   ChevronRight,
   Battery,
+  Volume2,
+  VolumeX,
+  HelpCircle,
 } from "lucide-react";
+import { soundEffects, useSoundMuted } from "../utils/soundEffects";
 import type {
   SubsystemState,
   SubsystemId,
@@ -45,6 +49,7 @@ export interface ControlDeckProps {
   onAllocationChange: (allocation: PowerAllocation) => void;
   onCommitTurn: () => void;
   onShowNasaData: () => void;
+  onOpenTutorial?: () => void;
   currentEvent?: TurnEvent;
   isProcessing?: boolean;
   children?: React.ReactNode; // Optional slot for OutpostVisualizer
@@ -67,10 +72,13 @@ export default function ControlDeck({
   onAllocationChange,
   onCommitTurn,
   onShowNasaData,
+  onOpenTutorial,
   currentEvent,
   isProcessing = false,
   children,
 }: ControlDeckProps) {
+  const [isMuted, toggleMute] = useSoundMuted();
+
   const totalAllocated =
     allocation.powerGrid + allocation.lifeSupport + allocation.radiationShielding;
   const netPowerMW = effectiveBudgetMW - totalAllocated;
@@ -139,6 +147,7 @@ export default function ControlDeck({
   const handleUpdate = useCallback(
     (channel: SubsystemId, newValue: number) => {
       const clamped = Math.max(0, Math.min(effectiveBudgetMW, Math.round(newValue)));
+      soundEffects.playSliderClick(clamped);
       onAllocationChange({
         ...allocation,
         [channel]: clamped,
@@ -150,6 +159,7 @@ export default function ControlDeck({
   const handleStep = useCallback(
     (channel: SubsystemId, delta: number) => {
       const current = allocation[channel];
+      soundEffects.playSliderClick(current + delta);
       handleUpdate(channel, current + delta);
     },
     [allocation, handleUpdate]
@@ -158,6 +168,7 @@ export default function ControlDeck({
   // Quick preset allocations
   const applyPreset = useCallback(
     (type: "balanced" | "lifeSupport" | "shield" | "batteries") => {
+      soundEffects.playSliderClick(50);
       let next: PowerAllocation;
       if (type === "balanced") {
         const ls = Math.min(BASELINES.lifeSupport, Math.round(effectiveBudgetMW * 0.38));
@@ -191,7 +202,10 @@ export default function ControlDeck({
   return (
     <div className="w-full max-w-7xl mx-auto flex flex-col gap-4 text-slate-100 select-none">
       {/* 1. TOP TELEMETRY BAR */}
-      <div className="w-full rounded-2xl bg-[#0B1120] border border-cyan-900/40 p-3 sm:p-4 shadow-xl flex flex-wrap items-center justify-between gap-3">
+      <div
+        data-tutorial="incident-alerts"
+        className="w-full rounded-2xl bg-[#0B1120] border border-cyan-900/40 p-3 sm:p-4 shadow-xl flex flex-wrap items-center justify-between gap-3"
+      >
         {/* Sol progress */}
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#1D4ED8] to-[#06B6D4] flex items-center justify-center font-black text-white text-base shadow-md">
@@ -266,23 +280,60 @@ export default function ControlDeck({
           </div>
         </div>
 
-        {/* NASA Data Button */}
-        <button
-          type="button"
-          onClick={onShowNasaData}
-          className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-cyan-500/40 text-slate-300 hover:text-cyan-300 transition-all text-xs font-bold"
-          title="Inspect Real NASA Science Instrument Data"
-        >
-          <Database className="w-3.5 h-3.5 text-[#06B6D4]" />
-          <span>NASA Data</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Mute/Unmute Toggle */}
+          <button
+            type="button"
+            onClick={toggleMute}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-bold transition-all ${
+              isMuted
+                ? "bg-rose-950/40 border-rose-600/40 text-rose-300 hover:bg-rose-900/40"
+                : "bg-slate-900 hover:bg-slate-800 border-slate-700 hover:border-cyan-500/40 text-slate-300 hover:text-cyan-300"
+            }`}
+            title={isMuted ? "Audio Muted (Click to Unmute)" : "Audio Active (Click to Mute)"}
+          >
+            {isMuted ? (
+              <VolumeX className="w-3.5 h-3.5 text-rose-400" />
+            ) : (
+              <Volume2 className="w-3.5 h-3.5 text-cyan-400" />
+            )}
+            <span className="hidden sm:inline">{isMuted ? "Muted" : "Sound"}</span>
+          </button>
+
+          {/* Tutorial / Help Button */}
+          {onOpenTutorial && (
+            <button
+              type="button"
+              onClick={onOpenTutorial}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-cyan-500/40 text-slate-300 hover:text-cyan-300 transition-all text-xs font-bold"
+              title="Launch 3-Step Mission Tutorial"
+            >
+              <HelpCircle className="w-3.5 h-3.5 text-[#06B6D4]" />
+              <span className="hidden sm:inline">Tutorial</span>
+            </button>
+          )}
+
+          {/* NASA Data Button */}
+          <button
+            type="button"
+            onClick={onShowNasaData}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-cyan-500/40 text-slate-300 hover:text-cyan-300 transition-all text-xs font-bold"
+            title="Inspect Real NASA Science Instrument Data"
+          >
+            <Database className="w-3.5 h-3.5 text-[#06B6D4]" />
+            <span>NASA Data</span>
+          </button>
+        </div>
       </div>
 
       {/* Optional Child Slot (e.g. OutpostVisualizer Cross-Section) */}
       {children && <div className="w-full">{children}</div>}
 
       {/* 2. POWER BUDGET POOL BAR & PRESET BUTTONS */}
-      <div className="w-full rounded-2xl bg-[#0B1120] border border-cyan-900/40 p-4 shadow-xl flex flex-col gap-3">
+      <div
+        data-tutorial="power-budget"
+        className="w-full rounded-2xl bg-[#0B1120] border border-cyan-900/40 p-4 shadow-xl flex flex-col gap-3"
+      >
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <span className="text-xs font-mono font-bold uppercase text-slate-400">
@@ -569,7 +620,10 @@ export default function ControlDeck({
       </div>
 
       {/* 4. LIVE CONSEQUENCE PREVIEW (Trade-off projection before advancing) */}
-      <div className="w-full rounded-2xl bg-[#0B1120] border-2 border-cyan-800/40 p-4 sm:p-5 shadow-2xl flex flex-col gap-4">
+      <div
+        data-tutorial="tradeoff-arrows"
+        className="w-full rounded-2xl bg-[#0B1120] border-2 border-cyan-800/40 p-4 sm:p-5 shadow-2xl flex flex-col gap-4"
+      >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Activity className="w-4 h-4 text-[#06B6D4]" />

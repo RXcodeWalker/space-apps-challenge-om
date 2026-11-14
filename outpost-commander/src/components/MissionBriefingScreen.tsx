@@ -17,9 +17,12 @@ import {
   Layers,
   ArrowRight,
   Info,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import type { MissionEnvironment } from "../data/nasaConstants";
 import { LUNAR_SOUTH_POLE, MARS_GALE_CRATER } from "../data/nasaConstants";
+import { soundEffects, useSoundMuted } from "../utils/soundEffects";
 
 interface MissionBriefingScreenProps {
   onStart: (environment: MissionEnvironment) => void;
@@ -98,6 +101,7 @@ export default function MissionBriefingScreen({
   onShowNasaData,
 }: MissionBriefingScreenProps) {
   const [selectedId, setSelectedId] = useState<string>(LUNAR_SOUTH_POLE.id);
+  const [isMuted, toggleMute] = useSoundMuted();
 
   const selectedDestination =
     DESTINATIONS.find((d) => d.env.id === selectedId) ?? DESTINATIONS[0];
@@ -162,6 +166,25 @@ export default function MissionBriefingScreen({
           </div>
 
           <div className="flex items-center gap-2 sm:gap-4 text-xs font-mono">
+            {/* Audio Toggle */}
+            <button
+              type="button"
+              onClick={toggleMute}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${
+                isMuted
+                  ? "bg-rose-950/40 border-rose-600/40 text-rose-300 hover:bg-rose-900/40"
+                  : "bg-slate-900/80 hover:bg-slate-800 border-slate-800 text-slate-300 hover:text-cyan-300"
+              }`}
+              title={isMuted ? "Audio Muted (Click to Unmute)" : "Audio Active (Click to Mute)"}
+            >
+              {isMuted ? (
+                <VolumeX className="w-3.5 h-3.5 text-rose-400" />
+              ) : (
+                <Volume2 className="w-3.5 h-3.5 text-cyan-400" />
+              )}
+              <span className="hidden sm:inline">{isMuted ? "Muted" : "Sound"}</span>
+            </button>
+
             <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900/80 border border-slate-800 text-slate-300">
               <Radio className="w-3.5 h-3.5 text-[#06B6D4] animate-pulse" />
               <span>DSN LINK: 100% SIGNAL</span>
@@ -213,7 +236,10 @@ export default function MissionBriefingScreen({
             return (
               <motion.div
                 key={dest.env.id}
-                onClick={() => setSelectedId(dest.env.id)}
+                onClick={() => {
+                  soundEffects.playButtonClick();
+                  setSelectedId(dest.env.id);
+                }}
                 whileHover={{ scale: 1.015 }}
                 whileTap={{ scale: 0.985 }}
                 className={`relative rounded-3xl p-5 sm:p-6 cursor-pointer transition-all duration-300 flex flex-col justify-between border-2 ${
@@ -360,6 +386,7 @@ export default function MissionBriefingScreen({
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
+                      soundEffects.playTurnChime();
                       onStart(dest.env);
                     }}
                     className={`flex-1 py-3 px-4 rounded-xl font-black text-sm tracking-wide flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 ${
@@ -424,7 +451,10 @@ export default function MissionBriefingScreen({
 
             <button
               type="button"
-              onClick={() => onStart(selectedDestination.env)}
+              onClick={() => {
+                soundEffects.playTurnChime();
+                onStart(selectedDestination.env);
+              }}
               className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-gradient-to-r from-[#1D4ED8] via-blue-600 to-[#06B6D4] hover:brightness-110 active:scale-95 text-white font-black text-base sm:text-lg tracking-wide flex items-center justify-center gap-3 shadow-xl shadow-blue-900/60 transition-all border border-cyan-300/40 flex-shrink-0"
             >
               <Rocket className="w-5 h-5 -rotate-45" />

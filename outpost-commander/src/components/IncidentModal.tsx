@@ -3,7 +3,7 @@
 // Presents location-specific mid-mission hazards, real NASA instrument
 // science, and engineering trade-off decisions.
 // ============================================================
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   AlertTriangle,
@@ -16,6 +16,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import type { IncidentCard, IncidentChoice } from "../data/incidentCards";
+import { soundEffects } from "../utils/soundEffects";
 
 interface IncidentModalProps {
   incident: IncidentCard;
@@ -31,6 +32,12 @@ export default function IncidentModal({
   const [selectedChoiceId, setSelectedChoiceId] = useState<string>(
     incident.choices[0]?.id || ""
   );
+
+  useEffect(() => {
+    if (isOpen) {
+      soundEffects.playIncidentAlert();
+    }
+  }, [isOpen]);
 
   const selectedChoice =
     incident.choices.find((c) => c?.id === selectedChoiceId) ||
