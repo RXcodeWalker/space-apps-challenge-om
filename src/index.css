@@ -33,3 +33,29 @@
     background: linear-gradient(135deg, #0b3d91 0%, #1a5276 50%, #0b3d91 100%);
   }
 }
+
+@media print {
+  @page {
+    size: landscape;
+    margin: 0;
+  }
+  body {
+    background: #02050e !important;
+    color: #ffffff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .certificate-printable-container {
+    box-shadow: none !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    max-width: none !important;
+    aspect-ratio: auto !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    margin: 0 auto !important;
+  }
+}

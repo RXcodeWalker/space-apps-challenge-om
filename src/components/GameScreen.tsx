@@ -20,6 +20,10 @@ import {
   Volume2,
   VolumeX,
   HelpCircle,
+  CheckCircle2,
+  AlertTriangle,
+  Flame,
+  ShieldAlert,
 } from "lucide-react";
 
 import OutpostVisualizer from "./OutpostVisualizer";
@@ -40,7 +44,9 @@ import {
   applyIncidentChoice,
   type GameState,
   type PowerAllocation,
+  type DifficultyTier,
 } from "../engine/simulationEngine";
+import { DIFFICULTY_PRESETS } from "../data/difficultyTiers";
 import {
   getIncidentForSol,
   type IncidentCard,
@@ -49,6 +55,7 @@ import {
 
 interface GameScreenProps {
   environment: MissionEnvironment;
+  difficulty?: DifficultyTier;
   onMissionEnd: (finalState: GameState) => void;
   onShowNasaData: () => void;
   onSwitchPlanet?: () => void;
@@ -56,12 +63,13 @@ interface GameScreenProps {
 
 export default function GameScreen({
   environment,
+  difficulty = "commander",
   onMissionEnd,
   onShowNasaData,
   onSwitchPlanet,
 }: GameScreenProps) {
   const [gameState, setGameState] = useState<GameState>(() =>
-    createInitialGameState(environment)
+    createInitialGameState(environment, difficulty)
   );
   const [phase, setPhase] = useState<"allocate" | "result">("allocate");
   const [lastResult, setLastResult] = useState<
@@ -96,12 +104,13 @@ export default function GameScreen({
   const effectiveBudget = getEffectivePowerBudget(
     environment,
     currentTurn,
-    modifierPowerDelta
+    modifierPowerDelta,
+    gameState.difficulty
   );
   const currentEvent = environment.turnEvents[currentTurn - 1];
 
   const [allocation, setAllocation] = useState<PowerAllocation>(() =>
-    getDefaultAllocation(effectiveBudget)
+    getDefaultAllocation(effectiveBudget, gameState.difficulty)
   );
 
   // Check for dynamic incidents on Sol start
@@ -129,11 +138,12 @@ export default function GameScreen({
       const budget = getEffectivePowerBudget(
         environment,
         gameState.currentTurn + 1,
-        modPower
+        modPower,
+        gameState.difficulty
       );
-      setAllocation(getDefaultAllocation(budget));
+      setAllocation(getDefaultAllocation(budget, gameState.difficulty));
     }
-  }, [gameState.currentTurn, phase, environment, gameState.activeModifiers]);
+  }, [gameState.currentTurn, phase, environment, gameState.activeModifiers, gameState.difficulty]);
 
   const handleAllocationChange = useCallback((next: PowerAllocation) => {
     setAllocation(next);
@@ -154,8 +164,13 @@ export default function GameScreen({
         (sum, m) => sum + (m.powerDeltaMW || 0),
         0
       );
-      const newBudget = getEffectivePowerBudget(environment, currentTurn, modPower);
-      setAllocation(getDefaultAllocation(newBudget));
+      const newBudget = getEffectivePowerBudget(
+        environment,
+        currentTurn,
+        modPower,
+        updatedState.difficulty
+      );
+      setAllocation(getDefaultAllocation(newBudget, updatedState.difficulty));
     },
     [activeIncident, gameState, environment, currentTurn]
   );
@@ -185,16 +200,16 @@ export default function GameScreen({
 
   // One-Click Play Again Handler
   const handlePlayAgain = useCallback(() => {
-    const freshState = createInitialGameState(environment);
+    const freshState = createInitialGameState(environment, gameState.difficulty);
     setGameState(freshState);
     setPhase("allocate");
     setLastResult(null);
     setActiveIncident(null);
     setDismissedIncidents({});
     setShowDebriefModal(false);
-    const initialBudget = getEffectivePowerBudget(environment, 1);
-    setAllocation(getDefaultAllocation(initialBudget));
-  }, [environment]);
+    const initialBudget = getEffectivePowerBudget(environment, 1, 0, gameState.difficulty);
+    setAllocation(getDefaultAllocation(initialBudget, gameState.difficulty));
+  }, [environment, gameState.difficulty]);
 
   // Switch Planet Handler
   const handleSwitchPlanetAction = useCallback(() => {
@@ -274,8 +289,158 @@ export default function GameScreen({
                 </div>
               )}
 
+              {/* CADET ASSISTANT BANNER: Gentle Automated Hints when Life Support drops */}
+              {gameState.difficulty === "cadet" && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={`p-3.5 sm:p-4 rounded-2xl border-2 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-xl ${
+                    allocation.lifeSupport < 28 ||
+                    gameState.crew.oxygenBufferPercent < 70 ||
+                    gameState.subsystems.lifeSupport.health < 70
+                      ? "bg-emerald-950/80 border-emerald-400/70 text-emerald-100 shadow-emerald-950/50 ring-2 ring-emerald-500/30"
+                      : "bg-slate-900/80 border-slate-800 text-slate-300"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-400/40 flex items-center justify-center text-xl shrink-0">
+                      🌟
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-mono font-bold uppercase tracking-wider text-emerald-400">
+                          CAPCOM Cadet Flight Assistant
+                        </span>
+                        <span className="text-[10px] bg-emerald-900/60 border border-emerald-600/40 px-2 py-0.5 rounded-full text-emerald-300 font-semibold">
+                          Automated Coaching Active
+                        </span>
+                      </div>
+                      <p className="text-xs sm:text-sm font-medium mt-0.5">
+                        {allocation.lifeSupport < 28 ? (
+                          <span>
+                            Hey Cadet Commander! Life Support is currently set to{" "}
+                            <strong>{allocation.lifeSupport} MW</strong>. Your astronauts need at
+                            least <strong>28 MW</strong> to stay healthy and keep fresh O₂ pumping!
+                          </span>
+                        ) : gameState.crew.oxygenBufferPercent < 70 ? (
+                          <span>
+                            The crew's oxygen buffer is at{" "}
+                            <strong>{gameState.crew.oxygenBufferPercent}%</strong>. Slide a little
+                            extra power into Life Support so they have plenty of fresh air!
+                          </span>
+                        ) : (
+                          <span>
+                            Super job, Cadet! All life support systems are running nominal. Clean
+                            air and fresh hydroponic crops are in great shape.
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+
+                  {allocation.lifeSupport < 28 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        soundEffects.playTurnChime();
+                        const neededLs = 28;
+                        const rem = Math.max(0, effectiveBudget - neededLs);
+                        const sh = Math.min(allocation.radiationShielding, Math.round(rem * 0.52));
+                        const pg = Math.max(0, rem - sh);
+                        setAllocation({
+                          lifeSupport: neededLs,
+                          radiationShielding: sh,
+                          powerGrid: pg,
+                        });
+                      }}
+                      className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:brightness-110 active:scale-95 text-white font-black text-xs flex items-center gap-2 shrink-0 shadow-lg shadow-emerald-900/50 transition-all border border-emerald-300/40"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Auto-Fix Life Support (28 MW)</span>
+                    </button>
+                  )}
+                </motion.div>
+              )}
+
+              {/* FLIGHT DIRECTOR: Hardcore Telemetry HUD */}
+              {gameState.difficulty === "flight_director" && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {/* 1. MMOD Risk / Strikes */}
+                  <div className="p-3.5 rounded-2xl bg-[#090E1A] border border-amber-600/50 flex items-center gap-3 shadow-lg">
+                    <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/40">
+                      <AlertTriangle className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-mono font-bold uppercase text-amber-400">
+                          MMOD Puncture Risk
+                        </span>
+                        <span className="text-[10px] font-mono text-slate-400">
+                          {gameState.micrometeoroidHistory.length} Strikes
+                        </span>
+                      </div>
+                      <p className="text-xs font-semibold text-white truncate mt-0.5">
+                        {gameState.micrometeoroidHistory.length > 0
+                          ? `Last: ${
+                              gameState.micrometeoroidHistory[
+                                gameState.micrometeoroidHistory.length - 1
+                              ].telemetryHeadline
+                            }`
+                          : "Hypervelocity Bumper: Active (32% Sol Hazard)"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* 2. Thermal Fatigue Curve Monitor */}
+                  <div className="p-3.5 rounded-2xl bg-[#090E1A] border border-cyan-600/50 flex items-center gap-3 shadow-lg">
+                    <div className="w-9 h-9 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center shrink-0 border border-cyan-500/40">
+                      <Flame className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-mono font-bold uppercase text-cyan-400">
+                          Thermal Fatigue (ΔT{" "}
+                          {environment.id === "lunar_south_pole" ? "227°C" : "100°C"})
+                        </span>
+                        <span className="text-[10px] font-mono text-slate-400">
+                          +{((gameState.cumulativeThermalFatigueWear || 0) * 100).toFixed(1)}% Wear
+                        </span>
+                      </div>
+                      <p className="text-xs font-semibold text-white truncate mt-0.5">
+                        Coffin-Manson Curve: Active cooling required
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* 3. Strict 500 mSv NASA Career Limit */}
+                  <div className="p-3.5 rounded-2xl bg-[#090E1A] border border-rose-600/50 flex items-center gap-3 shadow-lg">
+                    <div className="w-9 h-9 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center shrink-0 border border-rose-500/40">
+                      <ShieldAlert className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-mono font-bold uppercase text-rose-400">
+                          NASA Career Limit (500 mSv)
+                        </span>
+                        <span className="text-[10px] font-mono font-bold text-white">
+                          {gameState.crew.careerRadiationExposureMSv.toFixed(1)} / 500
+                        </span>
+                      </div>
+                      <p className="text-xs font-semibold text-slate-200 truncate mt-0.5">
+                        {gameState.crew.careerRadiationExposureMSv > 500
+                          ? "CRITICAL: Grounding Limit Exceeded"
+                          : gameState.crew.careerRadiationExposureMSv > 400
+                          ? "Warning: Approaching 3% REID Cap"
+                          : "Status: NCRP Compliant (<500 mSv)"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <ControlDeck
                 environment={environment}
+                difficulty={gameState.difficulty}
                 currentTurn={currentTurn}
                 totalTurns={TOTAL_TURNS}
                 effectiveBudgetMW={effectiveBudget}
@@ -318,6 +483,17 @@ export default function GameScreen({
                 <div className="flex items-center gap-3">
                   <span className="text-xs font-mono font-bold tracking-wider text-[#06B6D4] uppercase">
                     MISSION SOL {lastResult.turn} OF {TOTAL_TURNS}
+                  </span>
+                  <span
+                    className="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider font-mono flex items-center gap-1"
+                    style={{
+                      backgroundColor: `${DIFFICULTY_PRESETS[gameState.difficulty].accentColor}25`,
+                      color: DIFFICULTY_PRESETS[gameState.difficulty].accentColor,
+                      border: `1px solid ${DIFFICULTY_PRESETS[gameState.difficulty].accentColor}50`,
+                    }}
+                  >
+                    <span>{DIFFICULTY_PRESETS[gameState.difficulty].emoji}</span>
+                    <span>{DIFFICULTY_PRESETS[gameState.difficulty].title}</span>
                   </span>
                   <span className="text-xs text-slate-400 hidden sm:inline">
                     {environment.name} · {environment.subtitle}
@@ -439,6 +615,69 @@ export default function GameScreen({
                       </p>
                     </div>
                   </div>
+
+                  {/* Micro-Meteoroid Puncture Telemetry Report (Flight Director) */}
+                  {lastResult.micrometeoroidStrike && (
+                    <div className="p-4 rounded-xl bg-amber-950/70 border-2 border-amber-500/60 flex flex-col gap-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-mono font-bold text-amber-300 uppercase flex items-center gap-2">
+                          <AlertTriangle className="w-4 h-4 text-amber-400 animate-pulse" />
+                          MMOD Hypervelocity Strike Recorded
+                        </span>
+                        <span className="text-[10px] font-mono bg-amber-900/80 px-2 py-0.5 rounded text-amber-200">
+                          Velocity: {lastResult.micrometeoroidStrike.impactVelocityKmh.toLocaleString()} km/h
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-200">
+                        {lastResult.micrometeoroidStrike.technicalDetails}
+                      </p>
+                      <div className="text-[11px] font-mono text-amber-300/90 pt-1 border-t border-amber-800/60">
+                        <strong>Flight Directive:</strong> {lastResult.micrometeoroidStrike.mitigationProtocol}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Thermal Fatigue Curve Analysis (Flight Director) */}
+                  {lastResult.thermalFatigue && (
+                    <div className="p-4 rounded-xl bg-slate-900/90 border border-cyan-800/60 flex flex-col gap-2 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono font-bold text-cyan-400 flex items-center gap-1.5 uppercase">
+                          <Flame className="w-3.5 h-3.5 text-cyan-400" />
+                          Thermal Fatigue Report (Coffin-Manson)
+                        </span>
+                        <span className="font-mono text-slate-400 text-[11px]">
+                          Loop Efficiency: {Math.round(lastResult.thermalFatigue.thermalProtectionEfficiency * 100)}%
+                        </span>
+                      </div>
+                      <p className="text-slate-300">
+                        {lastResult.thermalFatigue.technicalDiagnosis}
+                      </p>
+                      <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 pt-1 border-t border-slate-800">
+                        <span>Sol ΔT: {lastResult.thermalFatigue.solDeltaT}°C</span>
+                        <span className="text-cyan-300">
+                          Fatigue Added: +{(lastResult.thermalFatigue.fatigueWearAdded * 100).toFixed(1)}%
+                        </span>
+                        <span className="text-amber-300">
+                          Total Fatigue: +{(lastResult.thermalFatigue.totalCumulativeFatigueWear * 100).toFixed(1)}%
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Cadet Gentle Automated Hints (Cadet Mode) */}
+                  {lastResult.cadetHints && lastResult.cadetHints.length > 0 && (
+                    <div className="p-4 rounded-xl bg-emerald-950/60 border border-emerald-500/50 flex flex-col gap-2">
+                      <div className="flex items-center gap-2 text-emerald-300 font-mono font-bold text-xs">
+                        <span className="text-base">🌟</span>
+                        <span>CAPCOM Cadet Assistant debrief</span>
+                      </div>
+                      {lastResult.cadetHints.map((hint) => (
+                        <p key={hint.id} className="text-xs text-slate-200 leading-relaxed">
+                          {hint.kidFriendlyMessage}
+                        </p>
+                      ))}
+                    </div>
+                  )}
 
                   {/* Proceed Button or Debrief Trigger */}
                   {lastResult.outcome === "ongoing" ? (

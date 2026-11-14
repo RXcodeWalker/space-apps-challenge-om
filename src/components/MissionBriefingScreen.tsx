@@ -19,13 +19,22 @@ import {
   Info,
   Volume2,
   VolumeX,
+  Flame,
+  AlertTriangle,
+  Award,
 } from "lucide-react";
 import type { MissionEnvironment } from "../data/nasaConstants";
 import { LUNAR_SOUTH_POLE, MARS_GALE_CRATER } from "../data/nasaConstants";
 import { soundEffects, useSoundMuted } from "../utils/soundEffects";
+import {
+  DIFFICULTY_PRESETS,
+  type DifficultyTier,
+} from "../data/difficultyTiers";
+import { useTranslation } from "../i18n/LanguageContext";
+import LanguageSelector from "./LanguageSelector";
 
 interface MissionBriefingScreenProps {
-  onStart: (environment: MissionEnvironment) => void;
+  onStart: (environment: MissionEnvironment, difficulty: DifficultyTier) => void;
   onShowNasaData?: (environment: MissionEnvironment) => void;
 }
 
@@ -100,11 +109,14 @@ export default function MissionBriefingScreen({
   onStart,
   onShowNasaData,
 }: MissionBriefingScreenProps) {
+  const { t } = useTranslation();
   const [selectedId, setSelectedId] = useState<string>(LUNAR_SOUTH_POLE.id);
+  const [selectedDifficulty, setSelectedDifficulty] = useState<DifficultyTier>("commander");
   const [isMuted, toggleMute] = useSoundMuted();
 
   const selectedDestination =
     DESTINATIONS.find((d) => d.env.id === selectedId) ?? DESTINATIONS[0];
+  const activeDifficultyPreset = DIFFICULTY_PRESETS[selectedDifficulty];
 
   return (
     <div className="min-h-screen bg-[#0B1120] text-slate-100 flex flex-col justify-between relative overflow-hidden select-none">
@@ -146,26 +158,29 @@ export default function MissionBriefingScreen({
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-xs font-mono font-bold tracking-widest uppercase text-[#06B6D4] px-1.5 py-0.5 rounded bg-cyan-950/60 border border-cyan-800/40">
-                  NASA Space Apps Challenge
+                  {t("common.nasaSpaceApps")}
                 </span>
                 <span className="flex h-2 w-2 relative">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                 </span>
                 <span className="text-[11px] font-mono text-emerald-400 font-semibold tracking-wide hidden sm:inline">
-                  TELEMETRY LIVE
+                  {t("common.telemetryLive")}
                 </span>
               </div>
               <h1 className="text-lg sm:text-xl font-black tracking-tight text-white flex items-center gap-2">
-                OUTPOST COMMANDER
+                {t("common.outpostCommander")}
                 <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#1D4ED8]/30 text-blue-300 border border-blue-500/30">
-                  v2.0 Real-Data Sim
+                  {t("common.versionTag")}
                 </span>
               </h1>
             </div>
           </div>
 
           <div className="flex items-center gap-2 sm:gap-4 text-xs font-mono">
+            {/* Multi-Language Selector */}
+            <LanguageSelector />
+
             {/* Audio Toggle */}
             <button
               type="button"
@@ -182,16 +197,16 @@ export default function MissionBriefingScreen({
               ) : (
                 <Volume2 className="w-3.5 h-3.5 text-cyan-400" />
               )}
-              <span className="hidden sm:inline">{isMuted ? "Muted" : "Sound"}</span>
+              <span className="hidden sm:inline">{isMuted ? t("common.muted") : t("common.sound")}</span>
             </button>
 
             <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900/80 border border-slate-800 text-slate-300">
               <Radio className="w-3.5 h-3.5 text-[#06B6D4] animate-pulse" />
-              <span>DSN LINK: 100% SIGNAL</span>
+              <span>{t("common.dsnLink")}</span>
             </div>
             <div className="px-3 py-1.5 rounded-lg bg-blue-950/40 border border-blue-800/50 text-blue-200 flex items-center gap-1.5 font-bold">
               <Sparkles className="w-3.5 h-3.5 text-[#F59E0B]" />
-              <span>AGES 7–12 · NO LOGIN</span>
+              <span>{t("common.targetAges")}</span>
             </div>
           </div>
         </div>
@@ -207,7 +222,7 @@ export default function MissionBriefingScreen({
             transition={{ duration: 0.4 }}
             className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-950/50 border border-cyan-500/30 text-cyan-300 text-xs sm:text-sm font-semibold mb-3 shadow-inner"
           >
-            <span>👨‍🚀👩‍🚀 Junior Flight Director Briefing</span>
+            <span>{t("briefing.briefingBadge")}</span>
           </motion.div>
           <motion.h2
             initial={{ opacity: 0, y: 10 }}
@@ -215,7 +230,7 @@ export default function MissionBriefingScreen({
             transition={{ duration: 0.5, delay: 0.1 }}
             className="text-2xl sm:text-4xl md:text-5xl font-black text-white tracking-tight leading-tight"
           >
-            Choose Your Outpost Destination
+            {t("briefing.title")}
           </motion.h2>
           <motion.p
             initial={{ opacity: 0 }}
@@ -223,15 +238,175 @@ export default function MissionBriefingScreen({
             transition={{ duration: 0.5, delay: 0.2 }}
             className="text-sm sm:text-base text-slate-300 mt-2 max-w-2xl mx-auto"
           >
-            Can you keep your 4 astronauts alive for 10 Sols? Balance your 100 MW
-            power grid between Life Support, Radiation Shields, and Batteries!
+            {t("briefing.subtitle")}
           </motion.p>
+        </div>
+
+        {/* STEP 1: COMMANDER RANK & DIFFICULTY PRESETS */}
+        <div className="max-w-5xl mx-auto w-full mb-8">
+          <div className="flex items-center justify-between mb-3 px-1">
+            <div className="flex items-center gap-2">
+              <Award className="w-4 h-4 text-cyan-400" />
+              <span className="text-xs font-mono font-bold tracking-wider text-cyan-300 uppercase">
+                {t("briefing.step1Title")}
+              </span>
+            </div>
+            <span className="text-[11px] font-mono text-slate-400 hidden sm:inline">
+              Adjusts Safety Margins, Automated Guidance & NASA Physics
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+            {(["cadet", "commander", "flight_director"] as DifficultyTier[]).map((tierKey) => {
+              const preset = DIFFICULTY_PRESETS[tierKey];
+              const isTierSelected = selectedDifficulty === tierKey;
+
+              return (
+                <motion.div
+                  key={tierKey}
+                  onClick={() => {
+                    soundEffects.playButtonClick();
+                    setSelectedDifficulty(tierKey);
+                  }}
+                  whileHover={{ scale: 1.015 }}
+                  whileTap={{ scale: 0.985 }}
+                  className={`rounded-2xl p-4 cursor-pointer transition-all duration-200 border-2 flex flex-col justify-between ${
+                    isTierSelected
+                      ? `bg-slate-900/95 ${preset.borderColor} shadow-xl ring-2 ring-white/10`
+                      : "bg-slate-950/60 border-slate-800/80 hover:border-slate-700 hover:bg-slate-900/40"
+                  }`}
+                  style={{
+                    boxShadow: isTierSelected ? `0 0 24px ${preset.glowColor}` : undefined,
+                  }}
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-2xl">{preset.emoji}</span>
+                      <span
+                        className="text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
+                        style={{
+                          backgroundColor: `${preset.accentColor}20`,
+                          color: preset.accentColor,
+                          border: `1px solid ${preset.accentColor}50`,
+                        }}
+                      >
+                        {preset.badge}
+                      </span>
+                    </div>
+
+                    <h3 className="text-base font-black text-white flex items-center gap-1.5">
+                      {t(`difficulties.${tierKey}.title`)}
+                      {tierKey === "cadet" && (
+                        <span className="text-xs text-emerald-400 font-semibold">(Ages 7–10)</span>
+                      )}
+                      {tierKey === "flight_director" && (
+                        <span className="text-xs text-amber-400 font-semibold">(Hardcore)</span>
+                      )}
+                    </h3>
+
+                    <p className="text-xs text-slate-300 font-medium mt-1 leading-snug">
+                      {t(`difficulties.${tierKey}.tagline`)}
+                    </p>
+
+                    {/* Feature Highlights */}
+                    <div className="mt-3 pt-2.5 border-t border-slate-800/80 space-y-1.5 text-[11px]">
+                      {tierKey === "cadet" && (
+                        <>
+                          <div className="flex items-center gap-1.5 text-emerald-300 font-medium">
+                            <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                            <span>Gentle automated hints when life support drops</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-emerald-300 font-medium">
+                            <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                            <span>High margin of error & 1.5× recovery rate</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-slate-400">
+                            <span>• Target: 28 MW Life Support, 24 MW Shields</span>
+                          </div>
+                        </>
+                      )}
+
+                      {tierKey === "commander" && (
+                        <>
+                          <div className="flex items-center gap-1.5 text-cyan-300 font-medium">
+                            <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                            <span>Current balanced NASA simulation baseline</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-cyan-300 font-medium">
+                            <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                            <span>Realistic 100 MW power trade-offs & storms</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-slate-400">
+                            <span>• Target: 35 MW Life Support, 30 MW Shields</span>
+                          </div>
+                        </>
+                      )}
+
+                      {tierKey === "flight_director" && (
+                        <>
+                          <div className="flex items-center gap-1.5 text-amber-300 font-medium">
+                            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                            <span>Random micro-meteoroid punctures & leaks</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-amber-300 font-medium">
+                            <Flame className="w-3.5 h-3.5 shrink-0" />
+                            <span>Actual non-linear thermal fatigue curves</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-rose-300 font-medium">
+                            <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
+                            <span>Strict 500 mSv NASA astronaut career limits</span>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-3.5 pt-2 flex items-center justify-between border-t border-slate-800/60">
+                    <span className="text-[10px] font-mono text-slate-500">
+                      {t(`difficulties.${tierKey}.targetAudience`)}
+                    </span>
+                    <span
+                      className={`text-xs font-bold font-mono transition-colors ${
+                        isTierSelected ? "text-white" : "text-slate-500"
+                      }`}
+                    >
+                      {isTierSelected ? "✓ ACTIVE RANK" : "SELECT →"}
+                    </span>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* STEP 2: DESTINATION SELECTION */}
+        <div className="max-w-5xl mx-auto w-full mb-3 px-1 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Rocket className="w-4 h-4 text-cyan-400" />
+            <span className="text-xs font-mono font-bold tracking-wider text-cyan-300 uppercase">
+              {t("briefing.step2Title")}
+            </span>
+          </div>
+          <span className="text-[11px] font-mono text-slate-400 hidden sm:inline">
+            NASA LRO & MSL Environmental Telemetry
+          </span>
         </div>
 
         {/* 2-Column Destination Selector Cards */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:gap-6 max-w-5xl mx-auto w-full">
           {DESTINATIONS.map((dest) => {
             const isSelected = selectedId === dest.env.id;
+            const destKey = dest.env.id === "lunar_south_pole" ? "moon" : "mars";
+            const destName = t(`destinations.${destKey}.name`);
+            const destSubtitle = t(`destinations.${destKey}.subtitle`);
+            const destBadge = t(`destinations.${destKey}.badge`);
+            const destTagline = t(`destinations.${destKey}.tagline`);
+            const destSunlightValue = t(`destinations.${destKey}.sunlightValue`);
+            const destSunlightRating = t(`destinations.${destKey}.sunlightRating`);
+            const destRadiationValue = t(`destinations.${destKey}.radiationValue`);
+            const destRadiationRating = t(`destinations.${destKey}.radiationRating`);
+            const destTempValue = t(`destinations.${destKey}.tempValue`);
+            const destTempSwingRange = t(`destinations.${destKey}.tempSwingRange`);
 
             return (
               <motion.div
@@ -255,7 +430,7 @@ export default function MissionBriefingScreen({
                 {isSelected && (
                   <div className="absolute -top-3.5 right-6 bg-gradient-to-r from-[#1D4ED8] to-[#06B6D4] text-white text-[11px] font-black uppercase tracking-wider px-3 py-1 rounded-full flex items-center gap-1.5 shadow-lg border border-cyan-300/40">
                     <CheckCircle2 className="w-3.5 h-3.5" />
-                    TARGET ACQUIRED
+                    {t("common.targetAcquired")}
                   </div>
                 )}
 
@@ -272,14 +447,14 @@ export default function MissionBriefingScreen({
                             {dest.code}
                           </span>
                           <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-medium">
-                            {dest.badge}
+                            {destBadge}
                           </span>
                         </div>
                         <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-                          {dest.env.name}
+                          {destName}
                         </h3>
                         <p className="text-xs text-slate-400 font-medium">
-                          {dest.env.subtitle}
+                          {destSubtitle}
                         </p>
                       </div>
                     </div>
@@ -287,7 +462,7 @@ export default function MissionBriefingScreen({
 
                   {/* High-Concept 10-Second Explainer */}
                   <p className="text-xs sm:text-sm text-slate-200 mb-5 leading-relaxed bg-white/5 rounded-2xl p-3 border border-white/5">
-                    {dest.tagline}
+                    {destTagline}
                   </p>
 
                   {/* 3 Visual Stat Badges (Kid-friendly cause & effect) */}
@@ -297,15 +472,15 @@ export default function MissionBriefingScreen({
                       <div className="flex items-center justify-between text-amber-400 mb-1">
                         <Sun className="w-4 h-4" />
                         <span className="text-[10px] font-mono font-bold uppercase text-slate-400">
-                          SOLAR
+                          {t("briefing.solarSunlight")}
                         </span>
                       </div>
                       <div>
                         <p className="text-sm sm:text-base font-black text-white leading-tight">
-                          {dest.sunlightValue}
+                          {destSunlightValue}
                         </p>
                         <p className="text-[10px] font-medium text-amber-300 mt-0.5 truncate">
-                          {dest.sunlightRating}
+                          {destSunlightRating}
                         </p>
                       </div>
                       {/* Mini visual bar */}
@@ -322,15 +497,15 @@ export default function MissionBriefingScreen({
                       <div className="flex items-center justify-between text-rose-400 mb-1">
                         <ShieldAlert className="w-4 h-4" />
                         <span className="text-[10px] font-mono font-bold uppercase text-slate-400">
-                          RAD DOSE
+                          {t("briefing.radiationRisk")}
                         </span>
                       </div>
                       <div>
                         <p className="text-sm sm:text-base font-black text-white leading-tight">
-                          {dest.radiationValue}
+                          {destRadiationValue}
                         </p>
                         <p className="text-[10px] font-medium text-rose-300 mt-0.5 truncate">
-                          {dest.radiationRating}
+                          {destRadiationRating}
                         </p>
                       </div>
                       {/* Mini visual bar */}
@@ -347,15 +522,15 @@ export default function MissionBriefingScreen({
                       <div className="flex items-center justify-between text-cyan-400 mb-1">
                         <ThermometerSnowflake className="w-4 h-4" />
                         <span className="text-[10px] font-mono font-bold uppercase text-slate-400">
-                          THERMAL
+                          {t("briefing.temperatureSwing")}
                         </span>
                       </div>
                       <div>
                         <p className="text-sm sm:text-base font-black text-white leading-tight">
-                          {dest.tempValue}
+                          {destTempValue}
                         </p>
                         <p className="text-[10px] font-medium text-cyan-300 mt-0.5 truncate">
-                          {dest.tempSwingRange}
+                          {destTempSwingRange}
                         </p>
                       </div>
                       {/* Mini visual bar */}
@@ -372,7 +547,7 @@ export default function MissionBriefingScreen({
                   <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 pt-2 border-t border-slate-800/80">
                     <span className="flex items-center gap-1.5">
                       <Database className="w-3.5 h-3.5 text-[#06B6D4]" />
-                      Data Source:
+                      {t("common.dataSource")}:
                     </span>
                     <span className="text-slate-200 font-semibold">
                       {dest.nasaMission}
@@ -387,7 +562,7 @@ export default function MissionBriefingScreen({
                     onClick={(e) => {
                       e.stopPropagation();
                       soundEffects.playTurnChime();
-                      onStart(dest.env);
+                      onStart(dest.env, selectedDifficulty);
                     }}
                     className={`flex-1 py-3 px-4 rounded-xl font-black text-sm tracking-wide flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 ${
                       isSelected
@@ -396,7 +571,7 @@ export default function MissionBriefingScreen({
                     }`}
                   >
                     <Rocket className="w-4 h-4" />
-                    <span>Launch {dest.env.name}</span>
+                    <span>{t("common.launch")} {destName} ({t(`difficulties.${selectedDifficulty}.title`)})</span>
                     <ArrowRight className="w-4 h-4 ml-1" />
                   </button>
 
@@ -408,7 +583,7 @@ export default function MissionBriefingScreen({
                         onShowNasaData(dest.env);
                       }}
                       className="px-3.5 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-cyan-300 transition-colors"
-                      title="Inspect NASA Scientific Instruments"
+                      title={t("briefing.inspectInstruments")}
                     >
                       <Info className="w-4 h-4" />
                     </button>
@@ -422,7 +597,7 @@ export default function MissionBriefingScreen({
         {/* Selected Environment Summary Box & Global 1-Click Launch Bar */}
         <div className="max-w-5xl mx-auto w-full mt-6">
           <motion.div
-            key={selectedDestination.env.id}
+            key={`${selectedDestination.env.id}-${selectedDifficulty}`}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             className="rounded-2xl bg-gradient-to-r from-[#0B1120] via-slate-900 to-[#0B1120] border border-cyan-500/20 p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl"
@@ -434,17 +609,26 @@ export default function MissionBriefingScreen({
               <div>
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-bold text-[#06B6D4] uppercase tracking-wider">
-                    Ready to Command:
+                    {t("common.readyToCommand")}:
                   </span>
-                  <span className="text-xs font-mono text-slate-400">
-                    10-Sol Mission · 4 Astronauts
+                  <span
+                    className="text-[11px] font-mono px-2 py-0.5 rounded-full font-bold"
+                    style={{
+                      backgroundColor: `${activeDifficultyPreset.accentColor}25`,
+                      color: activeDifficultyPreset.accentColor,
+                    }}
+                  >
+                    {activeDifficultyPreset.emoji} {t(`difficulties.${selectedDifficulty}.commanderRank`)}
+                  </span>
+                  <span className="text-xs font-mono text-slate-400 hidden md:inline">
+                    · {t("common.tenSolMission")}
                   </span>
                 </div>
-                <p className="text-sm sm:text-base font-bold text-white">
-                  {selectedDestination.env.name} — {selectedDestination.env.subtitle}
+                <p className="text-sm sm:text-base font-bold text-white mt-0.5">
+                  {t(`destinations.${selectedDestination.env.id === "lunar_south_pole" ? "moon" : "mars"}.name`)} — {t(`destinations.${selectedDestination.env.id === "lunar_south_pole" ? "moon" : "mars"}.subtitle`)}
                 </p>
                 <p className="text-xs text-slate-300 line-clamp-1 max-w-xl">
-                  {selectedDestination.env.kidSummary}
+                  {t(`difficulties.${selectedDifficulty}.tagline`)} {t(`destinations.${selectedDestination.env.id === "lunar_south_pole" ? "moon" : "mars"}.summary`)}
                 </p>
               </div>
             </div>
@@ -453,14 +637,14 @@ export default function MissionBriefingScreen({
               type="button"
               onClick={() => {
                 soundEffects.playTurnChime();
-                onStart(selectedDestination.env);
+                onStart(selectedDestination.env, selectedDifficulty);
               }}
               className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-gradient-to-r from-[#1D4ED8] via-blue-600 to-[#06B6D4] hover:brightness-110 active:scale-95 text-white font-black text-base sm:text-lg tracking-wide flex items-center justify-center gap-3 shadow-xl shadow-blue-900/60 transition-all border border-cyan-300/40 flex-shrink-0"
             >
               <Rocket className="w-5 h-5 -rotate-45" />
-              <span>LAUNCH MISSION</span>
+              <span>{t("briefing.launchAs", { rank: t(`difficulties.${selectedDifficulty}.title`).toUpperCase() })}</span>
               <span className="text-xs font-mono bg-black/30 px-2 py-0.5 rounded-full text-cyan-200">
-                SOL 1
+                {t("common.sol")} 1
               </span>
             </button>
           </motion.div>
@@ -471,12 +655,12 @@ export default function MissionBriefingScreen({
       <footer className="relative z-10 w-full border-t border-slate-900 bg-[#0B1120]/90 px-4 py-3 sm:px-8 text-center text-xs text-slate-500 flex flex-wrap items-center justify-between gap-2 max-w-7xl mx-auto">
         <div className="flex items-center gap-2">
           <Layers className="w-3.5 h-3.5 text-cyan-500" />
-          <span>Physics-based 10-Sol Resource Allocation Simulation</span>
+          <span>{t("common.footerTagline")}</span>
         </div>
         <div className="flex items-center gap-4 text-slate-400">
-          <span>Target Audience: Students Ages 7–12</span>
+          <span>{t("common.audienceTagline")}</span>
           <span>•</span>
-          <span>Zero Sign-up · Instant Play</span>
+          <span>{t("common.zeroSignUp")}</span>
         </div>
       </footer>
     </div>

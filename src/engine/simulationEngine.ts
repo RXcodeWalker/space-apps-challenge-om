@@ -1,7 +1,14 @@
 // ============================================================
 // Simulation Engine — Outpost Commander
 // Implements a deterministic 10-turn mission loop for the
-// Lunar South Pole and Mars Gale Crater environments.
+// Lunar South Pole and Mars Gale Crater environments, with
+// 3 Difficulty Tiers / Commander Ranks:
+// 1. Cadet (Ages 7–10): High margin of error, gentle automated hints
+// 2. Commander (Standard): Balanced baseline 10-Sol simulation
+// 3. Flight Director (Hardcore / Realistic Mode):
+//    - Random micro-meteoroid punctures
+//    - Actual thermal fatigue degradation curves (Coffin-Manson)
+//    - Stricter 500 mSv NASA astronaut career limits (NASA-STD-3001)
 // ============================================================
 
 import type { MissionEnvironment, TurnEvent } from "../data/nasaConstants";
@@ -11,6 +18,27 @@ import {
   MIN_SYSTEM_HEALTH,
   MAX_SYSTEM_HEALTH,
 } from "../data/nasaConstants";
+import {
+  DIFFICULTY_PRESETS,
+  type DifficultyTier,
+  type DifficultyConfig,
+  type ThermalFatigueReport,
+  type MicrometeoroidStrike,
+  type AutomatedHint,
+  calculateThermalFatigue,
+  rollMicrometeoroidStrike,
+  generateCadetAutomatedHints,
+} from "../data/difficultyTiers";
+
+// Re-export difficulty types for easy consumption
+export type {
+  DifficultyTier,
+  DifficultyConfig,
+  ThermalFatigueReport,
+  MicrometeoroidStrike,
+  AutomatedHint,
+};
+export { DIFFICULTY_PRESETS };
 
 // ---------------------------------------------------------------------------
 // Core type definitions
@@ -32,13 +60,16 @@ export interface SubsystemState {
   powerDrawMW: number;      // current turn's allocated MW
   statusMessage: string;    // human-readable status description
   kidFriendlyStatus: string;
+  thermalFatigueWear?: number; // structural fatigue wear from cyclic thermal strain
 }
 
 export interface CrewState {
   morale: number;           // 0–100; drops with life support failures & radiation spikes
   radiationExposureMSv: number; // cumulative mission exposure
-  safeRadiationLimitMSv: number; // 500 mSv NASA career limit (simplified 10-turn threshold)
-  foodReserveDays: number;  // days of food remaining; starts at 15
+  safeRadiationLimitMSv: number; // expedition threshold (45-60 mSv depending on difficulty)
+  careerRadiationExposureMSv: number; // NASA career ledger (towards 500 mSv career ceiling)
+  careerLimitMSv: number;   // 500 mSv NASA STD-3001 career limit
+  foodReserveDays: number;  // days of food remaining
   oxygenBufferPercent: number; // % of nominal O₂ buffer; 0 = emergency
 }
 
@@ -76,6 +107,7 @@ export interface ActiveModifier {
 
 export interface TurnResult {
   turn: number;             // 1–10
+  difficulty: DifficultyTier;
   event: TurnEvent;
   powerBudgetMW: number;    // effective MW available this turn (after event modifiers)
   allocation: PowerAllocation;
@@ -86,10 +118,14 @@ export interface TurnResult {
   missionScorePercent: number; // 0–100 running score
   turnNarrativeSummary: string;
   kidNarrativeSummary: string;
+  thermalFatigue?: ThermalFatigueReport;
+  micrometeoroidStrike?: MicrometeoroidStrike;
+  cadetHints?: AutomatedHint[];
 }
 
 export interface GameState {
   environment: MissionEnvironment;
+  difficulty: DifficultyTier;
   currentTurn: number;      // 1-indexed; 0 = not started
   history: TurnResult[];
   subsystems: Record<SubsystemId, SubsystemState>;
@@ -99,21 +135,14 @@ export interface GameState {
   incidentHistory: IncidentChoiceRecord[];
   activeModifiers: ActiveModifier[];
   permanentWaterO2Bonus: number;
+  cumulativeThermalFatigueWear: number;
+  micrometeoroidHistory: MicrometeoroidStrike[];
+  cadetHints?: AutomatedHint[];
 }
 
 // ---------------------------------------------------------------------------
 // Constants for the simulation model
 // ---------------------------------------------------------------------------
-
-/** MW required to keep a subsystem at exactly 100% health (baseline demand). */
-const SUBSYSTEM_BASELINE_POWER: Record<SubsystemId, number> = {
-  powerGrid: 25,
-  lifeSupport: 35,
-  radiationShielding: 30,
-};
-
-/** Fraction of remaining budget that acts as a free RTG/fuel-cell reserve. */
-const RTG_RESERVE_FRACTION = 0.1;
 
 /** Health recovery per MW over baseline (diminishing above 100%). */
 const HEALTH_RECOVERY_PER_EXCESS_MW = 1.4;
@@ -131,14 +160,10 @@ const MORALE_LOSS_LIFE_SUPPORT_LOW = 8;
 const MORALE_LOSS_RADIATION_HIGH = 6;
 const MORALE_LOSS_FOOD_LOW = 10;
 
-/** Food/oxygen constants. */
-const FOOD_CONSUMED_PER_TURN = 1.0;      // days consumed per turn
+/** Food/oxygen baseline rates. */
 const FOOD_HYDROPONICS_BONUS_PER_MW = 0.08; // extra food days per MW excess in life support
 const OXYGEN_RECOVERY_PER_MW_EXCESS = 2;    // % O₂ buffer per MW excess
 const OXYGEN_LOSS_PER_MW_DEFICIT = 4;       // % O₂ loss per MW deficit
-
-/** Career radiation limit across the 10-turn mission (simplified). */
-const MISSION_RADIATION_LIMIT_MSV = 50;
 
 // ---------------------------------------------------------------------------
 // Utility helpers
@@ -152,44 +177,62 @@ function totalAllocatedMW(allocation: PowerAllocation): number {
   return allocation.powerGrid + allocation.lifeSupport + allocation.radiationShielding;
 }
 
-function initialSubsystems(): Record<SubsystemId, SubsystemState> {
+function initialSubsystems(difficulty: DifficultyTier): Record<SubsystemId, SubsystemState> {
+  const config = DIFFICULTY_PRESETS[difficulty];
+  const baselines = config.baselinePowerDemands;
+
+  const isCadet = difficulty === "cadet";
+  const isHardcore = difficulty === "flight_director";
+
   return {
     powerGrid: {
       id: "powerGrid",
       label: "Power Grid",
-      health: 85,
-      wearAccumulated: 0.05,
-      powerDrawMW: SUBSYSTEM_BASELINE_POWER.powerGrid,
+      health: isCadet ? 92 : isHardcore ? 80 : 85,
+      wearAccumulated: isCadet ? 0.02 : isHardcore ? 0.08 : 0.05,
+      powerDrawMW: baselines.powerGrid,
       statusMessage: "Solar arrays nominal. RTG on standby.",
       kidFriendlyStatus: "Your solar panels and backup batteries are working great!",
+      thermalFatigueWear: 0,
     },
     lifeSupport: {
       id: "lifeSupport",
       label: "Life Support",
-      health: 90,
-      wearAccumulated: 0.02,
-      powerDrawMW: SUBSYSTEM_BASELINE_POWER.lifeSupport,
+      health: isCadet ? 95 : isHardcore ? 85 : 90,
+      wearAccumulated: isCadet ? 0.01 : isHardcore ? 0.05 : 0.02,
+      powerDrawMW: baselines.lifeSupport,
       statusMessage: "O₂ scrubbers, water recycling, and hydroponics nominal.",
       kidFriendlyStatus: "Air, water, and food systems are all doing well!",
+      thermalFatigueWear: 0,
     },
     radiationShielding: {
       id: "radiationShielding",
       label: "Radiation & Thermal Shielding",
-      health: 80,
-      wearAccumulated: 0.08,
-      powerDrawMW: SUBSYSTEM_BASELINE_POWER.radiationShielding,
+      health: isCadet ? 90 : isHardcore ? 75 : 80,
+      wearAccumulated: isCadet ? 0.03 : isHardcore ? 0.12 : 0.08,
+      powerDrawMW: baselines.radiationShielding,
       statusMessage: "Magnetic wall and regolith shielding at standard deflection.",
       kidFriendlyStatus: "Your radiation shield is protecting the crew like a force field!",
+      thermalFatigueWear: 0,
     },
   };
 }
 
-function initialCrew(): CrewState {
+function initialCrew(difficulty: DifficultyTier): CrewState {
+  const config = DIFFICULTY_PRESETS[difficulty];
+  const isCadet = difficulty === "cadet";
+  const isHardcore = difficulty === "flight_director";
+
+  // In Flight Director realistic mode, veteran astronaut has an established career baseline
+  const careerStartingDose = isHardcore ? 180 : 50;
+
   return {
-    morale: 80,
+    morale: isCadet ? 90 : isHardcore ? 75 : 80,
     radiationExposureMSv: 0,
-    safeRadiationLimitMSv: MISSION_RADIATION_LIMIT_MSV,
-    foodReserveDays: 15,
+    safeRadiationLimitMSv: config.missionRadiationLimitMSv,
+    careerRadiationExposureMSv: careerStartingDose,
+    careerLimitMSv: config.careerRadiationLimitMSv,
+    foodReserveDays: isCadet ? 18 : isHardcore ? 14 : 15,
     oxygenBufferPercent: 100,
   };
 }
@@ -203,20 +246,37 @@ function processSubsystem(
   previous: SubsystemState,
   allocatedMW: number,
   eventStressFactor: number,
-  extraWear: number
+  extraWear: number,
+  config: DifficultyConfig,
+  thermalFatigueWear = 0
 ): SubsystemState {
-  const baseline = SUBSYSTEM_BASELINE_POWER[subsystemId];
+  const baseline = config.baselinePowerDemands[subsystemId];
   const deficit = Math.max(0, baseline - allocatedMW);
   const excess = Math.max(0, allocatedMW - baseline);
-  const overloadFraction = allocatedMW / baseline;
+  const overloadFraction = baseline > 0 ? allocatedMW / baseline : 1;
 
   let healthDelta = 0;
-  healthDelta += excess * HEALTH_RECOVERY_PER_EXCESS_MW * (1 / eventStressFactor);
-  healthDelta -= deficit * HEALTH_LOSS_PER_DEFICIT_MW * eventStressFactor;
+  // Scaled recovery with difficulty multiplier
+  healthDelta +=
+    excess *
+    HEALTH_RECOVERY_PER_EXCESS_MW *
+    config.recoveryMultiplier *
+    (1 / Math.max(0.5, eventStressFactor));
 
-  let newWear = previous.wearAccumulated + extraWear;
+  // Scaled deficit loss with difficulty penalty
+  healthDelta -=
+    deficit *
+    HEALTH_LOSS_PER_DEFICIT_MW *
+    config.deficitPenaltyMultiplier *
+    eventStressFactor;
+
+  let newWear = previous.wearAccumulated + extraWear * config.wearRateMultiplier + thermalFatigueWear;
   if (overloadFraction > OVERLOAD_THRESHOLD_FRACTION) {
-    newWear += OVERLOAD_WEAR_RATE * (overloadFraction - OVERLOAD_THRESHOLD_FRACTION) * 10;
+    newWear +=
+      OVERLOAD_WEAR_RATE *
+      (overloadFraction - OVERLOAD_THRESHOLD_FRACTION) *
+      10 *
+      config.wearRateMultiplier;
   }
 
   // Accumulated wear linearly degrades max recoverable health
@@ -243,6 +303,7 @@ function processSubsystem(
     powerDrawMW: allocatedMW,
     statusMessage,
     kidFriendlyStatus,
+    thermalFatigueWear: Math.round(((previous.thermalFatigueWear || 0) + thermalFatigueWear) * 1000) / 1000,
   };
 }
 
@@ -303,24 +364,56 @@ function computeAlerts(
   crew: CrewState,
   event: TurnEvent,
   allocation: PowerAllocation,
-  effectiveBudgetMW: number
+  effectiveBudgetMW: number,
+  config: DifficultyConfig,
+  thermalReport?: ThermalFatigueReport,
+  strike?: MicrometeoroidStrike
 ): MissionAlert[] {
   const alerts: MissionAlert[] = [];
   const totalUsed = totalAllocatedMW(allocation);
 
-  if (totalUsed > effectiveBudgetMW + 2) {
+  // Over-budget alert
+  if (totalUsed > effectiveBudgetMW + 1) {
     alerts.push({
       severity: "critical",
       subsystem: "power",
       headline: "Over-budget Power Allocation",
       detail: `You allocated ${totalUsed} MW but only ${effectiveBudgetMW.toFixed(0)} MW is available this turn.`,
       tradeOffExplanation:
-        "Allocating more power than the grid can produce causes brownouts across all systems simultaneously — the classic trade-off: you can't give everyone more than you generate.",
+        "Allocating more power than the grid can produce causes brownouts across all systems simultaneously — you can't draw more than you generate.",
       kidFriendlyExplanation:
-        "You tried to use more power than your solar panels and batteries make! It's like trying to run three hair dryers from one tiny battery. Everything gets weak at once.",
+        "You tried to use more power than your solar panels and batteries make! Everything gets weak at once.",
     });
   }
 
+  // Micro-meteoroid strike alert (Flight Director mode)
+  if (strike) {
+    alerts.push({
+      severity: "critical",
+      subsystem: strike.subsystemHit,
+      headline: `⚡ ${strike.telemetryHeadline}`,
+      detail: `${strike.technicalDetails} Impact velocity: ${strike.impactVelocityKmh.toLocaleString()} km/h. Particle size: ${strike.particleDiameterMm.toFixed(1)} mm.`,
+      tradeOffExplanation: strike.mitigationProtocol,
+      kidFriendlyExplanation:
+        "A hypervelocity space rock pierced your outpost armor! Divert power to patch the damage right away!",
+    });
+  }
+
+  // Thermal fatigue degradation alert (Flight Director mode)
+  if (thermalReport && thermalReport.warningLevel !== "nominal") {
+    alerts.push({
+      severity: thermalReport.warningLevel === "critical" ? "critical" : "warning",
+      subsystem: "radiationShielding",
+      headline: `🌡️ Thermal Cycling Fatigue: ${thermalReport.warningLevel.toUpperCase()}`,
+      detail: thermalReport.technicalDiagnosis,
+      tradeOffExplanation:
+        "Actual thermal fatigue follows Coffin-Manson low-cycle expansion strain. Insufficient active thermal loop power allows deep temperature swings to warp composite structural seals.",
+      kidFriendlyExplanation:
+        "The base is freezing and boiling from space temperature swings! Thermal shielding needs steady power to prevent metal cracking.",
+    });
+  }
+
+  // Subsystem health drops
   (["powerGrid", "lifeSupport", "radiationShielding"] as SubsystemId[]).forEach((id) => {
     const prev = prevSubsystems[id];
     const next = nextSubsystems[id];
@@ -351,44 +444,62 @@ function computeAlerts(
         tradeOffExplanation: tradeOffs[id],
         kidFriendlyExplanation: kidExplanations[id],
       });
-    } else if (drop > 20) {
+    } else if (drop > 18) {
       alerts.push({
         severity: "warning",
         subsystem: id,
         headline: `${nextSubsystems[id].label} Degrading Fast`,
         detail: `Health fell ${drop.toFixed(1)} points this turn. Consider reallocating power.`,
-        tradeOffExplanation: `Rapid health decline in ${nextSubsystems[id].label} means the current power allocation is too low relative to this turn's demand. Increasing power here will draw from other systems.`,
-        kidFriendlyExplanation: `The ${nextSubsystems[id].label} lost a lot of health this turn. Try giving it more power — but remember, that means taking power from somewhere else!`,
+        tradeOffExplanation: `Rapid health decline in ${nextSubsystems[id].label} means the current power allocation is too low relative to demand.`,
+        kidFriendlyExplanation: `The ${nextSubsystems[id].label} lost a lot of health this turn. Try giving it more power!`,
       });
     }
   });
 
-  if (crew.oxygenBufferPercent < 20) {
+  // O2 alert
+  if (crew.oxygenBufferPercent < 25) {
     alerts.push({
       severity: "critical",
       subsystem: "crew",
       headline: "O₂ Emergency — Crew at Risk",
       detail: `Oxygen buffer at ${crew.oxygenBufferPercent.toFixed(0)}%. CO₂ scrubbing critically under-powered.`,
       tradeOffExplanation:
-        "Oxygen regeneration requires sustained Life Support power. Prioritising shielding or power grid in previous turns depleted the O₂ buffer — a time-delayed consequence of power trade-offs.",
+        "Oxygen regeneration requires sustained Life Support power. Prioritising shielding or grid in previous turns depleted the O₂ buffer.",
       kidFriendlyExplanation:
-        "EMERGENCY! The crew is running out of breathable air! This happened because Life Support didn't get enough power in the last few turns. Air is life — always keep some power here!",
+        "EMERGENCY! The crew is running out of breathable air! Life support needs power right now!",
     });
   }
 
-  if (crew.radiationExposureMSv > MISSION_RADIATION_LIMIT_MSV * 0.7) {
+  // Radiation alert & strict NASA 500 mSv career limit
+  if (config.strictCareerLimitEnforcement && crew.careerRadiationExposureMSv > config.careerRadiationLimitMSv) {
+    alerts.push({
+      severity: "critical",
+      subsystem: "crew",
+      headline: "NASA Flight Surgeon Advisory: 500 mSv Career Ceiling Exceeded",
+      detail: `Crew cumulative career exposure reached ${crew.careerRadiationExposureMSv.toFixed(
+        1
+      )} mSv (Strict NASA-STD-3001 Limit: 500 mSv). Grounding protocol initiated.`,
+      tradeOffExplanation:
+        "NASA astronaut career radiation limit of 500 mSv represents the 3% REID (Risk of Exposure-Induced Death) cancer cap. Breaching this triggers mandatory flight status revocation.",
+      kidFriendlyExplanation:
+        "DANGER! The astronauts have reached the maximum safe lifetime radiation limit! Mission abort protocol active.",
+    });
+  } else if (crew.radiationExposureMSv > config.missionRadiationLimitMSv * 0.7) {
     alerts.push({
       severity: "warning",
       subsystem: "crew",
       headline: "Crew Radiation Exposure Elevated",
-      detail: `Cumulative exposure: ${crew.radiationExposureMSv.toFixed(2)} mSv (limit: ${MISSION_RADIATION_LIMIT_MSV} mSv).`,
+      detail: `Expedition dose: ${crew.radiationExposureMSv.toFixed(2)} mSv (Expedition Limit: ${
+        config.missionRadiationLimitMSv
+      } mSv | Career Ledger: ${crew.careerRadiationExposureMSv.toFixed(1)} / 500 mSv).`,
       tradeOffExplanation:
-        "Radiation exposure is cumulative and invisible — a small deficit in shielding each turn compiles into a serious health risk by mission end. This is exactly why long-duration missions require robust, continuous shielding.",
+        "Radiation exposure is cumulative and irreversible — a small deficit in shielding each turn compiles into serious biological risk.",
       kidFriendlyExplanation:
-        "The crew has absorbed quite a bit of radiation — it adds up like collecting points in a bad game. Keep the radiation shield strong for the rest of the mission!",
+        "The crew has absorbed quite a bit of radiation! Keep the radiation shield strong for the rest of the mission.",
     });
   }
 
+  // Turn event alerts
   if (event.radiationSpikeMultiplier >= 3) {
     alerts.push({
       severity: "critical",
@@ -396,7 +507,7 @@ function computeAlerts(
       headline: event.label,
       detail: event.description,
       tradeOffExplanation:
-        "During a major Solar Particle Event, engineers must choose: pour power into shielding (sacrificing food/O₂ production) or maintain life support (accepting higher crew radiation dose). There is no free option.",
+        "During a major Solar Particle Event, engineers must choose: pour power into shielding or maintain life support. There is no free option.",
       kidFriendlyExplanation: event.kidFriendlyDescription,
     });
   } else if (event.powerDeltaMW < -15) {
@@ -406,7 +517,7 @@ function computeAlerts(
       headline: event.label,
       detail: event.description,
       tradeOffExplanation:
-        "A power reduction event compresses the available budget — every MW becomes more valuable and the prioritisation trade-offs become sharper. Something must give.",
+        "A power reduction event compresses the available budget — every MW becomes more valuable and trade-offs sharpen.",
       kidFriendlyExplanation: event.kidFriendlyDescription,
     });
   } else if (event.powerDeltaMW !== 0 || event.lifeSupportStressFactor !== 1.0) {
@@ -423,43 +534,66 @@ function computeAlerts(
   return alerts;
 }
 
-function computeMissionScore(subsystems: Record<SubsystemId, SubsystemState>, crew: CrewState): number {
+function computeMissionScore(
+  subsystems: Record<SubsystemId, SubsystemState>,
+  crew: CrewState,
+  config: DifficultyConfig
+): number {
   const healthScore =
     (subsystems.powerGrid.health + subsystems.lifeSupport.health + subsystems.radiationShielding.health) / 3;
   const moraleScore = crew.morale;
   const radiationScore = clamp(
-    100 - (crew.radiationExposureMSv / MISSION_RADIATION_LIMIT_MSV) * 100,
+    100 - (crew.radiationExposureMSv / config.missionRadiationLimitMSv) * 100,
     0,
     100
   );
-  const foodScore = clamp((crew.foodReserveDays / 15) * 100, 0, 100);
+  const foodScore = clamp((crew.foodReserveDays / (config.id === "cadet" ? 18 : 15)) * 100, 0, 100);
   const o2Score = crew.oxygenBufferPercent;
 
-  return Math.round(
+  let baseScore = Math.round(
     healthScore * 0.35 +
       moraleScore * 0.2 +
       radiationScore * 0.2 +
       foodScore * 0.1 +
       o2Score * 0.15
   );
+
+  // Career limit compliance bonus / penalty in Flight Director mode
+  if (config.strictCareerLimitEnforcement) {
+    if (crew.careerRadiationExposureMSv > config.careerRadiationLimitMSv) {
+      baseScore = Math.max(0, baseScore - 30);
+    }
+  }
+
+  return baseScore;
 }
 
 function computeOutcome(
   turn: number,
   subsystems: Record<SubsystemId, SubsystemState>,
   crew: CrewState,
-  score: number
+  score: number,
+  config: DifficultyConfig
 ): MissionOutcome {
-  const anySystemCritical = Object.values(subsystems).some((s) => s.health < 15);
-  const crewInDanger = crew.oxygenBufferPercent < 10 || crew.radiationExposureMSv > MISSION_RADIATION_LIMIT_MSV;
+  const criticalHealthFloor = config.id === "cadet" ? 8 : config.id === "flight_director" ? 20 : 15;
+  const criticalO2Floor = config.id === "cadet" ? 5 : config.id === "flight_director" ? 15 : 10;
+
+  const anySystemCritical = Object.values(subsystems).some((s) => s.health < criticalHealthFloor);
+  const crewInDanger =
+    crew.oxygenBufferPercent < criticalO2Floor ||
+    crew.radiationExposureMSv > config.missionRadiationLimitMSv ||
+    (config.strictCareerLimitEnforcement && crew.careerRadiationExposureMSv > config.careerRadiationLimitMSv);
 
   if (anySystemCritical || crewInDanger) {
     return "critical_alert";
   }
 
   if (turn === TOTAL_TURNS) {
-    if (score >= 70) return "mission_success";
-    if (score >= 45) return "partial_success";
+    const successThreshold = config.id === "cadet" ? 60 : config.id === "flight_director" ? 75 : 70;
+    const partialThreshold = config.id === "cadet" ? 38 : config.id === "flight_director" ? 50 : 45;
+
+    if (score >= successThreshold) return "mission_success";
+    if (score >= partialThreshold) return "partial_success";
     return "critical_alert";
   }
 
@@ -471,15 +605,18 @@ function buildNarratives(
   event: TurnEvent,
   subsystems: Record<SubsystemId, SubsystemState>,
   crew: CrewState,
-  alerts: MissionAlert[]
+  alerts: MissionAlert[],
+  difficulty: DifficultyTier
 ): { summary: string; kidSummary: string } {
   const criticalAlerts = alerts.filter((a) => a.severity === "critical");
   const worstSystem = Object.values(subsystems).sort((a, b) => a.health - b.health)[0];
 
   if (criticalAlerts.length > 0) {
     return {
-      summary: `Turn ${turn}: ${event.label} — CRITICAL alerts active. ${worstSystem.label} at ${worstSystem.health.toFixed(0)}% health. Immediate reallocation needed.`,
-      kidSummary: `Turn ${turn}: ${event.kidFriendlyDescription} Things are getting serious — your ${worstSystem.label} needs help right now!`,
+      summary: `Sol ${turn} [${difficulty.toUpperCase()}]: ${event.label} — CRITICAL alerts active. ${
+        worstSystem.label
+      } at ${worstSystem.health.toFixed(0)}% health. Immediate reallocation needed.`,
+      kidSummary: `Sol ${turn}: ${event.kidFriendlyDescription} Things are getting serious — your ${worstSystem.label} needs help right now!`,
     };
   }
 
@@ -487,14 +624,18 @@ function buildNarratives(
     Object.values(subsystems).reduce((s, x) => s + x.health, 0) / 3;
   if (avgHealth > 70) {
     return {
-      summary: `Turn ${turn}: ${event.label} — Systems stable. Average health ${avgHealth.toFixed(0)}%. Crew morale ${crew.morale}%.`,
-      kidSummary: `Turn ${turn}: ${event.kidFriendlyDescription} Great job — the outpost is running well and the crew is happy!`,
+      summary: `Sol ${turn} [${difficulty.toUpperCase()}]: ${event.label} — Systems stable. Average health ${avgHealth.toFixed(
+        0
+      )}%. Crew morale ${crew.morale}%.`,
+      kidSummary: `Sol ${turn}: ${event.kidFriendlyDescription} Great job — the outpost is running well and the crew is happy!`,
     };
   }
 
   return {
-    summary: `Turn ${turn}: ${event.label} — Systems under pressure. Average health ${avgHealth.toFixed(0)}%. Review allocation.`,
-    kidSummary: `Turn ${turn}: ${event.kidFriendlyDescription} Some systems need attention — check where you're sending power!`,
+    summary: `Sol ${turn} [${difficulty.toUpperCase()}]: ${event.label} — Systems under pressure. Average health ${avgHealth.toFixed(
+      0
+    )}%. Review allocation.`,
+    kidSummary: `Sol ${turn}: ${event.kidFriendlyDescription} Some systems need attention — check where you're sending power!`,
   };
 }
 
@@ -502,18 +643,40 @@ function buildNarratives(
 // Public API
 // ---------------------------------------------------------------------------
 
-export function createInitialGameState(environment: MissionEnvironment): GameState {
+export function createInitialGameState(
+  environment: MissionEnvironment,
+  difficulty: DifficultyTier = "commander"
+): GameState {
+  const config = DIFFICULTY_PRESETS[difficulty];
+  const initialSub = initialSubsystems(difficulty);
+  const initialCrw = initialCrew(difficulty);
+
+  const initialCadetHints =
+    config.enableAutomatedHints
+      ? generateCadetAutomatedHints(
+          initialSub,
+          initialCrw,
+          getDefaultAllocation(environment.basePowerBudgetMW, difficulty),
+          environment.basePowerBudgetMW,
+          1
+        )
+      : undefined;
+
   return {
     environment,
+    difficulty,
     currentTurn: 0,
     history: [],
-    subsystems: initialSubsystems(),
-    crew: initialCrew(),
+    subsystems: initialSub,
+    crew: initialCrw,
     finalOutcome: "ongoing",
     cumulativeScore: 0,
     incidentHistory: [],
     activeModifiers: [],
     permanentWaterO2Bonus: 0,
+    cumulativeThermalFatigueWear: 0,
+    micrometeoroidHistory: [],
+    cadetHints: initialCadetHints,
   };
 }
 
@@ -552,14 +715,22 @@ export function applyIncidentChoice(
     },
   };
 
+  const radDelta = effects.radiationDeltaMSv ?? 0;
+  const newMissionRadiation = Math.max(
+    0,
+    Math.round((state.crew.radiationExposureMSv + radDelta) * 100) / 100
+  );
+  const newCareerRadiation = Math.max(
+    0,
+    Math.round((state.crew.careerRadiationExposureMSv + radDelta * 3) * 10) / 10
+  );
+
   // Clone crew
   const newCrew: CrewState = {
     ...state.crew,
     morale: clamp(state.crew.morale + (effects.moraleDelta ?? 0), 0, 100),
-    radiationExposureMSv: Math.max(
-      0,
-      Math.round((state.crew.radiationExposureMSv + (effects.radiationDeltaMSv ?? 0)) * 100) / 100
-    ),
+    radiationExposureMSv: newMissionRadiation,
+    careerRadiationExposureMSv: newCareerRadiation,
     foodReserveDays: clamp(
       Math.round((state.crew.foodReserveDays + (effects.foodDaysDelta ?? 0)) * 10) / 10,
       0,
@@ -604,11 +775,17 @@ export function applyIncidentChoice(
   };
 }
 
-export function getDefaultAllocation(effectiveBudgetMW: number): PowerAllocation {
-  // Sensible baseline: prioritise life support, then shielding, then grid management
-  const lifeSupport = Math.min(SUBSYSTEM_BASELINE_POWER.lifeSupport, effectiveBudgetMW * 0.38);
-  const radiationShielding = Math.min(SUBSYSTEM_BASELINE_POWER.radiationShielding, effectiveBudgetMW * 0.32);
+export function getDefaultAllocation(
+  effectiveBudgetMW: number,
+  difficulty: DifficultyTier = "commander"
+): PowerAllocation {
+  const config = DIFFICULTY_PRESETS[difficulty];
+  const baselines = config.baselinePowerDemands;
+
+  const lifeSupport = Math.min(baselines.lifeSupport, effectiveBudgetMW * 0.38);
+  const radiationShielding = Math.min(baselines.radiationShielding, effectiveBudgetMW * 0.32);
   const powerGrid = Math.max(0, effectiveBudgetMW - lifeSupport - radiationShielding);
+
   return {
     powerGrid: Math.round(powerGrid),
     lifeSupport: Math.round(lifeSupport),
@@ -619,10 +796,12 @@ export function getDefaultAllocation(effectiveBudgetMW: number): PowerAllocation
 export function getEffectivePowerBudget(
   environment: MissionEnvironment,
   turn: number,
-  additionalModifierMW = 0
+  additionalModifierMW = 0,
+  difficulty: DifficultyTier = "commander"
 ): number {
+  const config = DIFFICULTY_PRESETS[difficulty];
   const event = environment.turnEvents[turn - 1];
-  const rtgFloor = environment.basePowerBudgetMW * RTG_RESERVE_FRACTION;
+  const rtgFloor = environment.basePowerBudgetMW * config.rtgReserveFraction;
   const solar = environment.basePowerBudgetMW * environment.baselineSolarEfficiency;
   const eventDelta = event ? event.powerDeltaMW : 0;
   const effective = Math.max(rtgFloor, solar + eventDelta + additionalModifierMW);
@@ -634,14 +813,27 @@ export function processTurn(
   allocation: PowerAllocation
 ): { nextState: GameState; result: TurnResult } {
   const turn = gameState.currentTurn + 1;
-  const { environment } = gameState;
+  const { environment, difficulty } = gameState;
+  const config = DIFFICULTY_PRESETS[difficulty];
   const event = environment.turnEvents[turn - 1];
 
-  const modifierPowerDelta = (gameState.activeModifiers || []).reduce(
-    (sum, m) => sum + (m.powerDeltaMW || 0),
-    0
+  // 1. HARDCORE MECHANIC: Random Micro-Meteoroid Puncture Check
+  let microStrike: MicrometeoroidStrike | null = null;
+  if (config.enableMicrometeoroids) {
+    microStrike = rollMicrometeoroidStrike(environment.id, turn, gameState.cumulativeScore);
+  }
+
+  // Active modifiers power sum + potential micrometeoroid power loss
+  const modifierPowerDelta =
+    (gameState.activeModifiers || []).reduce((sum, m) => sum + (m.powerDeltaMW || 0), 0) -
+    (microStrike ? microStrike.powerLossMW : 0);
+
+  const effectiveBudgetMW = getEffectivePowerBudget(
+    environment,
+    turn,
+    modifierPowerDelta,
+    difficulty
   );
-  const effectiveBudgetMW = getEffectivePowerBudget(environment, turn, modifierPowerDelta);
 
   // Clamp allocation so it never exceeds the budget (simulate brownout proportionally)
   const totalRequested = totalAllocatedMW(allocation);
@@ -652,6 +844,27 @@ export function processTurn(
     radiationShielding: Math.round(allocation.radiationShielding * scaleFactor),
   };
 
+  // 2. HARDCORE MECHANIC: Degradation curves based on actual thermal fatigue (Coffin-Manson)
+  let thermalReport: ThermalFatigueReport | undefined = undefined;
+  let thermalWearPerSubsystem = 0;
+  if (config.enableThermalFatigueCurves) {
+    thermalReport = calculateThermalFatigue(
+      environment.id,
+      turn,
+      clampedAllocation.radiationShielding,
+      config.baselinePowerDemands.radiationShielding,
+      gameState.cumulativeThermalFatigueWear || 0
+    );
+    thermalWearPerSubsystem = thermalReport.fatigueWearAdded * config.thermalFatigueMultiplier;
+  }
+
+  // Extra wear from events and micro-meteoroids
+  const extraGridWear = microStrike?.subsystemHit === "powerGrid" ? microStrike.wearDelta : 0;
+  const extraLsWear = microStrike?.subsystemHit === "lifeSupport" ? microStrike.wearDelta : 0;
+  const extraShieldWear =
+    (event.shieldingWearDelta || 0) +
+    (microStrike?.subsystemHit === "radiationShielding" ? microStrike.wearDelta : 0);
+
   // Process each subsystem
   const prevSubsystems = gameState.subsystems;
   const nextSubsystems: Record<SubsystemId, SubsystemState> = {
@@ -659,22 +872,28 @@ export function processTurn(
       "powerGrid",
       prevSubsystems.powerGrid,
       clampedAllocation.powerGrid,
-      1.0, // power grid stress is from eclipse/storm, encoded in effectiveBudgetMW already
-      0
+      1.0,
+      extraGridWear,
+      config,
+      thermalWearPerSubsystem * 0.7
     ),
     lifeSupport: processSubsystem(
       "lifeSupport",
       prevSubsystems.lifeSupport,
       clampedAllocation.lifeSupport,
       event.lifeSupportStressFactor,
-      0
+      extraLsWear,
+      config,
+      thermalWearPerSubsystem * 0.8
     ),
     radiationShielding: processSubsystem(
       "radiationShielding",
       prevSubsystems.radiationShielding,
       clampedAllocation.radiationShielding,
       event.radiationSpikeMultiplier,
-      event.shieldingWearDelta
+      extraShieldWear,
+      config,
+      thermalWearPerSubsystem * 1.5 // Radiator & shielding loops bear brunt of thermal fatigue
     ),
   };
 
@@ -683,22 +902,20 @@ export function processTurn(
   const effectiveRadiationMSv =
     environment.baselineDailyRadiationMSv *
     event.radiationSpikeMultiplier *
-    (1 - shieldingHealth * 0.85); // good shielding blocks up to 85% of radiation
+    config.radiationDamageMultiplier *
+    (1 - shieldingHealth * 0.85);
 
   const lsHealth = nextSubsystems.lifeSupport.health / 100;
-  const lsDeficit = Math.max(
-    0,
-    SUBSYSTEM_BASELINE_POWER.lifeSupport - clampedAllocation.lifeSupport
-  );
-  const lsExcess = Math.max(
-    0,
-    clampedAllocation.lifeSupport - SUBSYSTEM_BASELINE_POWER.lifeSupport
-  );
+  const lsBaseline = config.baselinePowerDemands.lifeSupport;
+  const lsDeficit = Math.max(0, lsBaseline - clampedAllocation.lifeSupport);
+  const lsExcess = Math.max(0, clampedAllocation.lifeSupport - lsBaseline);
 
   const bonusFactor = 1 + (gameState.permanentWaterO2Bonus || 0) / 100;
   const oxygenDelta =
     lsExcess * OXYGEN_RECOVERY_PER_MW_EXCESS * bonusFactor -
-    lsDeficit * OXYGEN_LOSS_PER_MW_DEFICIT;
+    lsDeficit * OXYGEN_LOSS_PER_MW_DEFICIT * config.oxygenLossRateMultiplier -
+    (microStrike?.o2LeakPercent ?? 0);
+
   const newOxygenBuffer = clamp(
     gameState.crew.oxygenBufferPercent + oxygenDelta * event.lifeSupportStressFactor,
     0,
@@ -706,7 +923,7 @@ export function processTurn(
   );
 
   const foodDelta =
-    lsExcess * FOOD_HYDROPONICS_BONUS_PER_MW * bonusFactor - FOOD_CONSUMED_PER_TURN;
+    lsExcess * FOOD_HYDROPONICS_BONUS_PER_MW * bonusFactor - config.foodConsumptionPerTurn;
   const newFoodReserve = clamp(gameState.crew.foodReserveDays + foodDelta, 0, 30);
 
   let moraleDelta = 0;
@@ -714,15 +931,34 @@ export function processTurn(
   if (lsHealth < 0.5) moraleDelta -= MORALE_LOSS_LIFE_SUPPORT_LOW;
   if (effectiveRadiationMSv > environment.baselineDailyRadiationMSv * 2) moraleDelta -= MORALE_LOSS_RADIATION_HIGH;
   if (newFoodReserve < 3) moraleDelta -= MORALE_LOSS_FOOD_LOW;
+  if (microStrike) moraleDelta -= 8; // Crew shaken by hull impact
+
+  const totalMissionRad =
+    Math.round((gameState.crew.radiationExposureMSv + effectiveRadiationMSv) * 100) / 100;
+  const totalCareerRad =
+    Math.round((gameState.crew.careerRadiationExposureMSv + effectiveRadiationMSv * 3.5) * 10) / 10;
 
   const nextCrew: CrewState = {
     morale: clamp(gameState.crew.morale + moraleDelta, 0, 100),
-    radiationExposureMSv:
-      Math.round((gameState.crew.radiationExposureMSv + effectiveRadiationMSv) * 100) / 100,
-    safeRadiationLimitMSv: MISSION_RADIATION_LIMIT_MSV,
+    radiationExposureMSv: totalMissionRad,
+    safeRadiationLimitMSv: config.missionRadiationLimitMSv,
+    careerRadiationExposureMSv: totalCareerRad,
+    careerLimitMSv: config.careerRadiationLimitMSv,
     foodReserveDays: Math.round(newFoodReserve * 10) / 10,
     oxygenBufferPercent: Math.round(newOxygenBuffer * 10) / 10,
   };
+
+  // 3. CADET MECHANIC: Automated gentle hints
+  let cadetHints: AutomatedHint[] | undefined = undefined;
+  if (config.enableAutomatedHints) {
+    cadetHints = generateCadetAutomatedHints(
+      nextSubsystems,
+      nextCrew,
+      clampedAllocation,
+      effectiveBudgetMW,
+      turn
+    );
+  }
 
   const alerts = computeAlerts(
     prevSubsystems,
@@ -730,12 +966,22 @@ export function processTurn(
     nextCrew,
     event,
     clampedAllocation,
-    effectiveBudgetMW
+    effectiveBudgetMW,
+    config,
+    thermalReport,
+    microStrike ?? undefined
   );
 
-  const score = computeMissionScore(nextSubsystems, nextCrew);
-  const outcome = computeOutcome(turn, nextSubsystems, nextCrew, score);
-  const { summary, kidSummary } = buildNarratives(turn, event, nextSubsystems, nextCrew, alerts);
+  const score = computeMissionScore(nextSubsystems, nextCrew, config);
+  const outcome = computeOutcome(turn, nextSubsystems, nextCrew, score, config);
+  const { summary, kidSummary } = buildNarratives(
+    turn,
+    event,
+    nextSubsystems,
+    nextCrew,
+    alerts,
+    difficulty
+  );
 
   // Age one-shot active modifiers
   const nextModifiers = (gameState.activeModifiers || [])
@@ -746,6 +992,7 @@ export function processTurn(
 
   const result: TurnResult = {
     turn,
+    difficulty,
     event,
     powerBudgetMW: effectiveBudgetMW,
     allocation: clampedAllocation,
@@ -756,6 +1003,9 @@ export function processTurn(
     missionScorePercent: score,
     turnNarrativeSummary: summary,
     kidNarrativeSummary: kidSummary,
+    thermalFatigue: thermalReport,
+    micrometeoroidStrike: microStrike ?? undefined,
+    cadetHints,
   };
 
   const nextState: GameState = {
@@ -767,43 +1017,53 @@ export function processTurn(
     finalOutcome: outcome,
     cumulativeScore: score,
     activeModifiers: nextModifiers,
+    cumulativeThermalFatigueWear:
+      thermalReport?.totalCumulativeFatigueWear ?? gameState.cumulativeThermalFatigueWear ?? 0,
+    micrometeoroidHistory: microStrike
+      ? [...(gameState.micrometeoroidHistory || []), microStrike]
+      : gameState.micrometeoroidHistory || [],
+    cadetHints,
   };
 
   return { nextState, result };
 }
 
-export function getTradeOffHints(allocation: PowerAllocation, effectiveBudgetMW: number): string[] {
+export function getTradeOffHints(
+  allocation: PowerAllocation,
+  effectiveBudgetMW: number,
+  difficulty: DifficultyTier = "commander"
+): string[] {
   const hints: string[] = [];
+  const config = DIFFICULTY_PRESETS[difficulty];
+  const baselines = config.baselinePowerDemands;
   const total = totalAllocatedMW(allocation);
 
   if (total > effectiveBudgetMW) {
-    hints.push(`You're trying to use ${total} MW but only ${effectiveBudgetMW} MW is available — the system will auto-scale down proportionally.`);
+    hints.push(`You're trying to use ${total} MW but only ${effectiveBudgetMW} MW is available — system will auto-scale down.`);
   }
 
-  if (allocation.lifeSupport < SUBSYSTEM_BASELINE_POWER.lifeSupport - 5) {
-    hints.push(`Life Support is under-powered by ${SUBSYSTEM_BASELINE_POWER.lifeSupport - allocation.lifeSupport} MW — crew O₂ and food production will suffer.`);
+  if (allocation.lifeSupport < baselines.lifeSupport - 4) {
+    hints.push(`Life Support is under-powered by ${baselines.lifeSupport - allocation.lifeSupport} MW — crew O₂ and food production will suffer.`);
   }
 
-  if (allocation.radiationShielding < SUBSYSTEM_BASELINE_POWER.radiationShielding - 5) {
-    hints.push(`Radiation Shielding is under-powered by ${SUBSYSTEM_BASELINE_POWER.radiationShielding - allocation.radiationShielding} MW — crew cumulative radiation dose will rise.`);
+  if (allocation.radiationShielding < baselines.radiationShielding - 4) {
+    hints.push(`Radiation Shielding is under-powered by ${baselines.radiationShielding - allocation.radiationShielding} MW — crew radiation dose will rise.`);
   }
 
-  if (allocation.powerGrid < SUBSYSTEM_BASELINE_POWER.powerGrid - 5) {
-    hints.push(`Power Grid management is under-resourced by ${SUBSYSTEM_BASELINE_POWER.powerGrid - allocation.powerGrid} MW — battery reserves may not replenish adequately.`);
+  if (allocation.powerGrid < baselines.powerGrid - 4) {
+    hints.push(`Power Grid is under-resourced by ${baselines.powerGrid - allocation.powerGrid} MW — battery reserves may not replenish adequately.`);
   }
 
   const overloads = (["powerGrid", "lifeSupport", "radiationShielding"] as SubsystemId[]).filter((id) => {
-    return allocation[id] > SUBSYSTEM_BASELINE_POWER[id] * OVERLOAD_THRESHOLD_FRACTION;
+    return allocation[id] > baselines[id] * OVERLOAD_THRESHOLD_FRACTION;
   });
   if (overloads.length > 0) {
-    hints.push(`${overloads.map((id) => ({ powerGrid: "Power Grid", lifeSupport: "Life Support", radiationShielding: "Radiation Shielding" }[id])).join(" & ")} are in overload — this causes accelerated wear that is hard to reverse!`);
+    hints.push(`${overloads.map((id) => ({ powerGrid: "Power Grid", lifeSupport: "Life Support", radiationShielding: "Radiation Shielding" }[id])).join(" & ")} are in overload — this causes accelerated hardware wear!`);
   }
 
   if (hints.length === 0) {
-    hints.push("Allocation looks balanced. All three systems near their baseline power requirements.");
+    hints.push("Allocation looks balanced. All three systems near their baseline requirements.");
   }
 
   return hints;
 }
-
-

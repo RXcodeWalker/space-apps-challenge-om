@@ -18,7 +18,14 @@ import {
   BatteryCharging,
   Radio,
   AlertTriangle,
+  Compass,
+  Box,
+  Layers,
+  Atom,
 } from "lucide-react";
+import Habitat3DDiorama from "./Habitat3DDiorama";
+import RegolithChemistryViewer from "./RegolithChemistryViewer";
+import { soundEffects } from "../utils/soundEffects";
 import type {
   SubsystemState,
   SubsystemId,
@@ -37,7 +44,7 @@ export interface OutpostVisualizerProps {
   interactive?: boolean;
 }
 
-type InspectedModule = "shield" | "hydroponics" | "power" | "command" | null;
+type InspectedModule = "shield" | "hydroponics" | "power" | "command" | "rover" | null;
 
 export default function OutpostVisualizer({
   environment,
@@ -48,6 +55,7 @@ export default function OutpostVisualizer({
   crew,
   interactive = true,
 }: OutpostVisualizerProps) {
+  const [viewMode, setViewMode] = useState<"3d" | "2d" | "chemistry">("3d");
   const [inspectedModule, setInspectedModule] = useState<InspectedModule>(null);
   const filterId = useId();
 
@@ -89,12 +97,12 @@ export default function OutpostVisualizer({
 
   return (
     <div className="relative w-full rounded-3xl bg-[#070C18] border border-cyan-900/40 overflow-hidden shadow-2xl flex flex-col select-none">
-      {/* Visualizer Top Bar & Quick Environmental Telemetry */}
-      <div className="relative z-20 flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 bg-[#0B1120]/80 backdrop-blur-md border-b border-cyan-900/30 text-xs">
+      {/* Visualizer Top Bar & View Mode Switcher */}
+      <div className="relative z-20 flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 bg-[#0B1120]/90 backdrop-blur-md border-b border-cyan-900/40 text-xs">
         <div className="flex items-center gap-2">
           <span className="text-base">{environment.emoji}</span>
           <span className="font-mono font-bold tracking-wider uppercase text-cyan-400">
-            HABITAT CROSS-SECTION
+            HABITAT OBSERVATORY
           </span>
           <span className="text-slate-500 font-mono hidden sm:inline">|</span>
           <span className="text-slate-300 font-semibold hidden sm:inline truncate max-w-xs">
@@ -102,34 +110,105 @@ export default function OutpostVisualizer({
           </span>
         </div>
 
+        {/* View Mode Switcher: 3D Diorama, 2D Cross-Section, Regolith Chem */}
+        <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-950/80 border border-cyan-800/50">
+          <button
+            type="button"
+            onClick={() => {
+              soundEffects.playSliderClick(70);
+              setViewMode("3d");
+            }}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
+              viewMode === "3d"
+                ? "bg-gradient-to-r from-cyan-500 to-blue-500 text-black shadow-md shadow-cyan-950 font-black"
+                : "text-slate-300 hover:text-white hover:bg-slate-900"
+            }`}
+          >
+            <Box className="w-3.5 h-3.5" />
+            <span>3D Diorama</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              soundEffects.playSliderClick(70);
+              setViewMode("2d");
+            }}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
+              viewMode === "2d"
+                ? "bg-gradient-to-r from-cyan-500 to-blue-500 text-black shadow-md shadow-cyan-950 font-black"
+                : "text-slate-300 hover:text-white hover:bg-slate-900"
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span>2D Cross-Section</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              soundEffects.playSliderClick(70);
+              setViewMode("chemistry");
+            }}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
+              viewMode === "chemistry"
+                ? "bg-gradient-to-r from-cyan-500 to-blue-500 text-black shadow-md shadow-cyan-950 font-black"
+                : "text-slate-300 hover:text-white hover:bg-slate-900"
+            }`}
+          >
+            <Atom className="w-3.5 h-3.5" />
+            <span>Regolith Chem (Mol*)</span>
+          </button>
+        </div>
+
         {/* Environmental Warning Pills */}
         <div className="flex items-center gap-2">
           {hasDustStorm && (
-            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 font-mono text-[11px] animate-pulse">
+            <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 font-mono text-[11px] animate-pulse">
               <AlertTriangle className="w-3 h-3 text-amber-400" />
               DUST STORM ACTIVE
             </span>
           )}
           {hasEclipse && (
-            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 font-mono text-[11px]">
+            <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 font-mono text-[11px]">
               <Sun className="w-3 h-3 text-indigo-400" />
               PARTIAL ECLIPSE
             </span>
           )}
           {hasSolarFlare && (
-            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500/20 border border-rose-500/40 text-rose-300 font-mono text-[11px] animate-bounce">
+            <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-500/20 border border-rose-500/40 text-rose-300 font-mono text-[11px] animate-bounce">
               <ShieldAlert className="w-3 h-3 text-rose-400" />
               SOLAR FLARE SPIKE
             </span>
           )}
-          <span className="text-[11px] font-mono text-slate-400 hidden md:inline">
-            Tap modules to inspect
-          </span>
         </div>
       </div>
 
-      {/* SVG Canvas Container */}
-      <div className="relative w-full aspect-[16/9] max-h-[380px] overflow-hidden flex items-center justify-center">
+      {/* 3D DIORAMA VIEW */}
+      {viewMode === "3d" && (
+        <Habitat3DDiorama
+          environment={environment}
+          subsystems={subsystems}
+          allocation={allocation}
+          effectiveBudgetMW={effectiveBudgetMW}
+          currentEvent={currentEvent}
+          crew={crew}
+          interactive={interactive}
+          onSelectModule={(mod: InspectedModule) => setInspectedModule(mod)}
+        />
+      )}
+
+      {/* REGOLITH CHEMISTRY / MOL* VIEW */}
+      {viewMode === "chemistry" && (
+        <RegolithChemistryViewer
+          initialMolecule={isMars ? "perchlorate" : "silicate"}
+          onClose={() => setViewMode("3d")}
+        />
+      )}
+
+      {/* 2D SVG BLUEPRINT CROSS-SECTION VIEW */}
+      {viewMode === "2d" && (
+        <div className="relative w-full aspect-[16/9] max-h-[380px] overflow-hidden flex items-center justify-center">
         <svg
           viewBox="0 0 1000 520"
           className="w-full h-full object-contain"
@@ -705,6 +784,7 @@ export default function OutpostVisualizer({
           </div>
         </div>
       </div>
+      )}
 
       {/* Interactive Module Inspection Drawer / Bottom Bar */}
       <AnimatePresence mode="wait">
@@ -778,6 +858,24 @@ export default function OutpostVisualizer({
                       Morale: {crew?.morale ?? 80}% · O₂ Buffer:{" "}
                       {crew?.oxygenBufferPercent ?? 100}% · Food:{" "}
                       {crew?.foodReserveDays ?? 15} days
+                    </p>
+                  </div>
+                </>
+              )}
+
+              {inspectedModule === "rover" && (
+                <>
+                  <div className="p-2 rounded-xl bg-amber-500/20 text-amber-300">
+                    <Compass className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-white text-sm">
+                      Surface Exploration Rover & EVA Spacesuit
+                    </p>
+                    <p className="text-slate-300 text-xs">
+                      {isMars
+                        ? "Curiosity/Perseverance class 6-wheel rover surveying Gale Crater mudstones & perchlorate deposits."
+                        : "Artemis lunar rover mining ice from Permanently Shadowed Regions (PSRs) at −173°C."}
                     </p>
                   </div>
                 </>

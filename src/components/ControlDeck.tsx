@@ -27,6 +27,7 @@ import {
   Volume2,
   VolumeX,
   HelpCircle,
+  ShieldAlert,
 } from "lucide-react";
 import { soundEffects, useSoundMuted } from "../utils/soundEffects";
 import type {
@@ -37,9 +38,16 @@ import type {
 } from "../engine/simulationEngine";
 import type { MissionEnvironment, TurnEvent } from "../data/nasaConstants";
 import { TOTAL_TURNS } from "../data/nasaConstants";
+import {
+  DIFFICULTY_PRESETS,
+  type DifficultyTier,
+} from "../data/difficultyTiers";
+import { useTranslation } from "../i18n/LanguageContext";
+import LanguageSelector from "./LanguageSelector";
 
 export interface ControlDeckProps {
   environment: MissionEnvironment;
+  difficulty?: DifficultyTier;
   currentTurn: number; // 1 to 10
   totalTurns?: number;
   effectiveBudgetMW: number;
@@ -55,14 +63,9 @@ export interface ControlDeckProps {
   children?: React.ReactNode; // Optional slot for OutpostVisualizer
 }
 
-const BASELINES: Record<SubsystemId, number> = {
-  powerGrid: 25,
-  lifeSupport: 35,
-  radiationShielding: 30,
-};
-
 export default function ControlDeck({
   environment,
+  difficulty = "commander",
   currentTurn,
   totalTurns = TOTAL_TURNS,
   effectiveBudgetMW,
@@ -78,6 +81,8 @@ export default function ControlDeck({
   children,
 }: ControlDeckProps) {
   const [isMuted, toggleMute] = useSoundMuted();
+  const config = DIFFICULTY_PRESETS[difficulty];
+  const baselines = config.baselinePowerDemands;
 
   const totalAllocated =
     allocation.powerGrid + allocation.lifeSupport + allocation.radiationShielding;
@@ -90,33 +95,48 @@ export default function ControlDeck({
     const radMultiplier = currentEvent?.radiationSpikeMultiplier ?? 1.0;
 
     // 1. Life support & O2/Food
-    const lsExcess = Math.max(0, allocation.lifeSupport - BASELINES.lifeSupport);
-    const lsDeficit = Math.max(0, BASELINES.lifeSupport - allocation.lifeSupport);
-    const o2Delta = Math.round((lsExcess * 2 - lsDeficit * 4) * stressFactor);
-    const foodDeltaDays = Math.round((lsExcess * 0.08 - 1.0) * 10) / 10;
+    const lsExcess = Math.max(0, allocation.lifeSupport - baselines.lifeSupport);
+    const lsDeficit = Math.max(0, baselines.lifeSupport - allocation.lifeSupport);
+    const o2Delta = Math.round(
+      (lsExcess * 2 - lsDeficit * 4 * config.oxygenLossRateMultiplier) * stressFactor
+    );
+    const foodDeltaDays =
+      Math.round((lsExcess * 0.08 - config.foodConsumptionPerTurn) * 10) / 10;
     const lsHealthDelta = Math.round(
-      (lsExcess * 1.4 - lsDeficit * 2.5) * (1 / stressFactor)
+      (lsExcess * 1.4 * config.recoveryMultiplier -
+        lsDeficit * 2.5 * config.deficitPenaltyMultiplier) *
+        (1 / stressFactor)
     );
 
     // 2. Shielding
-    const rsExcess = Math.max(0, allocation.radiationShielding - BASELINES.radiationShielding);
-    const rsDeficit = Math.max(0, BASELINES.radiationShielding - allocation.radiationShielding);
-    const shieldHealthDelta = Math.round(rsExcess * 1.4 - rsDeficit * 2.5);
+    const rsExcess = Math.max(0, allocation.radiationShielding - baselines.radiationShielding);
+    const rsDeficit = Math.max(0, baselines.radiationShielding - allocation.radiationShielding);
+    const shieldHealthDelta = Math.round(
+      rsExcess * 1.4 * config.recoveryMultiplier -
+        rsDeficit * 2.5 * config.deficitPenaltyMultiplier
+    );
 
     // Projected daily radiation dose
-    const currentShieldHealth = Math.max(0, Math.min(100, subsystems.radiationShielding.health + shieldHealthDelta));
+    const currentShieldHealth = Math.max(
+      0,
+      Math.min(100, subsystems.radiationShielding.health + shieldHealthDelta)
+    );
     const projectedDoseMSv =
       Math.round(
         environment.baselineDailyRadiationMSv *
           radMultiplier *
+          config.radiationDamageMultiplier *
           (1 - (currentShieldHealth / 100) * 0.85) *
           100
       ) / 100;
 
     // 3. Power Grid / Battery
-    const pgExcess = Math.max(0, allocation.powerGrid - BASELINES.powerGrid);
-    const pgDeficit = Math.max(0, BASELINES.powerGrid - allocation.powerGrid);
-    const gridHealthDelta = Math.round(pgExcess * 1.4 - pgDeficit * 2.5);
+    const pgExcess = Math.max(0, allocation.powerGrid - baselines.powerGrid);
+    const pgDeficit = Math.max(0, baselines.powerGrid - allocation.powerGrid);
+    const gridHealthDelta = Math.round(
+      pgExcess * 1.4 * config.recoveryMultiplier -
+        pgDeficit * 2.5 * config.deficitPenaltyMultiplier
+    );
 
     // 4. Crew Morale Projection
     let moraleTrend: "up" | "down" | "flat" = "flat";
@@ -141,6 +161,8 @@ export default function ControlDeck({
     currentEvent,
     environment,
     isOverBudget,
+    baselines,
+    config,
   ]);
 
   // Tactile slider / stepper helper
@@ -171,32 +193,32 @@ export default function ControlDeck({
       soundEffects.playSliderClick(50);
       let next: PowerAllocation;
       if (type === "balanced") {
-        const ls = Math.min(BASELINES.lifeSupport, Math.round(effectiveBudgetMW * 0.38));
-        const rs = Math.min(BASELINES.radiationShielding, Math.round(effectiveBudgetMW * 0.34));
+        const ls = Math.min(baselines.lifeSupport, Math.round(effectiveBudgetMW * 0.38));
+        const rs = Math.min(baselines.radiationShielding, Math.round(effectiveBudgetMW * 0.34));
         const pg = Math.max(0, effectiveBudgetMW - ls - rs);
         next = { lifeSupport: ls, radiationShielding: rs, powerGrid: pg };
       } else if (type === "lifeSupport") {
-        const ls = Math.min(effectiveBudgetMW, 45);
+        const ls = Math.min(effectiveBudgetMW, baselines.lifeSupport + 12);
         const rem = effectiveBudgetMW - ls;
         const rs = Math.round(rem * 0.55);
-        const pg = rem - rs;
+        const pg = Math.max(0, rem - rs);
         next = { lifeSupport: ls, radiationShielding: rs, powerGrid: pg };
       } else if (type === "shield") {
-        const rs = Math.min(effectiveBudgetMW, 42);
+        const rs = Math.min(effectiveBudgetMW, baselines.radiationShielding + 14);
         const rem = effectiveBudgetMW - rs;
         const ls = Math.round(rem * 0.6);
-        const pg = rem - ls;
+        const pg = Math.max(0, rem - ls);
         next = { lifeSupport: ls, radiationShielding: rs, powerGrid: pg };
       } else {
-        const pg = Math.min(effectiveBudgetMW, 40);
+        const pg = Math.min(effectiveBudgetMW, baselines.powerGrid + 14);
         const rem = effectiveBudgetMW - pg;
         const ls = Math.round(rem * 0.55);
-        const rs = rem - ls;
+        const rs = Math.max(0, rem - ls);
         next = { lifeSupport: ls, radiationShielding: rs, powerGrid: pg };
       }
       onAllocationChange(next);
     },
-    [effectiveBudgetMW, onAllocationChange]
+    [effectiveBudgetMW, onAllocationChange, baselines]
   );
 
   return (
@@ -215,6 +237,17 @@ export default function ControlDeck({
             <div className="flex items-center gap-2">
               <span className="text-xs font-mono font-bold tracking-wider text-[#06B6D4] uppercase">
                 MISSION SOL {currentTurn} OF {totalTurns}
+              </span>
+              <span
+                className="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider font-mono flex items-center gap-1"
+                style={{
+                  backgroundColor: `${config.accentColor}25`,
+                  color: config.accentColor,
+                  border: `1px solid ${config.accentColor}50`,
+                }}
+              >
+                <span>{config.emoji}</span>
+                <span>{config.title}</span>
               </span>
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-semibold hidden sm:inline">
                 {environment.name}
@@ -242,6 +275,34 @@ export default function ControlDeck({
             </p>
           </div>
         </div>
+
+        {/* Strict 500 mSv NASA Career Limit (Flight Director mode) */}
+        {difficulty === "flight_director" && (
+          <div className="flex items-center gap-2.5 bg-amber-950/40 border border-amber-600/40 rounded-xl px-3 py-2">
+            <div className="p-1.5 rounded-lg bg-amber-500/20 text-amber-400">
+              <ShieldAlert className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="text-[10px] font-mono text-amber-300 uppercase tracking-tight">
+                500 mSv Career Limit
+              </p>
+              <p className="text-xs sm:text-sm font-black font-mono text-white">
+                <span
+                  className={
+                    crew.careerRadiationExposureMSv > 500
+                      ? "text-red-400 animate-pulse"
+                      : crew.careerRadiationExposureMSv > 400
+                      ? "text-amber-400"
+                      : "text-emerald-400"
+                  }
+                >
+                  {crew.careerRadiationExposureMSv.toFixed(1)}
+                </span>
+                <span className="text-slate-400 font-normal"> / 500 mSv</span>
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Net Power Telemetry */}
         <div
@@ -446,7 +507,7 @@ export default function ControlDeck({
             </div>
 
             <p className="text-xs text-slate-300 mb-3 bg-white/5 p-2 rounded-xl">
-              Baseline demand: <strong>35 MW</strong>. Keeps oxygen flowing and
+              Baseline demand: <strong>{baselines.lifeSupport} MW</strong>. Keeps oxygen flowing and
               hydroponic plants healthy.
             </p>
 
@@ -463,7 +524,7 @@ export default function ControlDeck({
               />
               <div className="flex justify-between text-[10px] font-mono text-slate-500 mt-1">
                 <span>0 MW</span>
-                <span className="text-emerald-400 font-bold">35 MW Target</span>
+                <span className="text-emerald-400 font-bold">{baselines.lifeSupport} MW Target</span>
                 <span>{effectiveBudgetMW} MW</span>
               </div>
             </div>
@@ -510,7 +571,7 @@ export default function ControlDeck({
             </div>
 
             <p className="text-xs text-slate-300 mb-3 bg-white/5 p-2 rounded-xl">
-              Baseline demand: <strong>30 MW</strong>. Repels cosmic rays, solar flares,
+              Baseline demand: <strong>{baselines.radiationShielding} MW</strong>. Repels cosmic rays, solar flares,
               and extreme cold.
             </p>
 
@@ -529,7 +590,7 @@ export default function ControlDeck({
               />
               <div className="flex justify-between text-[10px] font-mono text-slate-500 mt-1">
                 <span>0 MW</span>
-                <span className="text-cyan-400 font-bold">30 MW Target</span>
+                <span className="text-cyan-400 font-bold">{baselines.radiationShielding} MW Target</span>
                 <span>{effectiveBudgetMW} MW</span>
               </div>
             </div>
@@ -576,7 +637,7 @@ export default function ControlDeck({
             </div>
 
             <p className="text-xs text-slate-300 mb-3 bg-white/5 p-2 rounded-xl">
-              Baseline demand: <strong>25 MW</strong>. Charges backup cells for dust
+              Baseline demand: <strong>{baselines.powerGrid} MW</strong>. Charges backup cells for dust
               storms and eclipses.
             </p>
 
@@ -593,7 +654,7 @@ export default function ControlDeck({
               />
               <div className="flex justify-between text-[10px] font-mono text-slate-500 mt-1">
                 <span>0 MW</span>
-                <span className="text-blue-400 font-bold">25 MW Target</span>
+                <span className="text-blue-400 font-bold">{baselines.powerGrid} MW Target</span>
                 <span>{effectiveBudgetMW} MW</span>
               </div>
             </div>
@@ -741,7 +802,7 @@ export default function ControlDeck({
           </div>
         </div>
 
-        {/* 10-Second Kid Takeaway Note */}
+        {/* Real-time Guidance / Takeaway Note */}
         <div className="text-xs text-slate-300 bg-white/5 rounded-xl p-3 border border-white/5 flex items-start gap-2.5">
           <Sparkles className="w-4 h-4 text-[#F59E0B] flex-shrink-0 mt-0.5" />
           <p className="leading-relaxed">
@@ -750,18 +811,19 @@ export default function ControlDeck({
                 Warning: You allocated more than the {effectiveBudgetMW} MW available!
                 Reduce power on one system so your grid doesn't brown out.
               </span>
-            ) : allocation.lifeSupport < 25 ? (
+            ) : allocation.lifeSupport < baselines.lifeSupport - 4 ? (
               <span className="text-amber-300">
-                Life Support is low! Your crew will breathe through backup tanks and
-                crops will wilt.
+                Life Support is under-budget (&lt;{baselines.lifeSupport} MW)! Crew will consume backup oxygen tanks and crops will wilt.
               </span>
-            ) : allocation.radiationShielding < 20 ? (
+            ) : allocation.radiationShielding < baselines.radiationShielding - 4 ? (
               <span className="text-amber-300">
-                Shielding is thin! The crew will absorb extra space radiation this sol.
+                Shielding is thin (&lt;{baselines.radiationShielding} MW)! Space radiation will penetrate the habitat.
+                {difficulty === "flight_director" && " ⚠️ Low active thermal loop power accelerates structural thermal fatigue!"}
               </span>
             ) : (
               <span className="text-emerald-300">
                 Power is well distributed! Systems will hold steady through Sol {currentTurn}.
+                {difficulty === "flight_director" && " Thermal loop active; fatigue minimized."}
               </span>
             )}
           </p>

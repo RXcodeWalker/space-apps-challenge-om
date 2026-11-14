@@ -13,12 +13,16 @@ import {
   RotateCcw,
   Globe,
   Database,
-  TrendingUp,
   Sparkles,
+  ShieldAlert,
 } from "lucide-react";
 
-import type { GameState, TurnResult } from "../engine/simulationEngine";
+import type { GameState } from "../engine/simulationEngine";
 import type { MissionEnvironment } from "../data/nasaConstants";
+import FlightRecorderReplay from "./FlightRecorderReplay";
+import JuniorAstronautCertificate from "./JuniorAstronautCertificate";
+import { calculateOutcomeRank } from "../utils/flightRecorder";
+import { DIFFICULTY_PRESETS } from "../data/difficultyTiers";
 
 interface MissionDebriefModalProps {
   isOpen: boolean;
@@ -27,88 +31,6 @@ interface MissionDebriefModalProps {
   onPlayAgain: () => void;
   onSwitchPlanet: () => void;
   onShowNasaData?: () => void;
-}
-
-interface OutcomeRank {
-  rankTitle: string;
-  badge: string;
-  evaluation: string;
-  tier: "master" | "senior" | "survivor" | "junior" | "trainee";
-  color: string;
-  borderColor: string;
-  bgGradient: string;
-}
-
-function calculateOutcomeRank(gameState: GameState): OutcomeRank {
-  const { cumulativeScore, finalOutcome, crew, subsystems } = gameState;
-  const isFailed =
-    finalOutcome === "critical_alert" ||
-    crew.oxygenBufferPercent < 10 ||
-    crew.radiationExposureMSv > 50 ||
-    Object.values(subsystems).some((s) => s.health < 15);
-
-  if (isFailed) {
-    return {
-      rankTitle: "Systems Trainee",
-      badge: "SIMULATION ABORT",
-      evaluation:
-        "Critical survival threshold breached. Subsystems suffered cascading brownouts or life support depletion. NASA post-flight analysis recommends tighter power rationing during environmental spikes.",
-      tier: "trainee",
-      color: "text-red-400",
-      borderColor: "border-red-500/50",
-      bgGradient: "from-red-950/60 via-slate-900 to-black",
-    };
-  }
-
-  if (cumulativeScore >= 85) {
-    return {
-      rankTitle: "Artemis Master Architect",
-      badge: "CHIEF FLIGHT ENGINEER",
-      evaluation:
-        "Flawless multi-variable execution. Maintained positive energy reserves while shielding the crew and keeping closed-loop ECLSS buffers above 80%. An exemplary model for NASA's Moon-to-Mars operational doctrine.",
-      tier: "master",
-      color: "text-amber-300",
-      borderColor: "border-amber-400/60",
-      bgGradient: "from-amber-950/60 via-slate-900 to-black",
-    };
-  }
-
-  if (cumulativeScore >= 70) {
-    return {
-      rankTitle: "Artemis Master Engineer",
-      badge: "EXPEDITION COMMANDER",
-      evaluation:
-        "Superb command under pressure. Successfully navigated extreme solar particle events and thermal anomalies while maintaining safe crew biological radiation thresholds.",
-      tier: "senior",
-      color: "text-cyan-300",
-      borderColor: "border-cyan-400/60",
-      bgGradient: "from-cyan-950/60 via-slate-900 to-black",
-    };
-  }
-
-  if (cumulativeScore >= 52) {
-    return {
-      rankTitle: "Outpost Survivor",
-      badge: "MISSION SURVIVOR",
-      evaluation:
-        "Mission completed and crew returned safely. However, several critical systems endured excessive wear or narrow O₂ margins. Optimization of power-divert protocols is recommended.",
-      tier: "survivor",
-      color: "text-emerald-300",
-      borderColor: "border-emerald-500/50",
-      bgGradient: "from-emerald-950/60 via-slate-900 to-black",
-    };
-  }
-
-  return {
-    rankTitle: "Junior Operations Officer",
-    badge: "MISSION COMPLETED (MARGINAL)",
-    evaluation:
-      "Outpost survived the 10-turn window, but significant reserves were depleted. Heavy reliance on emergency buffers highlighted vulnerabilities in long-term infrastructure stability.",
-    tier: "junior",
-    color: "text-yellow-400",
-    borderColor: "border-yellow-500/50",
-    bgGradient: "from-yellow-950/60 via-slate-900 to-black",
-  };
 }
 
 function generatePersonalizedInsights(
@@ -247,224 +169,6 @@ function generatePersonalizedInsights(
 }
 
 // ---------------------------------------------------------------------------
-// Pure SVG Turn-by-Turn Subsystem Interaction Chart
-// ---------------------------------------------------------------------------
-
-function SubsystemTelemetryChart({ history }: { history: TurnResult[] }) {
-  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-
-  if (!history || history.length === 0) {
-    return (
-      <div className="h-44 flex items-center justify-center text-slate-500 font-mono text-xs">
-        No telemetry logged yet.
-      </div>
-    );
-  }
-
-  const chartWidth = 620;
-  const chartHeight = 200;
-  const padding = { top: 20, right: 30, bottom: 30, left: 40 };
-  const graphWidth = chartWidth - padding.left - padding.right;
-  const graphHeight = chartHeight - padding.top - padding.bottom;
-
-  const totalPoints = Math.max(10, history.length);
-  const getX = (index: number) =>
-    padding.left + (index / (totalPoints - 1)) * graphWidth;
-  const getY = (value: number) =>
-    padding.top + graphHeight - (Math.max(0, Math.min(100, value)) / 100) * graphHeight;
-
-  // Generate SVG path strings
-  const lsPoints = history.map((h, i) => `${getX(i)},${getY(h.subsystems.lifeSupport.health)}`).join(" ");
-  const rsPoints = history.map((h, i) => `${getX(i)},${getY(h.subsystems.radiationShielding.health)}`).join(" ");
-  const pgPoints = history.map((h, i) => `${getX(i)},${getY(h.subsystems.powerGrid.health)}`).join(" ");
-
-  const hoveredTurn = hoveredIndex !== null ? history[hoveredIndex] : null;
-
-  return (
-    <div className="w-full flex flex-col gap-2">
-      {/* Legend & Hover Readout */}
-      <div className="flex flex-wrap items-center justify-between text-xs font-mono gap-2 px-1">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-            <span className="text-slate-300">Life Support</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-cyan-400" />
-            <span className="text-slate-300">Shielding</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-blue-400" />
-            <span className="text-slate-300">Power Grid</span>
-          </div>
-        </div>
-
-        {hoveredTurn ? (
-          <div className="text-[11px] text-cyan-300 bg-slate-900 px-2 py-0.5 rounded border border-cyan-500/30">
-            Sol {hoveredTurn.turn}: LS {hoveredTurn.subsystems.lifeSupport.health.toFixed(0)}% · RS{" "}
-            {hoveredTurn.subsystems.radiationShielding.health.toFixed(0)}% · Grid{" "}
-            {hoveredTurn.subsystems.powerGrid.health.toFixed(0)}%
-          </div>
-        ) : (
-          <span className="text-[11px] text-slate-500 hidden sm:inline">
-            Hover points for exact Sol metrics
-          </span>
-        )}
-      </div>
-
-      {/* SVG Canvas */}
-      <div className="w-full overflow-x-auto bg-slate-950/80 rounded-2xl border border-slate-800 p-2">
-        <svg
-          viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-          className="w-full h-auto min-w-[500px]"
-        >
-          {/* Grid lines */}
-          {[0, 25, 50, 75, 100].map((val) => {
-            const y = getY(val);
-            return (
-              <g key={val}>
-                <line
-                  x1={padding.left}
-                  y1={y}
-                  x2={chartWidth - padding.right}
-                  y2={y}
-                  stroke="rgba(255,255,255,0.08)"
-                  strokeDasharray="3 3"
-                />
-                <text
-                  x={padding.left - 8}
-                  y={y + 3}
-                  textAnchor="end"
-                  fill="rgba(148, 163, 184, 0.6)"
-                  fontSize="9"
-                  fontFamily="monospace"
-                >
-                  {val}%
-                </text>
-              </g>
-            );
-          })}
-
-          {/* X-axis labels (Sol 1 to 10) */}
-          {Array.from({ length: 10 }).map((_, i) => {
-            const x = getX(i);
-            return (
-              <text
-                key={i}
-                x={x}
-                y={chartHeight - 10}
-                textAnchor="middle"
-                fill={
-                  hoveredIndex === i
-                    ? "#06B6D4"
-                    : i < history.length
-                    ? "rgba(148, 163, 184, 0.8)"
-                    : "rgba(148, 163, 184, 0.3)"
-                }
-                fontSize="10"
-                fontFamily="monospace"
-                fontWeight={hoveredIndex === i ? "bold" : "normal"}
-              >
-                S{i + 1}
-              </text>
-            );
-          })}
-
-          {/* Polyline: Power Grid */}
-          <polyline
-            fill="none"
-            stroke="#3B82F6"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            points={pgPoints}
-          />
-
-          {/* Polyline: Shielding */}
-          <polyline
-            fill="none"
-            stroke="#06B6D4"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            points={rsPoints}
-          />
-
-          {/* Polyline: Life Support */}
-          <polyline
-            fill="none"
-            stroke="#10B981"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            points={lsPoints}
-          />
-
-          {/* Interactive Data Points */}
-          {history.map((h, i) => {
-            const x = getX(i);
-            const isHovered = hoveredIndex === i;
-
-            return (
-              <g
-                key={i}
-                onMouseEnter={() => setHoveredIndex(i)}
-                onMouseLeave={() => setHoveredIndex(null)}
-                className="cursor-pointer"
-              >
-                {/* Vertical guide line on hover */}
-                {isHovered && (
-                  <line
-                    x1={x}
-                    y1={padding.top}
-                    x2={x}
-                    y2={padding.top + graphHeight}
-                    stroke="#06B6D4"
-                    strokeWidth="1"
-                    strokeDasharray="2 2"
-                    opacity="0.7"
-                  />
-                )}
-
-                {/* Life Support Circle */}
-                <circle
-                  cx={x}
-                  cy={getY(h.subsystems.lifeSupport.health)}
-                  r={isHovered ? 5 : 3}
-                  fill="#10B981"
-                  stroke="#064E3B"
-                  strokeWidth="1.5"
-                />
-
-                {/* Shielding Circle */}
-                <circle
-                  cx={x}
-                  cy={getY(h.subsystems.radiationShielding.health)}
-                  r={isHovered ? 5 : 3}
-                  fill="#06B6D4"
-                  stroke="#164E63"
-                  strokeWidth="1.5"
-                />
-
-                {/* Power Grid Circle */}
-                <circle
-                  cx={x}
-                  cy={getY(h.subsystems.powerGrid.health)}
-                  r={isHovered ? 5 : 3}
-                  fill="#3B82F6"
-                  stroke="#1E3A8A"
-                  strokeWidth="1.5"
-                />
-              </g>
-            );
-          })}
-        </svg>
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Main Component
 // ---------------------------------------------------------------------------
 
@@ -477,6 +181,8 @@ export default function MissionDebriefModal({
   onShowNasaData,
 }: MissionDebriefModalProps) {
   if (!isOpen || !gameState) return null;
+
+  const [showCertificate, setShowCertificate] = useState(false);
 
   const outcomeRank = useMemo(
     () => calculateOutcomeRank(gameState),
@@ -529,6 +235,17 @@ export default function MissionDebriefModal({
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-black/50 border border-white/10 text-[11px] font-mono font-bold tracking-wider uppercase mb-2">
                   <span className={outcomeRank.color}>{outcomeRank.badge}</span>
                   <span className="text-slate-500">·</span>
+                  <span
+                    className="font-bold px-2 py-0.5 rounded-full"
+                    style={{
+                      backgroundColor: `${DIFFICULTY_PRESETS[gameState.difficulty || "commander"].accentColor}25`,
+                      color: DIFFICULTY_PRESETS[gameState.difficulty || "commander"].accentColor,
+                    }}
+                  >
+                    {DIFFICULTY_PRESETS[gameState.difficulty || "commander"].emoji}{" "}
+                    {DIFFICULTY_PRESETS[gameState.difficulty || "commander"].commanderRank}
+                  </span>
+                  <span className="text-slate-500">·</span>
                   <span className="text-slate-300">
                     Sol {gameState.currentTurn} of 10
                   </span>
@@ -542,6 +259,18 @@ export default function MissionDebriefModal({
                 <p className="text-xs sm:text-sm text-slate-300 mt-2 leading-relaxed max-w-xl">
                   {outcomeRank.evaluation}
                 </p>
+
+                {/* Junior Astronaut Certificate Action Pill */}
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowCertificate(true)}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:from-amber-400 hover:to-amber-300 text-black font-mono font-black text-xs shadow-lg shadow-amber-950/60 transition-all cursor-pointer transform hover:scale-[1.02]"
+                  >
+                    <Award className="w-4 h-4 text-black" />
+                    <span>Astronaut Mission Certificate (PDF / PNG)</span>
+                  </button>
+                </div>
               </div>
 
               {/* Composite Score Ring */}
@@ -558,22 +287,69 @@ export default function MissionDebriefModal({
               </div>
             </div>
 
-            {/* 2. TURN-BY-TURN SUB-SYSTEM INTERACTION CHART */}
-            <div className="rounded-3xl bg-[#080D1A] border border-cyan-900/40 p-5 shadow-lg flex flex-col gap-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <TrendingUp className="w-4 h-4 text-cyan-400" />
-                  <h2 className="text-sm font-bold font-mono uppercase tracking-wider text-slate-200">
-                    Subsystem Telemetry Interaction Over Time
-                  </h2>
+            {/* Hardcore Simulation Realism Breakdown (Flight Director) */}
+            {gameState.difficulty === "flight_director" && (
+              <div className="rounded-2xl p-4 bg-amber-950/40 border border-amber-500/40 flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-mono font-bold text-amber-300 uppercase flex items-center gap-2">
+                    <ShieldAlert className="w-4 h-4 text-amber-400" />
+                    Hardcore Simulation Telemetry Ledger
+                  </span>
+                  <span className="text-[10px] font-mono text-slate-400">
+                    NASA-STD-3001 & MMOD Calibration
+                  </span>
                 </div>
-                <span className="text-[11px] font-mono text-slate-400">
-                  Power · Life Support · Shielding
-                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="bg-black/40 p-3 rounded-xl border border-white/5">
+                    <p className="text-[10px] font-mono text-slate-400 uppercase">MMOD Micro-Punctures</p>
+                    <p className="text-base font-black text-amber-400 font-mono mt-0.5">
+                      {gameState.micrometeoroidHistory.length} Strikes Repelled
+                    </p>
+                  </div>
+                  <div className="bg-black/40 p-3 rounded-xl border border-white/5">
+                    <p className="text-[10px] font-mono text-slate-400 uppercase">Thermal Fatigue Wear</p>
+                    <p className="text-base font-black text-cyan-400 font-mono mt-0.5">
+                      +{((gameState.cumulativeThermalFatigueWear || 0) * 100).toFixed(1)}% Cyclic Strain
+                    </p>
+                  </div>
+                  <div className="bg-black/40 p-3 rounded-xl border border-white/5">
+                    <p className="text-[10px] font-mono text-slate-400 uppercase">Career Radiation Cap</p>
+                    <p className="text-base font-black font-mono mt-0.5">
+                      <span
+                        className={
+                          gameState.crew.careerRadiationExposureMSv > 500
+                            ? "text-red-400"
+                            : "text-emerald-400"
+                        }
+                      >
+                        {gameState.crew.careerRadiationExposureMSv.toFixed(1)}
+                      </span>
+                      <span className="text-xs text-slate-400 font-normal"> / 500 mSv</span>
+                    </p>
+                  </div>
+                </div>
               </div>
+            )}
 
-              <SubsystemTelemetryChart history={gameState.history} />
-            </div>
+            {/* Cadet Mission Achievement (Cadet Mode) */}
+            {gameState.difficulty === "cadet" && (
+              <div className="rounded-2xl p-4 bg-emerald-950/40 border border-emerald-500/40 flex items-center gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xl shrink-0">
+                  🌟
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-sm font-bold text-emerald-300">
+                    Cadet Flight Assistant Summary
+                  </h3>
+                  <p className="text-xs text-slate-300 mt-0.5">
+                    Congratulations on completing your mission with automated coaching! You learned how NASA flight directors balance life support air, water, and power grids on distant worlds.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* 2. SOL-BY-SOL MISSION REPLAY & FLIGHT RECORDER */}
+            <FlightRecorderReplay gameState={gameState} environment={environment} />
 
             {/* 3. TWO SPECIFIC PERSONALIZED ENGINEERING INSIGHTS */}
             <div className="flex flex-col gap-3">
@@ -594,7 +370,7 @@ export default function MissionDebriefModal({
                       </span>
                     </div>
                     <p className="text-xs sm:text-sm text-slate-200 leading-relaxed font-medium">
-                      "{insight1}"
+                      {insight1}
                     </p>
                   </div>
                   <div className="text-[10px] font-mono text-blue-400/80">
@@ -611,7 +387,7 @@ export default function MissionDebriefModal({
                       </span>
                     </div>
                     <p className="text-xs sm:text-sm text-slate-200 leading-relaxed font-medium">
-                      "{insight2}"
+                      {insight2}
                     </p>
                   </div>
                   <div className="text-[10px] font-mono text-cyan-400/80">
@@ -664,6 +440,18 @@ export default function MissionDebriefModal({
             )}
 
             <div className="flex items-center gap-3 w-full sm:w-auto">
+              {/* Junior Astronaut Certificate Button */}
+              <motion.button
+                type="button"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setShowCertificate(true)}
+                className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-black text-xs sm:text-sm shadow-lg shadow-amber-950/60"
+              >
+                <Award className="w-4 h-4 text-black" />
+                <span>Astronaut Certificate</span>
+              </motion.button>
+
               {/* Switch Planet Button */}
               <motion.button
                 type="button"
@@ -691,6 +479,18 @@ export default function MissionDebriefModal({
           </div>
         </motion.div>
       </div>
+
+      {/* Junior Astronaut Mission Certificate Modal */}
+      {showCertificate && (
+        <JuniorAstronautCertificate
+          isOpen={showCertificate}
+          onClose={() => setShowCertificate(false)}
+          gameState={gameState}
+          environment={environment}
+          rankTitle={outcomeRank.rankTitle}
+          rankTier={outcomeRank.tier}
+        />
+      )}
     </AnimatePresence>
   );
 }

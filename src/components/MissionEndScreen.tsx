@@ -1,7 +1,7 @@
 // ============================================================
 // MissionEndScreen — results, outcome, retry, and scoring
 // ============================================================
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import {
   Trophy,
@@ -11,10 +11,14 @@ import {
   Satellite,
   Sparkles,
   Globe,
+  Award,
 } from "lucide-react";
 import type { GameState, TurnResult } from "../engine/simulationEngine";
 import type { MissionEnvironment } from "../data/nasaConstants";
 import MissionDebriefModal from "./MissionDebriefModal";
+import JuniorAstronautCertificate from "./JuniorAstronautCertificate";
+import { calculateOutcomeRank } from "../utils/flightRecorder";
+import { DIFFICULTY_PRESETS } from "../data/difficultyTiers";
 
 interface MissionEndScreenProps {
   gameState: GameState;
@@ -98,7 +102,10 @@ export default function MissionEndScreen({
   kidMode,
 }: MissionEndScreenProps) {
   const [showDebrief, setShowDebrief] = useState(false);
+  const [showCertificate, setShowCertificate] = useState(false);
   const { finalOutcome, cumulativeScore, history } = gameState;
+
+  const outcomeRank = useMemo(() => calculateOutcomeRank(gameState), [gameState]);
 
   const isSuccess = finalOutcome === "mission_success";
   const isPartial = finalOutcome === "partial_success";
@@ -162,6 +169,22 @@ export default function MissionEndScreen({
           <div className="flex items-start gap-4">
             <div className="text-5xl">{outcomeConfig.emoji}</div>
             <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <span
+                  className="text-[11px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
+                  style={{
+                    backgroundColor: `${DIFFICULTY_PRESETS[gameState.difficulty || "commander"].accentColor}25`,
+                    color: DIFFICULTY_PRESETS[gameState.difficulty || "commander"].accentColor,
+                    border: `1px solid ${DIFFICULTY_PRESETS[gameState.difficulty || "commander"].accentColor}50`,
+                  }}
+                >
+                  {DIFFICULTY_PRESETS[gameState.difficulty || "commander"].emoji}{" "}
+                  {DIFFICULTY_PRESETS[gameState.difficulty || "commander"].commanderRank}
+                </span>
+                <span className="text-xs text-slate-400 font-mono hidden sm:inline">
+                  {outcomeRank.rankTitle}
+                </span>
+              </div>
               <h2 className={`text-2xl font-black ${outcomeConfig.color}`}>
                 {outcomeConfig.title}
               </h2>
@@ -233,12 +256,21 @@ export default function MissionEndScreen({
 
         {/* Actions */}
         <div className="flex flex-col gap-3">
+          {/* Certificate Primary Action Button */}
+          <button
+            onClick={() => setShowCertificate(true)}
+            className="w-full flex items-center justify-center gap-2.5 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:from-amber-400 hover:to-amber-300 text-black font-black py-4 rounded-xl transition-all shadow-xl shadow-amber-950/60 text-sm cursor-pointer transform hover:scale-[1.01]"
+          >
+            <Award size={20} className="text-black" />
+            <span>Download / Print Junior Astronaut Mission Certificate (PDF & Image)</span>
+          </button>
+
           <button
             onClick={() => setShowDebrief(true)}
-            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white font-black py-3.5 rounded-xl transition-all shadow-lg shadow-cyan-900/40 text-sm"
+            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white font-black py-3.5 rounded-xl transition-all shadow-lg shadow-cyan-900/40 text-sm cursor-pointer"
           >
             <Sparkles size={18} />
-            View NASA Engineering Debrief & Telemetry Chart
+            <span>View Flight Recorder Replay & Engineering Debrief</span>
           </button>
 
           <div className="flex flex-col sm:flex-row gap-3">
@@ -281,6 +313,18 @@ export default function MissionEndScreen({
               onNewMission();
             }}
             onShowNasaData={onShowNasaData}
+          />
+        )}
+
+        {/* Junior Astronaut Mission Certificate Modal */}
+        {showCertificate && (
+          <JuniorAstronautCertificate
+            isOpen={showCertificate}
+            onClose={() => setShowCertificate(false)}
+            gameState={gameState}
+            environment={environment}
+            rankTitle={outcomeRank.rankTitle}
+            rankTier={outcomeRank.tier}
           />
         )}
       </motion.div>

@@ -10,17 +10,17 @@ import MissionEndScreen from "./components/MissionEndScreen";
 import NasaDataModal from "./components/NasaDataModal";
 
 import type { MissionEnvironment } from "./data/nasaConstants";
-import type { GameState } from "./engine/simulationEngine";
+import type { GameState, DifficultyTier } from "./engine/simulationEngine";
 
 type AppPhase = "menu" | "game" | "end";
 
 export default function App() {
   const [phase, setPhase] = useState<AppPhase>("menu");
   const [selectedEnvironment, setSelectedEnvironment] = useState<MissionEnvironment | null>(null);
+  const [selectedDifficulty, setSelectedDifficulty] = useState<DifficultyTier>("commander");
   const [finalGameState, setFinalGameState] = useState<GameState | null>(null);
   const [isNasaModalOpen, setIsNasaModalOpen] = useState(false);
   const [nasaModalEnv, setNasaModalEnv] = useState<MissionEnvironment | null>(null);
-  const [kidMode] = useState(true);
 
   function handleOpenNasaData(env?: MissionEnvironment | null) {
     if (env) {
@@ -29,8 +29,9 @@ export default function App() {
     setIsNasaModalOpen(true);
   }
 
-  function handleStartMission(env: MissionEnvironment) {
+  function handleStartMission(env: MissionEnvironment, difficulty: DifficultyTier = "commander") {
     setSelectedEnvironment(env);
+    setSelectedDifficulty(difficulty);
     setFinalGameState(null);
     setPhase("game");
   }
@@ -88,6 +89,7 @@ export default function App() {
           >
             <GameScreen
               environment={selectedEnvironment}
+              difficulty={selectedDifficulty}
               onMissionEnd={handleMissionEnd}
               onShowNasaData={() => handleOpenNasaData(selectedEnvironment)}
               onSwitchPlanet={handleNewMission}
@@ -110,7 +112,7 @@ export default function App() {
               onRetry={handleRetry}
               onNewMission={handleNewMission}
               onShowNasaData={() => handleOpenNasaData(selectedEnvironment)}
-              kidMode={kidMode}
+              kidMode={selectedDifficulty === "cadet"}
             />
           </motion.div>
         )}
