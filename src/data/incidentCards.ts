@@ -721,16 +721,691 @@ export const MARS_INCIDENT_CARDS: IncidentCard[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// 5 EUROPA UNDER-ICE INCIDENT CARDS (Clipper-Inspired)
+// ---------------------------------------------------------------------------
+
+export const EUROPA_INCIDENT_CARDS: IncidentCard[] = [
+  {
+    id: "europa_jovian_radiation_storm",
+    environmentId: "europa_under_ice",
+    triggerSol: 2,
+    severity: "critical",
+    title: "Jupiter Magnetospheric Radiation Storm",
+    headline: "Relativistic electrons from Jupiter's radiation belt barrage sub-surface ice crust",
+    description:
+      "Jupiter's tilted magnetosphere has rotated its dense plasma sheet directly across Europa. While kilometers of solid ice shell absorb primary cosmic rays, secondary Bremsstrahlung gamma rays are penetrating into the station's upper habitat modules. Magnetic deflection coils must be boosted or astronauts must retreat to deep ballast shelters.",
+    nasaScience: {
+      instrument: "Europa Clipper PIMS & Radiation Monitoring Unit",
+      mission: "NASA Europa Clipper (JPL)",
+      badgeTitle: "Jovian Magnetosphere Dynamics",
+      explanation:
+        "Jupiter's magnetic field is 20,000× stronger than Earth's, trapping charged particles in lethal radiation belts. Europa Clipper is equipped with a heavy 150 kg titanium/aluminum vault to shield its sensitive electronics.",
+      dataSourceUrl: "https://europa.nasa.gov/mission/spacecraft/",
+    },
+    choices: [
+      {
+        id: "overclock_magnetic_coils",
+        label: "Overclock Deflection Coils (+15 MW Radiation Shielding)",
+        shortTag: "Deflect Radiation",
+        description:
+          "Divert 15 MW into the superconducting electromagnetic deflector field, repelling charged particles and preventing radiation penetration.",
+        tradeOffSummary: "Requires 15 MW power diversion; completely neutralizes Jovian radiation spike.",
+        effects: {
+          powerDeltaMW: -15,
+          radiationDeltaMSv: -2.8,
+          shieldingHealthDelta: -5,
+          moraleDelta: 5,
+        },
+        engineeringTakeaway:
+          "Active magnetic deflection protected your astronauts from lethal Jovian Bremsstrahlung radiation at a significant electrical cost.",
+      },
+      {
+        id: "retreat_to_ocean_ballast",
+        label: "Retreat Crew to Deep-Ocean Water Ballast Bunker",
+        shortTag: "Bunker Down",
+        description:
+          "Confine crew to the cramped lower ocean-ballast pressure chamber, using 10 meters of surrounding seawater as passive shielding without drawing electrical power.",
+        tradeOffSummary: "Zero electrical power drain, but crew is cramped for 24 hours (−12 Morale).",
+        effects: {
+          moraleDelta: -12,
+          radiationDeltaMSv: 0.5,
+          lifeSupportHealthDelta: -4,
+        },
+        engineeringTakeaway:
+          "Passive seawater shielding saved valuable megawatts, but confinement in cold ballast tanks stressed crew morale.",
+      },
+      {
+        id: "deploy_composite_shutters",
+        label: "Deploy Composite Borated Polyethylene Shutters",
+        shortTag: "Mechanical Shutters",
+        description:
+          "Motorize heavy radiation shielding shutters across habitat viewing cupolas and service trunks.",
+        tradeOffSummary: "Balanced approach: draws 8 MW, reduces radiation by 70%.",
+        effects: {
+          powerDeltaMW: -8,
+          radiationDeltaMSv: -1.2,
+          shieldingHealthDelta: 4,
+          moraleDelta: 0,
+        },
+        engineeringTakeaway:
+          "Mechanical shields provided steady secondary radiation mitigation without overstressing the power grid.",
+      },
+    ],
+  },
+  {
+    id: "europa_hydrothermal_vent_surge_card",
+    environmentId: "europa_under_ice",
+    triggerSol: 4,
+    severity: "opportunity",
+    title: "Hydrothermal Cryo-Geothermal Vent Eruption",
+    headline: "Seafloor convective thermal plume expands; Stirling generators can tap surge",
+    description:
+      "Acoustic hydrophones detect a 65°C mineral-rich hydrothermal brine surge along a seafloor tectonic fissure. Station Stirling heat exchangers can tap this natural thermal convection to harvest immense electrical power, but superheated mineral deposition risks clogging primary radiator tubes.",
+    nasaScience: {
+      instrument: "Europa Clipper MASPEX & REASON Sounder",
+      mission: "NASA Europa Clipper / Astrobiology",
+      badgeTitle: "Seafloor Hydrothermal Chemistry",
+      explanation:
+        "Tidal dissipation in Europa's rocky core sustains hydrothermal vents similar to Earth's deep ocean 'black smokers', providing continuous chemical and thermal energy independent of sunlight.",
+      dataSourceUrl: "https://solarsystem.nasa.gov/moons/jupiter-moons/europa/in-depth/",
+    },
+    choices: [
+      {
+        id: "engage_full_geothermal",
+        label: "Engage Full Geothermal Heat Recovery (+18 MW Power)",
+        shortTag: "Full Geothermal",
+        description:
+          "Open all cryo-turbines to superheated brine flow, capturing a massive +18 MW electrical surge while accepting minor mineral scaling.",
+        tradeOffSummary: "Enormous power surge (+18 MW), but increases power grid wear (+0.08).",
+        effects: {
+          powerDeltaMW: 18,
+          powerGridHealthDelta: -6,
+          moraleDelta: 8,
+        },
+        engineeringTakeaway:
+          "You capitalized on Europa's internal heat engine to generate clean baseload energy, balancing hardware wear against abundant power.",
+      },
+      {
+        id: "divert_to_eclss_electrolysis",
+        label: "Divert Plume to ECLSS Water Electrolysis (+20% O₂ Buffer)",
+        shortTag: "Electrolyze Brine",
+        description:
+          "Channel heated steam through solid-oxide electrolysis units, splitting hydrothermal water into pure breathable O₂ and hydrogen fuel.",
+        tradeOffSummary: "Boosts O₂ buffer (+20%) and adds moderate power (+6 MW).",
+        effects: {
+          powerDeltaMW: 6,
+          oxygenBufferDelta: 20,
+          lifeSupportHealthDelta: 8,
+          moraleDelta: 6,
+        },
+        engineeringTakeaway:
+          "Converting geothermal heat directly into life support reserves permanently bolstered outpost life expectancy.",
+      },
+      {
+        id: "maintain_safe_flow",
+        label: "Throttle Wellhead to Conservative Baseline",
+        shortTag: "Safe Throttle",
+        description:
+          "Maintain calibrated intake velocity to prevent mineral scaling and avoid any turbine stress.",
+        tradeOffSummary: "Safe baseline: +5 MW bonus, zero hardware wear.",
+        effects: {
+          powerDeltaMW: 5,
+          moraleDelta: 2,
+        },
+        engineeringTakeaway:
+          "Conservative engineering preserved turbine longevity at the expense of a potential power windfall.",
+      },
+    ],
+  },
+  {
+    id: "europa_ice_crust_tension_fracture",
+    environmentId: "europa_under_ice",
+    triggerSol: 6,
+    severity: "warning",
+    title: "Tidal Ice Shell Crevasse Fracture",
+    headline: "Laplace orbital resonance triggers seismic shear along station anchor pylons",
+    description:
+      "Europa's 30-meter diurnal tidal bulge has propagated a high-strain tension fissure through the ice ceiling directly above Habitat Module 1. Without thermal melting or mechanical stabilization, expanding ice will crush the titanium habitat collar.",
+    nasaScience: {
+      instrument: "Europa Clipper REASON Radar & MISE Spectrometer",
+      mission: "NASA Europa Clipper (Univ. of Texas / JPL)",
+      badgeTitle: "Ice Shell Tectonics & Lineae",
+      explanation:
+        "Europa's surface is scored with thousands of intersecting cycloidal fractures (lineae) driven by diurnal gravitational stress from Jupiter. REASON radar soundings map how these fractures penetrate into the subsurface ocean.",
+      dataSourceUrl: "https://www.jpl.nasa.gov/missions/europa-clipper/science-instruments/reason",
+    },
+    choices: [
+      {
+        id: "pulse_thermal_trusses",
+        label: "Pulse Thermal Trusses to Flash-Melt & Re-Freeze Sealant Ice",
+        shortTag: "Thermal Weld",
+        description:
+          "Pump 12 MW into external heating coils, melting a slurry barrier that flash-freezes under vacuum to fuse the crevasse closed.",
+        tradeOffSummary: "Draws 12 MW power, but permanently secures the habitat structure.",
+        effects: {
+          powerDeltaMW: -12,
+          lifeSupportHealthDelta: 12,
+          shieldingHealthDelta: 8,
+          moraleDelta: 5,
+        },
+        engineeringTakeaway:
+          "You used cryogenic phase-change physics to turn Europa's freezing ice into a self-healing structural shield.",
+      },
+      {
+        id: "deploy_titanium_anchor_struts",
+        label: "Deploy Hydraulic Titanium Tension Struts",
+        shortTag: "Structural Struts",
+        description:
+          "Extend automated mechanical struts to absorb tectonic shear and anchor the module into solid ice bedrock.",
+        tradeOffSummary: "Consumes 7 MW grid power, halts structural deformation.",
+        effects: {
+          powerDeltaMW: -7,
+          powerGridHealthDelta: -4,
+          lifeSupportHealthDelta: 4,
+        },
+        engineeringTakeaway:
+          "Mechanical reinforcement arrested ice displacement with minimal electrical disruption.",
+      },
+      {
+        id: "evacuate_module_1",
+        label: "Evacuate Module 1 & Isolate Bulkhead Doors",
+        shortTag: "Evacuate Module",
+        description:
+          "Depressurize the affected module and crowd astronauts into the central hub.",
+        tradeOffSummary: "Zero power spent, but reduces habitat living volume and crew morale (−14 Morale).",
+        effects: {
+          moraleDelta: -14,
+          lifeSupportHealthDelta: -8,
+        },
+        engineeringTakeaway:
+          "Zero-cost operational isolation preserved electrical power but severely impacted astronaut psychological comfort.",
+      },
+    ],
+  },
+  {
+    id: "europa_cryo_brine_salinity_short",
+    environmentId: "europa_under_ice",
+    triggerSol: 8,
+    severity: "warning",
+    title: "Magnesium Sulfate Ocean Brine Incursion",
+    headline: "High-conductivity saline ocean water leaks into secondary thermal exchanger",
+    description:
+      "Subsurface ocean water has an electrical conductivity of ~2.5 S/m due to dissolved magnesium sulfate (MgSO₄) and sodium salts. A microscopic weep has introduced conductive brine into the primary electrical bus conduit.",
+    nasaScience: {
+      instrument: "Europa Clipper PIMS & SUDA Surface Dust Analyzer",
+      mission: "NASA Europa Clipper (LASP / JPL)",
+      badgeTitle: "Ocean Salinity & Composition",
+      explanation:
+        "Galileo and Clipper measurements of Europa's induced magnetic dipole moment prove the ocean is salty and electrically conductive, comparable to Earth's oceans.",
+      dataSourceUrl: "https://europa.nasa.gov/mission/science/",
+    },
+    choices: [
+      {
+        id: "electrolytic_desalination",
+        label: "Electrolytic Desalination & Vacuum Bakeout (-8 MW Power)",
+        shortTag: "Electrolytic Desal",
+        description:
+          "Run reverse osmosis and vacuum bakeout to boil away saline brine and restore electrical insulation.",
+        tradeOffSummary: "Draws 8 MW power, restores power grid health (+12).",
+        effects: {
+          powerDeltaMW: -8,
+          powerGridHealthDelta: 12,
+          shieldingHealthDelta: 4,
+        },
+        engineeringTakeaway:
+          "Electrolytic purification prevented short-circuits and stabilized the high-voltage distribution network.",
+      },
+      {
+        id: "isolate_to_backup_rtg",
+        label: "Isolate Circuit & Reroute to Backup RTG Shunt",
+        shortTag: "Reroute Bus",
+        description:
+          "Permanently quarantine the flooded junction box and route vital circuits through the secondary RTG bus.",
+        tradeOffSummary: "Draws 5 MW, prevents short-circuit risks with minimal downtime.",
+        effects: {
+          powerDeltaMW: -5,
+          powerGridHealthDelta: 4,
+          moraleDelta: 0,
+        },
+        engineeringTakeaway:
+          "Pragmatic bus reconfiguration isolated electrical hazards without requiring immediate physical repairs.",
+      },
+      {
+        id: "harvest_salts_hydroponics",
+        label: "Harvest Dissolved Salts for Hydroponic Mineral Nutrients",
+        shortTag: "Harvest Salts",
+        description:
+          "Precipitate mineral salts into greenhouse water tanks as vital magnesium and sulfur crop nutrients.",
+        tradeOffSummary: "Adds +2 days food reserve, but causes minor electrical wear (−5 Grid Health).",
+        effects: {
+          foodDaysDelta: 2,
+          powerGridHealthDelta: -5,
+          moraleDelta: 4,
+        },
+        engineeringTakeaway:
+          "Creative chemical recycling turned hazardous seawater leakage into life-giving agricultural fertilizer.",
+      },
+    ],
+  },
+  {
+    id: "europa_deep_ocean_biosignature_echo",
+    environmentId: "europa_under_ice",
+    triggerSol: 10,
+    severity: "opportunity",
+    title: "Hydrothermal Biosignature Discovery",
+    headline: "MASPEX spectrometer detects amino-acid fragments in cryo-vent gas",
+    description:
+      "An automated autonomous underwater rover docked at the lower ice airlock returns samples from a deep hydrothermal vent. MASPEX chromatography reveals chirally biased amino acid chains, metabolic methane spikes, and lipid polymers!",
+    nasaScience: {
+      instrument: "Europa Clipper MASPEX Mass Spectrometer",
+      mission: "NASA Europa Clipper / Southwest Research Institute",
+      badgeTitle: "Ocean World Biosignatures",
+      explanation:
+        "MASPEX has high enough resolving power (m/Δm > 20,000) to distinguish structural isomers of complex amino acids and determine if organic compounds were formed abiotically or by alien biology.",
+      dataSourceUrl: "https://www.swri.org/press-release/swri-built-spectrometer-arrives-at-jpl-for-europa-clipper",
+    },
+    choices: [
+      {
+        id: "full_genomic_sequencing",
+        label: "Divert Station Supercomputer Bus to Full Genomic Sequencing",
+        shortTag: "DNA Sequencing",
+        description:
+          "Allocate 14 MW to high-throughput nanopore sequencing, confirming whether the genetic code mirrors Earth biology.",
+        tradeOffSummary: "Draws 14 MW power, sky-rockets crew morale (+25 Morale).",
+        effects: {
+          powerDeltaMW: -14,
+          moraleDelta: 25,
+          lifeSupportHealthDelta: 5,
+        },
+        engineeringTakeaway:
+          "Prioritizing pure exploration science rewarded the mission with humanity's greatest discovery: life beyond Earth.",
+      },
+      {
+        id: "deep_freeze_storage",
+        label: "Preserve Cryogenic Specimen Vials in Deep Cold Storage",
+        shortTag: "Deep Freeze",
+        description:
+          "Pack biological samples into ultra-pure liquid nitrogen Dewar flasks for safe preservation and return to Earth.",
+        tradeOffSummary: "Conserves power (0 MW), provides high scientific and morale yield (+15 Morale).",
+        effects: {
+          moraleDelta: 15,
+          foodDaysDelta: 1,
+        },
+        engineeringTakeaway:
+          "Careful sample containment ensured irreplaceable scientific specimens survived without draining critical station reserves.",
+      },
+      {
+        id: "transmit_dsn_archive",
+        label: "Broadcast High-Gain Deep Space Network Telemetry Burst",
+        shortTag: "Broadcast DSN",
+        description:
+          "Point the high-gain steerable dish through the surface ice bore-hole, beaming the data package straight to Earth.",
+        tradeOffSummary: "Consumes 8 MW power, boosts crew morale (+20 Morale).",
+        effects: {
+          powerDeltaMW: -8,
+          moraleDelta: 20,
+        },
+        engineeringTakeaway:
+          "Real-time interplanetary telemetry transmission ensured the scientific payload was secured across 600 million kilometers.",
+      },
+    ],
+  },
+];
+
+// ---------------------------------------------------------------------------
+// 5 TITAN HYDROCARBON BASE INCIDENT CARDS (Dragonfly-Inspired)
+// ---------------------------------------------------------------------------
+
+export const TITAN_INCIDENT_CARDS: IncidentCard[] = [
+  {
+    id: "titan_methane_monsoon_flash_flood",
+    environmentId: "titan_hydrocarbon",
+    triggerSol: 2,
+    severity: "warning",
+    title: "Methane Monsoon Flash Inundation",
+    headline: "Heavy liquid methane downpour floods cryogenic shoreline radiator manifolds",
+    description:
+      "Cassini and Huygens observations proved Titan experiences intense liquid methane storms. A violent cloudburst is currently dumping supercooled liquid methane (−179°C) across the outpost landing site, chilling electronics down to cryogenic extremes and flooding exterior drainage culverts.",
+    nasaScience: {
+      instrument: "Cassini ISS & VIMS (Visual and Infrared Mapping Spectrometer)",
+      mission: "NASA Cassini / ESA Huygens",
+      badgeTitle: "Methane Hydrological Cycle",
+      explanation:
+        "Titan is the only world other than Earth with an active hydrological cycle — except clouds, rain, rivers, and lakes are made of liquid methane (CH₄) and ethane (C₂H₆).",
+      dataSourceUrl: "https://science.nasa.gov/mission/cassini/science/titan/",
+    },
+    choices: [
+      {
+        id: "activate_heated_culverts",
+        label: "Activate Emergency Heated Drainage Culverts (-10 MW Power)",
+        shortTag: "Heated Drainage",
+        description:
+          "Energize thermal heating tapes along structural footings, redirecting flash runoff safely away from habitat seals.",
+        tradeOffSummary: "Requires 10 MW power, protects all structural seals and electronics.",
+        effects: {
+          powerDeltaMW: -10,
+          lifeSupportHealthDelta: 8,
+          shieldingHealthDelta: 8,
+          moraleDelta: 4,
+        },
+        engineeringTakeaway:
+          "Active thermal management prevented cryogenic cold-embrittlement of structural titanium and composite seals.",
+      },
+      {
+        id: "divert_to_cryo_turbines",
+        label: "Divert Runoff Directly into Cryo-Rankine Turbines (+14 MW Power)",
+        shortTag: "Harvest Flood",
+        description:
+          "Harness the rapid hydrostatic flow of freezing methane through shoreline Stirling heat exchangers for massive power generation.",
+        tradeOffSummary: "Generates +14 MW power, but causes minor turbine impeller wear (−6 Grid Health).",
+        effects: {
+          powerDeltaMW: 14,
+          powerGridHealthDelta: -6,
+          moraleDelta: 6,
+        },
+        engineeringTakeaway:
+          "Transforming a cryogenic natural disaster into an electrical bonanza demonstrated brilliant adaptive engineering.",
+      },
+      {
+        id: "seal_and_idle_exterior",
+        label: "Seal Base Exterior & Idle Outer Modules",
+        shortTag: "Idle Modules",
+        description:
+          "Retract all sensors and idle outer airlocks, waiting out the methane storm indoors.",
+        tradeOffSummary: "Zero power consumed, but halts scientific activity (−12 Morale).",
+        effects: {
+          moraleDelta: -12,
+          lifeSupportHealthDelta: -5,
+        },
+        engineeringTakeaway:
+          "Passive shelter preserved power reserves while highlighting the psychological toll of prolonged cryogenic isolation.",
+      },
+    ],
+  },
+  {
+    id: "titan_dragonfly_icing_in_supercooled_fog",
+    environmentId: "titan_hydrocarbon",
+    triggerSol: 4,
+    severity: "critical",
+    title: "Dragonfly Rotorcraft Supercooled Fog Icing",
+    headline: "Dense nitrogen-methane fog deposits cryogenic rime ice along rotor blades",
+    description:
+      "NASA Dragonfly's 8 counter-rotating carbon-fiber rotors are returning from a 15 km reconnaissance flight across Shangri-La. Supercooled methane fog has coated the rotor airfoils with thick rime ice, threatening blade stall and loss of the drone.",
+    nasaScience: {
+      instrument: "NASA Dragonfly Rotorcraft Airframe & DragonCam",
+      mission: "NASA Dragonfly (Johns Hopkins APL / NASA Langley)",
+      badgeTitle: "Heavy Atmosphere Aerodynamics",
+      explanation:
+        "Titan's dense air (4× Earth density) enables efficient rotorcraft flight, but cryogenic atmospheric humidity presents unique condensation and icing hazards modeled at NASA Langley.",
+      dataSourceUrl: "https://dragonfly.jhuapl.edu/Spacecraft/",
+    },
+    choices: [
+      {
+        id: "power_electrothermal_boots",
+        label: "Power Electrothermal De-Icing Boots on Rotor Blades (-8 MW)",
+        shortTag: "Thermal Boots",
+        description:
+          "Send 8 MW to embedded resistive heating strips inside Dragonfly's carbon-fiber blades, flashing the ice to vapor.",
+        tradeOffSummary: "Draws 8 MW power, completely restores rotorcraft aerodynamics.",
+        effects: {
+          powerDeltaMW: -8,
+          powerGridHealthDelta: 6,
+          moraleDelta: 8,
+        },
+        engineeringTakeaway:
+          "Electrothermal blade heating prevented catastrophic drone loss in Titan's dense, freezing atmosphere.",
+      },
+      {
+        id: "park_in_heated_hangar",
+        label: "Tether Drone & Emergency Dock in Heated Hangar (-12 MW)",
+        shortTag: "Heated Hangar",
+        description:
+          "Maneuver Dragonfly into the habitat's pressurized airlock bay for a warm thermal soak.",
+        tradeOffSummary: "Diverts 12 MW from life support heaters, safe but power-heavy.",
+        effects: {
+          powerDeltaMW: -12,
+          lifeSupportHealthDelta: 4,
+          moraleDelta: 10,
+        },
+        engineeringTakeaway:
+          "Bringing sensitive aerospace hardware indoors ensured thorough maintenance at high heating cost.",
+      },
+      {
+        id: "aerodynamic_centrifugal_shedding",
+        label: "Execute High-RPM Centrifugal Ice Shedding Maneuver",
+        shortTag: "RPM Shedding",
+        description:
+          "Spin rotors up to maximum RPM on the launch pad to mechanically fracture and fling off ice sheets.",
+        tradeOffSummary: "Low power draw (-3 MW), but risks rotor motor bearing fatigue (−8 Grid Health).",
+        effects: {
+          powerDeltaMW: -3,
+          powerGridHealthDelta: -8,
+          moraleDelta: 2,
+        },
+        engineeringTakeaway:
+          "Mechanical centrifugal shedding traded mechanical wear on motors for vital electrical conservation.",
+      },
+    ],
+  },
+  {
+    id: "titan_cryo_rankine_lake_heat_exchanger_slagging",
+    environmentId: "titan_hydrocarbon",
+    triggerSol: 6,
+    severity: "opportunity",
+    title: "Kraken Mare Cryogenic Cold Sink Optimization",
+    headline: "Lake surface calms; heat rejection efficiency hits theoretical Carnot peak",
+    description:
+      "Calm liquid surface conditions on Kraken Mare have eliminated wave turbulence. Station engineers can submerge high-surface-area heat exchanger grids into the 94 K liquid methane sink to achieve a 65% thermodynamic Carnot cycle efficiency.",
+    nasaScience: {
+      instrument: "Cassini RADAR Altimeter & Dragonfly MMRTG",
+      mission: "NASA Glenn Research Center / APL",
+      badgeTitle: "Cryogenic Thermodynamic Cycles",
+      explanation:
+        "The extreme temperature differential between an RTG heat source (~200°C) and Titan's ambient liquid methane (−179°C) provides unmatched thermal-to-electric conversion efficiency.",
+      dataSourceUrl: "https://rps.nasa.gov/",
+    },
+    choices: [
+      {
+        id: "maximize_cryo_flow",
+        label: "Maximize Cryo-Heat Rejection Flow (+20 MW Power)",
+        shortTag: "Max Cryo Flow",
+        description:
+          "Open high-flow cryogenic intake valves to achieve maximum thermodynamic ΔT between hot MMRTG and 94 K lake water.",
+        tradeOffSummary: "Generates massive +20 MW bonus power, requires 4 MW life support heating.",
+        effects: {
+          powerDeltaMW: 20,
+          lifeSupportHealthDelta: -4,
+          moraleDelta: 8,
+        },
+        engineeringTakeaway:
+          "Leveraging Titan's cryogenic lake as an infinite heat sink unlocked world-class thermodynamic power generation.",
+      },
+      {
+        id: "balanced_lake_cooling",
+        label: "Maintain Calibrated Medium Intake Flow (+10 MW Power)",
+        shortTag: "Balanced Flow",
+        description:
+          "Pump lake liquid at sustainable baseline rates without chilling structural habitat bulkheads.",
+        tradeOffSummary: "Steady +10 MW power, zero system degradation.",
+        effects: {
+          powerDeltaMW: 10,
+          moraleDelta: 4,
+        },
+        engineeringTakeaway:
+          "Moderate cooling captured reliable electrical gains while shielding the habitat from extreme temperature shock.",
+      },
+      {
+        id: "extract_methane_propellant",
+        label: "Filter Liquid Methane for Clean Propellant (+15% Buffer, +6 MW)",
+        shortTag: "Extract Fuel",
+        description:
+          "Divert a fraction of the lake flow into refinery storage tanks as cryogenic rocket propellant and reaction buffer.",
+        tradeOffSummary: "Yields +15% permanent buffer reserves and +6 MW power.",
+        effects: {
+          powerDeltaMW: 6,
+          oxygenBufferDelta: 15,
+          permanentWaterO2Bonus: 0.15,
+          moraleDelta: 5,
+        },
+        engineeringTakeaway:
+          "ISRU (In-Situ Resource Utilization) of Titan's vast methane seas created self-sustaining propellant independence.",
+      },
+    ],
+  },
+  {
+    id: "titan_tholin_electrostatic_arc",
+    environmentId: "titan_hydrocarbon",
+    triggerSol: 8,
+    severity: "warning",
+    title: "Tholin Dune Triboelectric Electrostatic Storm",
+    headline: "Organic sand friction generates high-voltage static arcs across comms array",
+    description:
+      "Titan's towering organic sand dunes, composed of complex tholins and solid hydrocarbons, have high electrical resistivity. Wind-blown sand grains rubbing together create static charges up to tens of kilovolts, arcing into the external antenna mast and tripping circuit breakers.",
+    nasaScience: {
+      instrument: "Cassini RADAR & Laboratory Tholin Triboelectric Tests",
+      mission: "NASA / Georgia Tech Astrobiology",
+      badgeTitle: "Organic Sand Electrification",
+      explanation:
+        "Wind tunnel experiments in Titan-equivalent atmospheres show organic sand grains become electrostatically charged when tumbled, sticking together and generating significant static potentials.",
+      dataSourceUrl: "https://www.nasa.gov/feature/goddard/2017/titan-sand-clings-together",
+    },
+    choices: [
+      {
+        id: "energize_grounding_plane",
+        label: "Energize Ionizing Grounding Plane (-8 MW Power Grid)",
+        shortTag: "Grounding Grid",
+        description:
+          "Charge an active copper counter-poise grounding net beneath the sand to safely dissipate static build-up into the sub-crust.",
+        tradeOffSummary: "Draws 8 MW power, completely eliminates all electrical arc hazards.",
+        effects: {
+          powerDeltaMW: -8,
+          powerGridHealthDelta: 10,
+          shieldingHealthDelta: 6,
+          moraleDelta: 4,
+        },
+        engineeringTakeaway:
+          "Active electrical grounding neutralized high-voltage static arcs generated by Titan's dry hydrocarbon dunes.",
+      },
+      {
+        id: "isolate_antenna_hardline",
+        label: "Isolate External Comms & Switch to Fiber-Optic Hardlines",
+        shortTag: "Fiber Isolation",
+        description:
+          "Retract metallic antennas and route local telemetry through shielded subterranean optical fibers.",
+        tradeOffSummary: "Consumes only 4 MW power, causes minor comms blackout (−6 Morale).",
+        effects: {
+          powerDeltaMW: -4,
+          moraleDelta: -6,
+          powerGridHealthDelta: 2,
+        },
+        engineeringTakeaway:
+          "Physical isolation protected sensitive receivers from static over-voltages at minimal energy cost.",
+      },
+      {
+        id: "capacitive_static_harvest",
+        label: "Harness Static Arcs into Secondary Capacitors (+8 MW Power)",
+        shortTag: "Harvest Static",
+        description:
+          "Route static lightning discharges through surge arrestors into solid-state capacitor banks to recharge batteries.",
+        tradeOffSummary: "Captures +8 MW power, but causes wear on surge suppression coils (−8 Shielding Health).",
+        effects: {
+          powerDeltaMW: 8,
+          shieldingHealthDelta: -8,
+          moraleDelta: 5,
+        },
+        engineeringTakeaway:
+          "Audacious electrical engineering converted destructive atmospheric static arcs into usable stored energy.",
+      },
+    ],
+  },
+  {
+    id: "titan_prebiotic_amino_acid_discovery",
+    environmentId: "titan_hydrocarbon",
+    triggerSol: 10,
+    severity: "opportunity",
+    title: "Prebiotic Organic Chemistry Discovery",
+    headline: "DraMS mass spectrometer confirms adenine and pyrimidine bases in lakebed mud",
+    description:
+      "Dragonfly's drill (DrACO) extracts core samples from the Selk Crater impact melt sheet where liquid water mixed with organic hydrocarbons millions of years ago. DraMS mass spectrometry identifies nitrogen heterocycles, purines, and amino acids!",
+    nasaScience: {
+      instrument: "NASA Dragonfly DraMS & DraGNS",
+      mission: "NASA Dragonfly (NASA Goddard / CNES)",
+      badgeTitle: "Prebiotic Astrobiology",
+      explanation:
+        "Titan's surface represents a planetary-scale frozen prebiotic laboratory, preserving organic chemicals that could explain how non-living chemistry transformed into life on early Earth.",
+      dataSourceUrl: "https://dragonfly.jhuapl.edu/Science/",
+    },
+    choices: [
+      {
+        id: "full_gas_chromatography",
+        label: "Initiate Comprehensive Gas Chromatograph Mass Spectrometry (-12 MW)",
+        shortTag: "DraMS GCMS",
+        description:
+          "Allocate 12 MW to DraMS pyrolysis ovens, confirming molecular weights and chiral structures of prebiotic building blocks.",
+        tradeOffSummary: "Draws 12 MW power, results in historic scientific triumph (+25 Morale).",
+        effects: {
+          powerDeltaMW: -12,
+          moraleDelta: 25,
+          lifeSupportHealthDelta: 6,
+        },
+        engineeringTakeaway:
+          "DraMS mass spectrometry verified that Titan holds the prebiotic chemical blueprints for the emergence of life.",
+      },
+      {
+        id: "deep_freeze_core_samples",
+        label: "Deep-Freeze Replicate Core Samples for Earth Return",
+        shortTag: "Sample Return",
+        description:
+          "Store pristine hydrocarbon core drillings in vacuum-sealed cryogenic canisters for future recovery.",
+        tradeOffSummary: "Conserves power (0 MW), secures mission legacy and crew satisfaction (+15 Morale).",
+        effects: {
+          moraleDelta: 15,
+          foodDaysDelta: 1,
+        },
+        engineeringTakeaway:
+          "Pristine sample curation guaranteed long-term scientific value without depleting critical operational energy.",
+      },
+      {
+        id: "transmit_planetary_archive",
+        label: "Transmit High-Bandwidth Spectral Archive to Earth (-8 MW)",
+        shortTag: "Broadcast Data",
+        description:
+          "Direct high-power X-band radio transmitter at Earth, streaming the complete chemical spectral database.",
+        tradeOffSummary: "Consumes 8 MW power, boosts crew pride and mission success score (+20 Morale).",
+        effects: {
+          powerDeltaMW: -8,
+          moraleDelta: 20,
+        },
+        engineeringTakeaway:
+          "Deep space communications secured humanity's access to the groundbreaking organic secrets of Titan.",
+      },
+    ],
+  },
+];
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-export const ALL_INCIDENT_CARDS = [...LUNAR_INCIDENT_CARDS, ...MARS_INCIDENT_CARDS];
+export const ALL_INCIDENT_CARDS = [
+  ...LUNAR_INCIDENT_CARDS,
+  ...MARS_INCIDENT_CARDS,
+  ...EUROPA_INCIDENT_CARDS,
+  ...TITAN_INCIDENT_CARDS,
+];
+
+const INCIDENT_MAP: Record<MissionEnvironmentId, IncidentCard[]> = {
+  lunar_south_pole: LUNAR_INCIDENT_CARDS,
+  mars_gale_crater: MARS_INCIDENT_CARDS,
+  europa_under_ice: EUROPA_INCIDENT_CARDS,
+  titan_hydrocarbon: TITAN_INCIDENT_CARDS,
+};
 
 export function getIncidentForSol(
   environmentId: MissionEnvironmentId,
   sol: number
 ): IncidentCard | undefined {
-  const cards = environmentId === "lunar_south_pole" ? LUNAR_INCIDENT_CARDS : MARS_INCIDENT_CARDS;
+  const cards = INCIDENT_MAP[environmentId] || LUNAR_INCIDENT_CARDS;
   return cards.find((c) => c.triggerSol === sol);
 }
 

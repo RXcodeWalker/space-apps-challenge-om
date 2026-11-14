@@ -3,7 +3,11 @@
 // All physical parameters sourced from real NASA missions.
 // ============================================================
 
-export type MissionEnvironmentId = "lunar_south_pole" | "mars_gale_crater";
+export type MissionEnvironmentId =
+  | "lunar_south_pole"
+  | "mars_gale_crater"
+  | "europa_under_ice"
+  | "titan_hydrocarbon";
 
 export interface NasaCitation {
   datasetName: string;

@@ -60,7 +60,15 @@ export default function JuniorAstronautCertificate({
 
   // Formatted date and certificate serial
   const completionDate = "November 14, 2026 · Sol 10";
-  const certificateId = `NASA-JAC-2026-${environment.id === "lunar_south_pole" ? "LUN" : "MAR"}-${Math.max(
+  const envCode =
+    environment.id === "lunar_south_pole"
+      ? "LUN"
+      : environment.id === "mars_gale_crater"
+      ? "MAR"
+      : environment.id === "europa_under_ice"
+      ? "EUR"
+      : "TTN";
+  const certificateId = `NASA-JAC-2026-${envCode}-${Math.max(
     10,
     cumulativeScore
   )}-${Math.floor(1000 + Math.random() * 9000)}`;

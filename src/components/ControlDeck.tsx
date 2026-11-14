@@ -31,6 +31,7 @@ import {
   Sliders,
 } from "lucide-react";
 import AmbientAudioModal from "./AmbientAudioModal";
+import CrewPanel from "./CrewPanel";
 import { soundEffects, useSoundMuted } from "../utils/soundEffects";
 import type {
   SubsystemState,
@@ -61,6 +62,8 @@ export interface ControlDeckProps {
   onCommitTurn: () => void;
   onShowNasaData: () => void;
   onOpenTutorial?: () => void;
+  onOpenCrewRoster?: () => void;
+  onInspectRootCause?: (type: "brownout" | "life_support" | "radiation_shield") => void;
   currentEvent?: TurnEvent;
   isProcessing?: boolean;
   children?: React.ReactNode; // Optional slot for OutpostVisualizer
@@ -79,6 +82,8 @@ export default function ControlDeck({
   onCommitTurn,
   onShowNasaData,
   onOpenTutorial,
+  onOpenCrewRoster,
+  onInspectRootCause,
   currentEvent,
   isProcessing = false,
   children,
@@ -86,6 +91,7 @@ export default function ControlDeck({
   const { t } = useTranslation();
   const [isMuted, toggleMute] = useSoundMuted();
   const [isAudioModalOpen, setIsAudioModalOpen] = useState(false);
+  const [isCrewModalOpen, setIsCrewModalOpen] = useState(false);
   const config = DIFFICULTY_PRESETS[difficulty];
   const baselines = config.baselinePowerDemands;
 
@@ -255,7 +261,11 @@ export default function ControlDeck({
                 <span>{t(`difficulties.${difficulty}.title`)}</span>
               </span>
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-semibold hidden sm:inline">
-                {t(`destinations.${environment.id === "lunar_south_pole" ? "moon" : "mars"}.name`)}
+                {environment.id === "lunar_south_pole"
+                  ? t("destinations.moon.name")
+                  : environment.id === "mars_gale_crater"
+                  ? t("destinations.mars.name")
+                  : environment.name}
               </span>
             </div>
             <p className="text-sm font-black text-white leading-tight">
@@ -266,22 +276,39 @@ export default function ControlDeck({
           </div>
         </div>
 
-        {/* Crew Health & Morale */}
-        <div className="flex items-center gap-3 bg-slate-900/80 border border-slate-800 rounded-xl px-3 py-2">
-          <div className="p-1.5 rounded-lg bg-rose-500/20 text-rose-400">
+        {/* Crew Health & Morale with 4 Specialists */}
+        <button
+          type="button"
+          onClick={() => {
+            soundEffects.playButtonClick();
+            if (onOpenCrewRoster) {
+              onOpenCrewRoster();
+            } else {
+              setIsCrewModalOpen(true);
+            }
+          }}
+          className="flex items-center gap-3 bg-slate-900/80 hover:bg-slate-800/90 border border-slate-800 hover:border-cyan-500/50 rounded-xl px-3 py-2 transition-all cursor-pointer text-left group"
+          title="Click to view 4 Astronaut Specialists & Morale Dossier"
+        >
+          <div className="p-1.5 rounded-lg bg-rose-500/20 text-rose-400 group-hover:scale-110 transition-transform">
             <HeartPulse className="w-4 h-4" />
           </div>
           <div>
-            <p className="text-[10px] font-mono text-slate-400 uppercase">
-              {t("game.crewMorale")} & {t("game.oxygenBuffer")}
-            </p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-[10px] font-mono text-slate-400 uppercase">
+                {t("game.crewMorale")} & {t("game.oxygenBuffer")}
+              </p>
+              <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-cyan-950 text-cyan-300 border border-cyan-700/40">
+                4 Specialists 👨‍🚀
+              </span>
+            </div>
             <p className="text-xs sm:text-sm font-black text-white flex items-center gap-1.5">
               <span>{crew.morale}% {t("game.crewMorale")}</span>
               <span className="text-slate-500">·</span>
               <span className="text-emerald-400">{crew.oxygenBufferPercent}% O₂</span>
             </p>
           </div>
-        </div>
+        </button>
 
         {/* Strict 500 mSv NASA Career Limit (Flight Director mode) */}
         {difficulty === "flight_director" && (
@@ -508,6 +535,49 @@ export default function ControlDeck({
             <div className="h-full bg-rose-500 animate-pulse flex-1" title="OVER BUDGET" />
           )}
         </div>
+
+        {/* Over-budget Brownout Warning Banner with "Inspect Root Cause" button */}
+        {isOverBudget && (
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="p-3.5 rounded-xl bg-gradient-to-r from-red-950/90 via-rose-950/80 to-slate-900 border-2 border-red-500/70 text-red-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xl shadow-red-950/70"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-red-500/25 text-red-400 flex items-center justify-center shrink-0 border border-red-500/50 shadow-md">
+                <Zap className="w-5 h-5 animate-bounce" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-mono font-bold uppercase tracking-wider text-red-300">
+                    ⚡ BROWNOUT COLLAPSE HAZARD DETECTED
+                  </span>
+                  <span className="text-[10px] font-mono bg-red-900/70 px-1.5 py-0.5 rounded text-red-200">
+                    {netPowerMW} MW Deficit
+                  </span>
+                </div>
+                <p className="text-xs text-slate-200 mt-0.5">
+                  Allocating {totalAllocated} MW exceeds generator capacity ({effectiveBudgetMW} MW).
+                  Drawing more power than available trips the main bus and triggers system-wide brownouts!
+                </p>
+              </div>
+            </div>
+
+            {onInspectRootCause && (
+              <button
+                type="button"
+                onClick={() => {
+                  soundEffects.playButtonClick();
+                  onInspectRootCause("brownout");
+                }}
+                className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 hover:brightness-110 active:scale-95 text-white font-mono font-black text-xs flex items-center gap-2 shadow-lg shadow-red-950/70 border border-red-300/40 shrink-0 transition-all"
+              >
+                <Search className="w-3.5 h-3.5" />
+                <span>Inspect Root Cause</span>
+              </button>
+            )}
+          </motion.div>
+        )}
       </div>
 
       {/* 3. THREE LARGE TACTILE POWER ALLOCATION CONTROLS */}
@@ -574,6 +644,22 @@ export default function ControlDeck({
               <Plus className="w-3.5 h-3.5" /> +5 MW
             </button>
           </div>
+
+          {/* Life Support Root Cause Trigger if in deficit or low health */}
+          {onInspectRootCause && (allocation.lifeSupport < baselines.lifeSupport - 4 || subsystems.lifeSupport.health < 45) && (
+            <button
+              type="button"
+              onClick={() => {
+                soundEffects.playButtonClick();
+                onInspectRootCause("life_support");
+              }}
+              className="mt-2.5 py-1.5 px-2.5 rounded-xl bg-red-950/70 hover:bg-red-900/70 border border-red-500/50 text-red-200 text-[11px] font-mono font-bold flex items-center justify-center gap-1.5 transition-all shadow-md"
+              title="Why is Life Support in danger? Inspect NASA ECLSS Root Cause"
+            >
+              <Search className="w-3.5 h-3.5 text-red-400" />
+              <span>Inspect Life Support Root Cause</span>
+            </button>
+          )}
         </div>
 
         {/* CHANNEL 2: RADIATION & THERMAL SHIELD */}
@@ -891,6 +977,24 @@ export default function ControlDeck({
         onClose={() => setIsAudioModalOpen(false)}
         environmentName={environment.name}
       />
+
+      {/* Astronaut Specialists & Crew Morale Modal */}
+      {isCrewModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto bg-black/85 backdrop-blur-md">
+          <div className="relative w-full max-w-3xl my-auto">
+            <div className="flex justify-end mb-2">
+              <button
+                type="button"
+                onClick={() => setIsCrewModalOpen(false)}
+                className="px-3 py-1.5 rounded-xl bg-slate-800 text-slate-300 hover:text-white font-mono text-xs font-bold border border-slate-700 transition-colors"
+              >
+                ✕ Close Crew Dossier
+              </button>
+            </div>
+            <CrewPanel crew={crew} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

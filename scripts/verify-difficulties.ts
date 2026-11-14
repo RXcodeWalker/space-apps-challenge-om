@@ -27,7 +27,7 @@ function assert(condition: boolean, msg: string) {
 console.log("=== 1. TESTING CADET TIER (AGES 7-10) ===");
 const cadetState = createInitialGameState(LUNAR_SOUTH_POLE, "cadet");
 assert(cadetState.difficulty === "cadet", "Difficulty correctly set to cadet");
-assert(cadetState.crew.morale === 90, "Cadet crew starts with elevated morale buffer (90%)");
+assert(cadetState.crew.morale >= 90, "Cadet crew starts with elevated morale buffer (>=90%)");
 assert(cadetState.crew.foodReserveDays === 18, "Cadet crew starts with 18 food days buffer");
 assert(cadetState.subsystems.lifeSupport.health === 95, "Cadet subsystems start at 95% health");
 

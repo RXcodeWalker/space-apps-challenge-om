@@ -82,7 +82,7 @@ export interface SubsystemState {
 }
 
 export interface CrewState {
-  members: CrewMember[];    // 4 distinct NASA astronauts (Botanist, Power Engineer, Medical Officer, Geologist)
+  members?: CrewMember[];    // 4 distinct NASA astronauts (Botanist, Power Engineer, Medical Officer, Geologist)
   morale: number;           // 0–100; synchronized team average
   radiationExposureMSv: number; // cumulative mission exposure
   safeRadiationLimitMSv: number; // expedition threshold (45-60 mSv depending on difficulty)
@@ -249,15 +249,19 @@ function initialCrew(difficulty: DifficultyTier): CrewState {
 
   // In Flight Director realistic mode, veteran astronaut has an established career baseline
   const careerStartingDose = isHardcore ? 180 : 50;
+  const members = createInitialCrewMembers(difficulty);
+  const avgMorale = Math.round(members.reduce((sum, m) => sum + m.morale, 0) / members.length);
 
   return {
-    morale: isCadet ? 90 : isHardcore ? 75 : 80,
+    members,
+    morale: avgMorale || (isCadet ? 95 : isHardcore ? 75 : 85),
     radiationExposureMSv: 0,
     safeRadiationLimitMSv: config.missionRadiationLimitMSv,
     careerRadiationExposureMSv: careerStartingDose,
     careerLimitMSv: config.careerRadiationLimitMSv,
     foodReserveDays: isCadet ? 18 : isHardcore ? 14 : 15,
     oxygenBufferPercent: 100,
+    recentMoraleEvents: [],
   };
 }
 
@@ -707,16 +711,26 @@ export function createInitialGameState(
 export function applyIncidentChoice(
   state: GameState,
   incident: IncidentCard,
-  choice: IncidentChoice
+  choice: IncidentChoice,
+  assignedSpecialist?: SpecialistRepairOption
 ): GameState {
   const { effects } = choice;
+  const specialistEffects = assignedSpecialist?.effects;
+
+  // Combine directive and specialist effects for subsystems
+  const powerGridDelta =
+    (effects.powerGridHealthDelta ?? 0) + (specialistEffects?.powerGridHealthDelta ?? 0);
+  const lifeSupportDelta =
+    (effects.lifeSupportHealthDelta ?? 0) + (specialistEffects?.lifeSupportHealthDelta ?? 0);
+  const shieldingDelta =
+    (effects.shieldingHealthDelta ?? 0) + (specialistEffects?.shieldingHealthDelta ?? 0);
 
   // Clone subsystems
   const newSubsystems = {
     powerGrid: {
       ...state.subsystems.powerGrid,
       health: clamp(
-        state.subsystems.powerGrid.health + (effects.powerGridHealthDelta ?? 0),
+        state.subsystems.powerGrid.health + powerGridDelta,
         MIN_SYSTEM_HEALTH,
         MAX_SYSTEM_HEALTH
       ),
@@ -724,7 +738,7 @@ export function applyIncidentChoice(
     lifeSupport: {
       ...state.subsystems.lifeSupport,
       health: clamp(
-        state.subsystems.lifeSupport.health + (effects.lifeSupportHealthDelta ?? 0),
+        state.subsystems.lifeSupport.health + lifeSupportDelta,
         MIN_SYSTEM_HEALTH,
         MAX_SYSTEM_HEALTH
       ),
@@ -732,14 +746,82 @@ export function applyIncidentChoice(
     radiationShielding: {
       ...state.subsystems.radiationShielding,
       health: clamp(
-        state.subsystems.radiationShielding.health + (effects.shieldingHealthDelta ?? 0),
+        state.subsystems.radiationShielding.health + shieldingDelta,
         MIN_SYSTEM_HEALTH,
         MAX_SYSTEM_HEALTH
       ),
     },
   };
 
-  const radDelta = effects.radiationDeltaMSv ?? 0;
+  // Clone and update individual crew members
+  let updatedMembers =
+    state.crew.members && state.crew.members.length > 0
+      ? state.crew.members.map((m) => ({ ...m }))
+      : createInitialCrewMembers(state.difficulty);
+
+  const newMoraleEvents = [...(state.crew.recentMoraleEvents || [])];
+
+  if (assignedSpecialist) {
+    const sEffects = assignedSpecialist.effects;
+    updatedMembers = updatedMembers.map((m) => {
+      if (m.role === assignedSpecialist.crewRole) {
+        const newHealth = clamp(m.health + (sEffects.healthDelta ?? 0), 0, 100);
+        const newMorale = clamp(m.morale + (sEffects.moraleDelta ?? 0), 0, 100);
+        const addedRad = sEffects.radiationDeltaMSv ?? 0;
+        const newRad = Math.round((m.radiationDoseMSv + addedRad) * 100) / 100;
+        const newCareerRad = Math.round((m.careerRadiationMSv + addedRad * 3) * 10) / 10;
+        return {
+          ...m,
+          health: newHealth,
+          morale: newMorale,
+          radiationDoseMSv: newRad,
+          careerRadiationMSv: newCareerRad,
+          status:
+            sEffects.newStatus ??
+            (newHealth < 45
+              ? ("injured" as const)
+              : addedRad > 1.5
+              ? ("irradiated" as const)
+              : ("heroic" as const)),
+          statusDescription: sEffects.statusDescription ?? assignedSpecialist.tacticalSummary,
+          currentAssignment: assignedSpecialist.actionTitle,
+          recentEvent: assignedSpecialist.moraleEvent.title,
+          repairsConducted: m.repairsConducted + 1,
+        };
+      }
+      // General team morale ripple if specialist succeeded/struggled
+      if (sEffects.teamMoraleDelta) {
+        return {
+          ...m,
+          morale: clamp(m.morale + sEffects.teamMoraleDelta, 0, 100),
+        };
+      }
+      return m;
+    });
+
+    const deployed = updatedMembers.find((m) => m.role === assignedSpecialist.crewRole);
+    if (deployed) {
+      newMoraleEvents.unshift({
+        id: `${incident.id}_${assignedSpecialist.crewRole}_sol${incident.triggerSol}`,
+        sol: incident.triggerSol,
+        crewMemberId: deployed.id,
+        crewMemberName: deployed.name,
+        crewRole: deployed.role,
+        roleIcon: deployed.avatar,
+        title: assignedSpecialist.moraleEvent.title,
+        narrative: assignedSpecialist.moraleEvent.narrative,
+        moraleDelta: (assignedSpecialist.effects.moraleDelta ?? 0) + (assignedSpecialist.effects.teamMoraleDelta ?? 0),
+        healthDelta: assignedSpecialist.effects.healthDelta,
+        radiationDeltaMSv: assignedSpecialist.effects.radiationDeltaMSv,
+        type: assignedSpecialist.moraleEvent.type,
+        subsystemHelped: assignedSpecialist.actionTitle,
+      });
+    }
+  }
+
+  const radDelta =
+    (effects.radiationDeltaMSv ?? 0) +
+    (specialistEffects?.radiationDeltaMSv ? specialistEffects.radiationDeltaMSv * 0.25 : 0);
   const newMissionRadiation = Math.max(
     0,
     Math.round((state.crew.radiationExposureMSv + radDelta) * 100) / 100
@@ -749,23 +831,37 @@ export function applyIncidentChoice(
     Math.round((state.crew.careerRadiationExposureMSv + radDelta * 3) * 10) / 10
   );
 
+  const avgTeamMorale =
+    updatedMembers.length > 0
+      ? Math.round(updatedMembers.reduce((sum, m) => sum + m.morale, 0) / updatedMembers.length)
+      : clamp(state.crew.morale + (effects.moraleDelta ?? 0), 0, 100);
+
+  const foodDelta = (effects.foodDaysDelta ?? 0) + (specialistEffects?.foodDaysDelta ?? 0);
+  const o2Delta = (effects.oxygenBufferDelta ?? 0) + (specialistEffects?.oxygenBufferDelta ?? 0);
+
   // Clone crew
   const newCrew: CrewState = {
     ...state.crew,
-    morale: clamp(state.crew.morale + (effects.moraleDelta ?? 0), 0, 100),
+    members: updatedMembers,
+    morale: avgTeamMorale,
     radiationExposureMSv: newMissionRadiation,
     careerRadiationExposureMSv: newCareerRadiation,
     foodReserveDays: clamp(
-      Math.round((state.crew.foodReserveDays + (effects.foodDaysDelta ?? 0)) * 10) / 10,
+      Math.round((state.crew.foodReserveDays + foodDelta) * 10) / 10,
       0,
       30
     ),
     oxygenBufferPercent: clamp(
-      Math.round((state.crew.oxygenBufferPercent + (effects.oxygenBufferDelta ?? 0)) * 10) / 10,
+      Math.round((state.crew.oxygenBufferPercent + o2Delta) * 10) / 10,
       0,
       100
     ),
+    recentMoraleEvents: newMoraleEvents.slice(0, 10),
   };
+
+  const deployedName = assignedSpecialist
+    ? updatedMembers.find((m) => m.role === assignedSpecialist.crewRole)?.name
+    : undefined;
 
   const choiceRecord: IncidentChoiceRecord = {
     incidentId: incident.id,
@@ -775,19 +871,31 @@ export function applyIncidentChoice(
     choiceLabel: choice.label,
     tradeOffSummary: choice.tradeOffSummary,
     engineeringTakeaway: choice.engineeringTakeaway,
+    specialistRole: assignedSpecialist?.crewRole,
+    specialistName: deployedName,
+    specialistAction: assignedSpecialist?.actionTitle,
+    specialistRiskRewardSummary: assignedSpecialist
+      ? `${assignedSpecialist.rewardDescription} | Risk: ${assignedSpecialist.riskDescription}`
+      : undefined,
   };
 
   const newModifiers = [...(state.activeModifiers || [])];
-  if (effects.powerDeltaMW && effects.powerDeltaMW !== 0) {
+  const totalPowerDelta = (effects.powerDeltaMW ?? 0) + (specialistEffects?.powerDeltaMW ?? 0);
+  if (totalPowerDelta !== 0) {
     newModifiers.push({
       id: `${incident.id}_power`,
-      name: `${incident.title}: ${choice.shortTag}`,
-      powerDeltaMW: effects.powerDeltaMW,
+      name: `${incident.title}: ${choice.shortTag}${
+        assignedSpecialist ? ` (+ ${assignedSpecialist.actionTitle})` : ""
+      }`,
+      powerDeltaMW: totalPowerDelta,
       turnsRemaining: 1, // impacts this sol
     });
   }
 
-  const bonus = (state.permanentWaterO2Bonus || 0) + (effects.permanentWaterO2Bonus || 0);
+  const bonus =
+    (state.permanentWaterO2Bonus || 0) +
+    (effects.permanentWaterO2Bonus || 0) +
+    (specialistEffects?.permanentWaterO2Bonus || 0);
 
   return {
     ...state,
@@ -964,6 +1072,17 @@ export function processTurn(
     lsExcess * FOOD_HYDROPONICS_BONUS_PER_MW * bonusFactor - config.foodConsumptionPerTurn;
   const newFoodReserve = clamp(gameState.crew.foodReserveDays + foodDelta, 0, 30);
 
+  // -------------------------------------------------------------------------
+  // Crew Member Passive Perks & Morale Processing
+  // -------------------------------------------------------------------------
+  const currentMembers =
+    gameState.crew.members && gameState.crew.members.length > 0
+      ? gameState.crew.members
+      : createInitialCrewMembers(difficulty);
+
+  const doc = currentMembers.find((m) => m.role === "medical_officer");
+  const isDocActive = (doc?.health ?? 0) >= 50 && doc?.status !== "irradiated";
+
   let moraleDelta = 0;
   if (lsHealth > 0.75 && nextSubsystems.powerGrid.health > 60) moraleDelta += MORALE_GAIN_GOOD_TURN;
   if (lsHealth < 0.5) moraleDelta -= MORALE_LOSS_LIFE_SUPPORT_LOW;
@@ -971,19 +1090,63 @@ export function processTurn(
   if (newFoodReserve < 3) moraleDelta -= MORALE_LOSS_FOOD_LOW;
   if (microStrike) moraleDelta -= 8; // Crew shaken by hull impact
 
+  // Passive perk: Dr. Sarah Chen (Guardian Angel) dampens negative morale by 35%
+  if (moraleDelta < 0 && isDocActive) {
+    moraleDelta = Math.round(moraleDelta * 0.65);
+  }
+
+  // Update each individual crew member vitals
+  const nextMembers: CrewMember[] = currentMembers.map((member) => {
+    // Suit radiation absorption modifier by role
+    const radFactor = member.role === "geologist" ? 0.75 : member.role === "botanist" ? 1.15 : 1.0;
+    const memberDose = Math.round(effectiveRadiationMSv * radFactor * 100) / 100;
+    const nextRad = Math.round((member.radiationDoseMSv + memberDose) * 100) / 100;
+    const nextCareerRad = Math.round((member.careerRadiationMSv + memberDose * 3.5) * 10) / 10;
+    const nextMorale = clamp(member.morale + moraleDelta, 0, 100);
+
+    // Natural recovery if habitat conditions are safe
+    let nextStatus = member.status;
+    let nextStatusDesc = member.statusDescription;
+    if (member.status === "fatigued" && lsHealth > 0.7 && newOxygenBuffer > 80) {
+      nextStatus = "nominal";
+      nextStatusDesc = "Fully rested and operational after nominal sleep cycle.";
+    } else if (member.status === "irradiated" && isDocActive && lsHealth > 0.8) {
+      nextStatus = "fatigued";
+      nextStatusDesc = "Receiving active radioprotective therapy in medical bay.";
+    } else if (member.status === "on_eva") {
+      nextStatus = "nominal";
+      nextStatusDesc = "Repairs complete; re-entered primary habitat airlock.";
+    }
+
+    return {
+      ...member,
+      morale: nextMorale,
+      radiationDoseMSv: nextRad,
+      careerRadiationMSv: nextCareerRad,
+      status: nextStatus,
+      statusDescription: nextStatusDesc,
+    };
+  });
+
+  const avgCrewMorale = Math.round(
+    nextMembers.reduce((sum, m) => sum + m.morale, 0) / nextMembers.length
+  );
+
   const totalMissionRad =
     Math.round((gameState.crew.radiationExposureMSv + effectiveRadiationMSv) * 100) / 100;
   const totalCareerRad =
     Math.round((gameState.crew.careerRadiationExposureMSv + effectiveRadiationMSv * 3.5) * 10) / 10;
 
   const nextCrew: CrewState = {
-    morale: clamp(gameState.crew.morale + moraleDelta, 0, 100),
+    members: nextMembers,
+    morale: avgCrewMorale,
     radiationExposureMSv: totalMissionRad,
     safeRadiationLimitMSv: config.missionRadiationLimitMSv,
     careerRadiationExposureMSv: totalCareerRad,
     careerLimitMSv: config.careerRadiationLimitMSv,
     foodReserveDays: Math.round(newFoodReserve * 10) / 10,
     oxygenBufferPercent: Math.round(newOxygenBuffer * 10) / 10,
+    recentMoraleEvents: gameState.crew.recentMoraleEvents || [],
   };
 
   // 3. CADET MECHANIC: Automated gentle hints

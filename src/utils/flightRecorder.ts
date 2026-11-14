@@ -51,7 +51,14 @@ function buildMilestoneAnnotation(
   sol: number,
   turnResult: TurnResult,
   prevTurnResult: TurnResult | null,
-  incidentRecord?: { choiceLabel: string; incidentTitle: string; tradeOffSummary: string }
+  incidentRecord?: {
+    choiceLabel: string;
+    incidentTitle: string;
+    tradeOffSummary: string;
+    specialistName?: string;
+    specialistRole?: string;
+    specialistAction?: string;
+  }
 ): {
   headline: string;
   milestoneAnnotation: string;
@@ -82,7 +89,10 @@ function buildMilestoneAnnotation(
     // Check if incident was resolved on this sol
     let choiceContext = "";
     if (incidentRecord) {
-      choiceContext = ` (${incidentRecord.choiceLabel})`;
+      const specText = incidentRecord.specialistName
+        ? ` — Emergency Repair by ${incidentRecord.specialistName} (${incidentRecord.specialistRole})`
+        : "";
+      choiceContext = ` (${incidentRecord.choiceLabel}${specText})`;
     }
 
     return {

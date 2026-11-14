@@ -134,6 +134,36 @@ export interface TranslationSchema {
       nasaMission: string;
       summary: string;
     };
+    europa?: {
+      name: string;
+      subtitle: string;
+      badge: string;
+      tagline: string;
+      sunlightValue: string;
+      sunlightRating: string;
+      radiationValue: string;
+      radiationRating: string;
+      tempValue: string;
+      tempRating: string;
+      tempSwingRange: string;
+      nasaMission: string;
+      summary: string;
+    };
+    titan?: {
+      name: string;
+      subtitle: string;
+      badge: string;
+      tagline: string;
+      sunlightValue: string;
+      sunlightRating: string;
+      radiationValue: string;
+      radiationRating: string;
+      tempValue: string;
+      tempRating: string;
+      tempSwingRange: string;
+      nasaMission: string;
+      summary: string;
+    };
   };
   difficulties: {
     cadet: {

@@ -28,7 +28,7 @@ interface NasaDataModalProps {
   onClose: () => void;
 }
 
-type TabType = "lunar" | "mars" | "calibration";
+type TabType = "lunar" | "mars" | "europa" | "titan" | "calibration";
 
 interface ArchitectureCalibrationPoint {
   system: string;
@@ -84,6 +84,24 @@ const CALIBRATION_POINTS: ArchitectureCalibrationPoint[] = [
     tradeOffPhysics:
       "Volatiles at 40 Kelvin require intense thermal pulse energy to sublimate into collection tanks. High immediate electrical cost unlocks compounding long-term resource security.",
   },
+  {
+    system: "Europa Zero Solar Flux & Cryo-Geothermal Baseload",
+    instruments: "NASA Europa Clipper REASON & PIMS Magnetometer",
+    nasaDataValue: "0 W/m² solar flux at 15 km depth; ~1.2 TW tidal dissipation hydrothermal heat flux; 428 µT Jovian B-field",
+    simulationRule:
+      "Zero solar efficiency requires 100% reliance on cryo-geothermal wellhead baseload (52 MW) + RTG nuclear batteries (35 MW). Magnetic deflection power is essential during Jovian flux tube crossings.",
+    tradeOffPhysics:
+      "Under-ice habitats are impervious to surface dust storms, but require active electromagnetic deflection against Jupiter's relativistic electrons. Tapping seafloor hydrothermal plumes provides free surge power.",
+  },
+  {
+    system: "Titan Cryogenic Methane Lake Carnot Thermodynamic Heat Sink",
+    instruments: "NASA Dragonfly (DraMS/DraGNS) & Cassini-Huygens HASI",
+    nasaDataValue: "146.7 kPa (1.45 bar) air pressure; −179.5°C (93.7 K) liquid methane temperature; 95% N₂ / 4.9% CH₄",
+    simulationRule:
+      "Ambient liquid methane acts as an ultra-cold heat sink. Coupling hot MMRTG (473 K) to 94 K methane lake yields theoretical Carnot efficiency exceeding 75%.",
+    tradeOffPhysics:
+      "Dense 1.45 bar nitrogen air enables efficient aerodynamic Dragonfly rotorcraft flight, but high convective heat loss cools habitat seals 4× faster than on Earth, demanding active thermal heating loops.",
+  },
 ];
 
 export default function NasaDataModal({
@@ -95,6 +113,8 @@ export default function NasaDataModal({
   const [activeTab, setActiveTab] = useState<TabType>(() => {
     if (environment?.id === "mars_gale_crater") return "mars";
     if (environment?.id === "lunar_south_pole") return "lunar";
+    if (environment?.id === "europa_under_ice") return "europa";
+    if (environment?.id === "titan_hydrocarbon") return "titan";
     return "calibration";
   });
 
@@ -105,6 +125,10 @@ export default function NasaDataModal({
       ? LUNAR_SOUTH_POLE
       : activeTab === "mars"
       ? MARS_GALE_CRATER
+      : activeTab === "europa"
+      ? EUROPA_UNDER_ICE
+      : activeTab === "titan"
+      ? TITAN_HYDROCARBON
       : environment || LUNAR_SOUTH_POLE;
 
   return (
@@ -188,6 +212,26 @@ export default function NasaDataModal({
               }`}
             >
               <span>🔴 {t("destinations.mars.name")}</span>
+            </button>
+            <button
+              onClick={() => setActiveTab("europa")}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold font-mono transition-all ${
+                activeTab === "europa"
+                  ? "bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20"
+                  : "bg-slate-800/80 text-slate-300 hover:bg-slate-700 hover:text-white"
+              }`}
+            >
+              <span>❄️ {t("destinations.europa.name") || "Europa (Clipper)"}</span>
+            </button>
+            <button
+              onClick={() => setActiveTab("titan")}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold font-mono transition-all ${
+                activeTab === "titan"
+                  ? "bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20"
+                  : "bg-slate-800/80 text-slate-300 hover:bg-slate-700 hover:text-white"
+              }`}
+            >
+              <span>🪐 {t("destinations.titan.name") || "Titan (Dragonfly)"}</span>
             </button>
           </div>
 

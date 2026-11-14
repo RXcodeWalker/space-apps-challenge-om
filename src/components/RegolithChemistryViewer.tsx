@@ -39,10 +39,10 @@ interface BondDef {
 }
 
 interface MoleculePreset {
-  id: "perchlorate" | "silicate" | "water" | "calcium_perchlorate";
+  id: "perchlorate" | "silicate" | "water" | "calcium_perchlorate" | "magnesium_sulfate" | "methane";
   name: string;
   formula: string;
-  environment: "Mars" | "Moon" | "Both";
+  environment: "Mars" | "Moon" | "Europa" | "Titan" | "Both";
   nasaMission: string;
   tagline: string;
   kidSummary: string;

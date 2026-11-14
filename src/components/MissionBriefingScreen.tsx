@@ -25,7 +25,12 @@ import {
   Award,
 } from "lucide-react";
 import type { MissionEnvironment } from "../data/nasaConstants";
-import { LUNAR_SOUTH_POLE, MARS_GALE_CRATER } from "../data/nasaConstants";
+import {
+  LUNAR_SOUTH_POLE,
+  MARS_GALE_CRATER,
+  EUROPA_UNDER_ICE,
+  TITAN_HYDROCARBON,
+} from "../data/nasaConstants";
 import { soundEffects, useSoundMuted } from "../utils/soundEffects";
 import { ambientAudio } from "../utils/ambientAudio";
 import AmbientAudioModal from "./AmbientAudioModal";
@@ -107,7 +112,56 @@ const DESTINATIONS: DestinationCardData[] = [
     accentColor: "#F59E0B", // Amber Warning
     glowColor: "rgba(245, 158, 11, 0.35)",
   },
+  {
+    env: EUROPA_UNDER_ICE,
+    code: "EUR-OC-06",
+    badge: "Europa Clipper Sub-Surface Base",
+    sunlightLabel: "Solar Sunlight",
+    sunlightValue: "0% Flux (Under-Ice)",
+    sunlightRating: "Near-Constant" as const,
+    sunlightPercent: 0,
+    radiationLabel: "Radiation Risk",
+    radiationValue: "1.80 mSv/day (Surge: 5×)",
+    radiationRating: "Solar Flare Risk" as const,
+    radiationLevel: 95,
+    tempLabel: "Cryogenic Boundary",
+    tempValue: "160°C Gradient",
+    tempRating: "Extreme 227°C Swing" as const,
+    tempSwingRange: "−173°C to −13°C",
+    nasaMission: "NASA Europa Clipper (REASON/PIMS/MASPEX)",
+    tagline: "Sub-surface ocean station beneath 15 km of ice, powered by cryo-geothermal & RTG.",
+    accentColor: "#38BDF8", // Ice Blue
+    glowColor: "rgba(56, 189, 248, 0.4)",
+  },
+  {
+    env: TITAN_HYDROCARBON,
+    code: "TTN-HC-08",
+    badge: "Dragonfly Hydrocarbon Outpost",
+    sunlightLabel: "Solar Sunlight",
+    sunlightValue: "1% Flux (Dense Smog)",
+    sunlightRating: "Storm Vulnerable" as const,
+    sunlightPercent: 1,
+    radiationLabel: "Radiation Risk",
+    radiationValue: "0.12 mSv/day",
+    radiationRating: "Thin Atmosphere" as const,
+    radiationLevel: 20,
+    tempLabel: "Surface Temperature",
+    tempValue: "94 Kelvin Baseline",
+    tempRating: "Severe −80°C Nights" as const,
+    tempSwingRange: "−183°C to −179°C",
+    nasaMission: "NASA Dragonfly & Cassini-Huygens",
+    tagline: "Thick 1.45 bar atmosphere, cryogenic methane lakes, and Dragonfly aerial sorties.",
+    accentColor: "#FB923C", // Hydrocarbon Orange
+    glowColor: "rgba(251, 146, 60, 0.4)",
+  },
 ];
+
+function resolveDestKey(id: string): "moon" | "mars" | "europa" | "titan" {
+  if (id === "lunar_south_pole") return "moon";
+  if (id === "mars_gale_crater") return "mars";
+  if (id === "europa_under_ice") return "europa";
+  return "titan";
+}
 
 export default function MissionBriefingScreen({
   onStart,
@@ -430,7 +484,7 @@ export default function MissionBriefingScreen({
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:gap-6 max-w-5xl mx-auto w-full">
           {DESTINATIONS.map((dest) => {
             const isSelected = selectedId === dest.env.id;
-            const destKey = dest.env.id === "lunar_south_pole" ? "moon" : "mars";
+            const destKey = resolveDestKey(dest.env.id);
             const destName = t(`destinations.${destKey}.name`);
             const destSubtitle = t(`destinations.${destKey}.subtitle`);
             const destBadge = t(`destinations.${destKey}.badge`);
@@ -659,10 +713,10 @@ export default function MissionBriefingScreen({
                   </span>
                 </div>
                 <p className="text-sm sm:text-base font-bold text-white mt-0.5">
-                  {t(`destinations.${selectedDestination.env.id === "lunar_south_pole" ? "moon" : "mars"}.name`)} — {t(`destinations.${selectedDestination.env.id === "lunar_south_pole" ? "moon" : "mars"}.subtitle`)}
+                  {t(`destinations.${resolveDestKey(selectedDestination.env.id)}.name`)} — {t(`destinations.${resolveDestKey(selectedDestination.env.id)}.subtitle`)}
                 </p>
                 <p className="text-xs text-slate-300 line-clamp-1 max-w-xl">
-                  {t(`difficulties.${selectedDifficulty}.tagline`)} {t(`destinations.${selectedDestination.env.id === "lunar_south_pole" ? "moon" : "mars"}.summary`)}
+                  {t(`difficulties.${selectedDifficulty}.tagline`)} {t(`destinations.${resolveDestKey(selectedDestination.env.id)}.summary`)}
                 </p>
               </div>
             </div>

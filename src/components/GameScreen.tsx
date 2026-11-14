@@ -31,6 +31,7 @@ import OutpostVisualizer from "./OutpostVisualizer";
 import ControlDeck from "./ControlDeck";
 import AlertBanner from "./AlertBanner";
 import IncidentModal from "./IncidentModal";
+import CrewPanel from "./CrewPanel";
 import MissionDebriefModal from "./MissionDebriefModal";
 import QuickTutorialOverlay, { TUTORIAL_STORAGE_KEY } from "./QuickTutorialOverlay";
 import LanguageSelector from "./LanguageSelector";
@@ -38,6 +39,7 @@ import AmbientAudioModal from "./AmbientAudioModal";
 import { useTranslation } from "../i18n/LanguageContext";
 import { soundEffects, useSoundMuted } from "../utils/soundEffects";
 import { ambientAudio } from "../utils/ambientAudio";
+import type { SpecialistRepairOption } from "../data/crewData";
 
 import type { MissionEnvironment } from "../data/nasaConstants";
 import { TOTAL_TURNS } from "../data/nasaConstants";
@@ -461,7 +463,13 @@ export default function GameScreen({
                       <div className="flex items-center justify-between">
                         <span className="text-[10px] font-mono font-bold uppercase text-cyan-400">
                           Thermal Fatigue (ΔT{" "}
-                          {environment.id === "lunar_south_pole" ? "227°C" : "100°C"})
+                          {environment.id === "lunar_south_pole"
+                            ? "227°C"
+                            : environment.id === "europa_under_ice"
+                            ? "160°C"
+                            : environment.id === "titan_hydrocarbon"
+                            ? "200°C"
+                            : "100°C"})
                         </span>
                         <span className="text-[10px] font-mono text-slate-400">
                           +{((gameState.cumulativeThermalFatigueWear || 0) * 100).toFixed(1)}% Wear
@@ -557,7 +565,11 @@ export default function GameScreen({
                     <span>{t(`difficulties.${gameState.difficulty}.title`)}</span>
                   </span>
                   <span className="text-xs text-slate-400 hidden sm:inline">
-                    {t(`destinations.${environment.id === "lunar_south_pole" ? "moon" : "mars"}.name`)}
+                    {environment.id === "lunar_south_pole"
+                      ? t("destinations.moon.name")
+                      : environment.id === "mars_gale_crater"
+                      ? t("destinations.mars.name")
+                      : environment.name}
                   </span>
                 </div>
 
