@@ -7,7 +7,8 @@
     --color-nasa-gold: #ffd700;
   }
 
-  html, body {
+  html,
+  body {
     @apply bg-slate-950 text-slate-100 font-sans antialiased;
     overscroll-behavior-y: contain;
     -webkit-tap-highlight-color: transparent;
@@ -21,7 +22,10 @@
     @apply box-border;
   }
 
-  button, input[type="range"], [role="button"], a {
+  button,
+  input[type="range"],
+  [role="button"],
+  a {
     -webkit-touch-callout: none;
   }
 }
@@ -30,41 +34,72 @@
   .health-bar-critical {
     @apply bg-red-500;
   }
+
   .health-bar-warning {
     @apply bg-yellow-400;
   }
+
   .health-bar-good {
     @apply bg-emerald-400;
   }
+
   .glass-panel {
     @apply bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl;
   }
+
   .nasa-gradient {
     background: linear-gradient(135deg, #0b3d91 0%, #1a5276 50%, #0b3d91 100%);
   }
+
   .safe-top-padding {
     padding-top: max(0.75rem, env(safe-area-inset-top));
   }
+
   .safe-bottom-padding {
     padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
   }
 }
 
 @media print {
-  @page {
-    size: landscape;
-    margin: 0;
+  .no-print {
+    display: none !important;
   }
-  body {
+
+  /* STEM Debrief Worksheet Print Optimization (Portrait, Ink-friendly white background) */
+  body.printing-worksheet {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  body.printing-worksheet .stem-worksheet-printable {
+    display: block !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    box-shadow: none !important;
+    border: 2px solid #000000 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+    padding: 1rem !important;
+  }
+
+  body.printing-worksheet .certificate-printable-container {
+    display: none !important;
+  }
+
+  /* Junior Astronaut Certificate Print Optimization (Landscape, Deep space theme) */
+  body:not(.printing-worksheet) {
     background: #02050e !important;
     color: #ffffff !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
-  .no-print {
-    display: none !important;
-  }
-  .certificate-printable-container {
+
+  body:not(.printing-worksheet) .certificate-printable-container {
     box-shadow: none !important;
     width: 100vw !important;
     height: 100vh !important;
@@ -73,5 +108,9 @@
     page-break-inside: avoid !important;
     break-inside: avoid !important;
     margin: 0 auto !important;
+  }
+
+  body:not(.printing-worksheet) .stem-worksheet-printable {
+    display: none !important;
   }
 }

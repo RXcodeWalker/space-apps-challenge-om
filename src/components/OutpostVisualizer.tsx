@@ -23,9 +23,14 @@ import {
   Layers,
   Atom,
   Search,
+  BookOpen,
 } from "lucide-react";
 import Habitat3DDiorama from "./Habitat3DDiorama";
 import RegolithChemistryViewer from "./RegolithChemistryViewer";
+import ModuleInspectModal from "./ModuleInspectModal";
+import {
+  type HabitatModuleId,
+} from "../data/habitatModulesData";
 import { soundEffects } from "../utils/soundEffects";
 import type {
   SubsystemState,
@@ -60,7 +65,15 @@ export default function OutpostVisualizer({
 }: OutpostVisualizerProps) {
   const [viewMode, setViewMode] = useState<"3d" | "2d" | "chemistry">("3d");
   const [inspectedModule, setInspectedModule] = useState<InspectedModule>(null);
+  const [cutawayModuleId, setCutawayModuleId] = useState<HabitatModuleId | null>(null);
+  const [isCutawayOpen, setIsCutawayOpen] = useState<boolean>(false);
   const filterId = useId();
+
+  const handleOpenCutaway = (modId: HabitatModuleId) => {
+    soundEffects.playButtonClick();
+    setCutawayModuleId(modId);
+    setIsCutawayOpen(true);
+  };
 
   const isMars = environment.id === "mars_gale_crater";
   const isEuropa = environment.id === "europa_under_ice";
@@ -191,6 +204,64 @@ export default function OutpostVisualizer({
         </div>
       </div>
 
+      {/* CLICK-TO-INSPECT TIP BANNER WITH MODULE SHORTCUT PILLS */}
+      <div className="relative z-20 flex flex-wrap items-center justify-between gap-2 px-4 py-2 bg-gradient-to-r from-cyan-950/80 via-blue-950/70 to-purple-950/80 border-b border-cyan-800/40 text-xs">
+        <div className="flex items-center gap-2">
+          <span className="flex h-2 w-2 relative">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
+          </span>
+          <Search className="w-3.5 h-3.5 text-cyan-300" />
+          <span className="text-slate-300 font-medium">
+            <strong className="text-cyan-300 font-bold">Click any habitat module</strong> to inspect real NASA engineering diagrams & BVAD formulas:
+          </span>
+        </div>
+
+        {/* Quick Module Shortcut Pills */}
+        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none">
+          <button
+            type="button"
+            onClick={() => handleOpenCutaway("greenhouse")}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-950/70 hover:bg-emerald-900 border border-emerald-500/40 text-emerald-300 font-mono text-[11px] font-bold transition-all cursor-pointer active:scale-95 whitespace-nowrap shadow-sm"
+          >
+            <span>🌿</span>
+            <span>Greenhouse</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleOpenCutaway("life_support")}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-cyan-950/70 hover:bg-cyan-900 border border-cyan-500/40 text-cyan-300 font-mono text-[11px] font-bold transition-all cursor-pointer active:scale-95 whitespace-nowrap shadow-sm"
+          >
+            <span>🫁</span>
+            <span>MOXIE/ECLSS</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleOpenCutaway("radiation_shield")}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-950/70 hover:bg-blue-900 border border-blue-500/40 text-blue-300 font-mono text-[11px] font-bold transition-all cursor-pointer active:scale-95 whitespace-nowrap shadow-sm"
+          >
+            <span>🛡️</span>
+            <span>Water-Wall</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleOpenCutaway("power_core")}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-950/70 hover:bg-amber-900 border border-amber-500/40 text-amber-300 font-mono text-[11px] font-bold transition-all cursor-pointer active:scale-95 whitespace-nowrap shadow-sm"
+          >
+            <span>⚡</span>
+            <span>Kilopower</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleOpenCutaway("airlock")}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-950/70 hover:bg-purple-900 border border-purple-500/40 text-purple-300 font-mono text-[11px] font-bold transition-all cursor-pointer active:scale-95 whitespace-nowrap shadow-sm"
+          >
+            <span>🚪</span>
+            <span>Dust Airlock</span>
+          </button>
+        </div>
+      </div>
+
       {/* 3D DIORAMA VIEW */}
       {viewMode === "3d" && (
         <Habitat3DDiorama
@@ -201,7 +272,21 @@ export default function OutpostVisualizer({
           currentEvent={currentEvent}
           crew={crew}
           interactive={interactive}
-          onSelectModule={(mod: InspectedModule) => setInspectedModule(mod)}
+          onSelectModule={(mod: InspectedModule) => {
+            setInspectedModule(mod);
+            if (mod) {
+              const mapping: Record<string, HabitatModuleId> = {
+                hydroponics: "greenhouse",
+                command: "life_support",
+                shield: "radiation_shield",
+                power: "power_core",
+                rover: "airlock",
+              };
+              if (mapping[mod]) {
+                handleOpenCutaway(mapping[mod]);
+              }
+            }
+          }}
         />
       )}
 
@@ -526,13 +611,18 @@ export default function OutpostVisualizer({
           />
 
           {/* ======================================================== */}
-          {/* HABITAT STRUCTURES & SUBSYSTEMS                          */}
+          {/* HABITAT STRUCTURES & SUBSYSTEMS (CLICK-TO-INSPECT)       */}
           {/* ======================================================== */}
 
-          {/* 1. SOLAR ARRAYS & ENERGY CONDUITS (Left & Right) */}
+          {/* 1. SOLAR ARRAYS, KILOPOWER REACTOR & CONDUITS (Left & Right) */}
           <g
-            className="cursor-pointer transition-transform hover:opacity-90"
-            onClick={() => interactive && setInspectedModule("power")}
+            className="cursor-pointer transition-all hover:brightness-125 group"
+            onClick={() => {
+              if (interactive) {
+                setInspectedModule("power");
+                handleOpenCutaway("power_core");
+              }
+            }}
           >
             {/* Left Solar Mast */}
             <line x1="160" y1="365" x2="160" y2="240" stroke="#64748B" strokeWidth="6" strokeLinecap="round" />
@@ -594,11 +684,16 @@ export default function OutpostVisualizer({
             />
           </g>
 
-          {/* 2. TRANSLUCENT RADIATION & THERMAL SHIELD DOME */}
+          {/* 2. TRANSLUCENT RADIATION & THERMAL SHIELD DOME & WATER-WALL */}
           {/* Surrounds the whole habitat (center at x=500, y=390, radius=240) */}
           <g
-            className="cursor-pointer"
-            onClick={() => interactive && setInspectedModule("shield")}
+            className="cursor-pointer transition-all hover:brightness-125 group"
+            onClick={() => {
+              if (interactive) {
+                setInspectedModule("shield");
+                handleOpenCutaway("radiation_shield");
+              }
+            }}
           >
             {/* Shield Dome Surface */}
             <path
@@ -616,6 +711,16 @@ export default function OutpostVisualizer({
               filter={isShieldStrong ? `url(#shieldGlow-${filterId})` : undefined}
               opacity={shieldIntensity}
               className={isShieldCritical ? "animate-pulse" : ""}
+            />
+
+            {/* Outer Regolith Sintered Berm Rim */}
+            <path
+              d="M 220 390 A 280 280 0 0 1 780 390"
+              fill="none"
+              stroke="#475569"
+              strokeWidth="5"
+              strokeDasharray="14,6"
+              opacity="0.6"
             />
 
             {/* Shimmering Hex Shield Lattice (Visible when shield is powered) */}
@@ -648,8 +753,13 @@ export default function OutpostVisualizer({
 
           {/* LEFT POD: Hydroponics & Greenhouse Bio-Dome (Food Production) */}
           <g
-            className="cursor-pointer transition-transform hover:opacity-95"
-            onClick={() => interactive && setInspectedModule("hydroponics")}
+            className="cursor-pointer transition-all hover:brightness-125 group"
+            onClick={() => {
+              if (interactive) {
+                setInspectedModule("hydroponics");
+                handleOpenCutaway("greenhouse");
+              }
+            }}
           >
             {/* Foundation bunker */}
             <rect x="290" y="340" width="130" height="60" rx="10" fill="#1E293B" stroke="#475569" strokeWidth="2" />
@@ -742,10 +852,15 @@ export default function OutpostVisualizer({
             </text>
           </g>
 
-          {/* CENTER POD: Main Command Habitat (2 Levels) */}
+          {/* CENTER POD: Main Command Habitat & MOXIE/ECLSS Life Support (2 Levels) */}
           <g
-            className="cursor-pointer transition-transform hover:opacity-95"
-            onClick={() => interactive && setInspectedModule("command")}
+            className="cursor-pointer transition-all hover:brightness-125 group"
+            onClick={() => {
+              if (interactive) {
+                setInspectedModule("command");
+                handleOpenCutaway("life_support");
+              }
+            }}
           >
             {/* Main Dome Arch */}
             <path
@@ -760,7 +875,7 @@ export default function OutpostVisualizer({
             <path d="M 480 260 Q 500 248 520 260" fill="none" stroke="#38BDF8" strokeWidth="3" />
             <circle cx="500" cy="254" r="3" fill="#38BDF8" className="animate-ping" />
 
-            {/* Hab Observation Windows */}
+            {/* Hab Upper Level: Observation Windows */}
             <rect x="470" y="325" width="60" height="18" rx="6" fill="#0EA5E9" opacity="0.75" />
             <line x1="490" y1="325" x2="490" y2="343" stroke="#1E293B" strokeWidth="2" />
             <line x1="510" y1="325" x2="510" y2="343" stroke="#1E293B" strokeWidth="2" />
@@ -769,24 +884,43 @@ export default function OutpostVisualizer({
             <circle cx="482" cy="333" r="3" fill="#FFFFFF" />
             <path d="M 480 338 L 484 338 L 483 342" stroke="#FFFFFF" strokeWidth="1.5" />
 
-            {/* Lower Level: Airlock & Tunnel Door */}
-            <rect x="480" y="355" width="40" height="25" rx="4" fill="#0F172A" stroke="#38BDF8" strokeWidth="1.5" />
-            <circle cx="500" cy="367" r="5" fill="#38BDF8" opacity="0.8" />
+            {/* Lower Level: MOXIE & Sabatier Life Support Core Core & Air Scrubbers */}
+            <rect x="450" y="352" width="100" height="28" rx="5" fill="#0B132B" stroke="#06B6D4" strokeWidth="1.8" />
+            {/* Sabatier Catalyst Cylinder */}
+            <rect x="460" y="358" width="22" height="16" rx="3" fill="#0284C7" />
+            <circle cx="471" cy="366" r="3" fill="#38BDF8" className="animate-pulse" />
+            {/* MOXIE SOXE Electrolysis Cell */}
+            <rect x="490" y="358" width="22" height="16" rx="3" fill="#0369A1" />
+            <line x1="492" y1="366" x2="510" y2="366" stroke="#22D3EE" strokeWidth="2" />
+            {/* OGA Oxygen Generation Output Tube */}
+            <rect x="520" y="358" width="22" height="16" rx="3" fill="#0E7490" />
+            <circle cx="531" cy="366" r="3" fill="#67E8F9" />
 
-            {/* Status LED */}
-            <circle cx="445" cy="370" r="4" fill="#38BDF8" className="animate-pulse" />
-            <text x="456" y="373" fill="#93C5FD" fontSize="9" fontWeight="bold" fontFamily="monospace">
-              COMMAND HAB
+            {/* Status LED & Label */}
+            <circle cx="445" cy="345" r="4" fill="#38BDF8" className="animate-pulse" />
+            <text x="456" y="348" fill="#93C5FD" fontSize="8" fontWeight="bold" fontFamily="monospace">
+              ECLSS &amp; MOXIE CORE ({allocation.lifeSupport}MW)
             </text>
           </g>
 
-          {/* RIGHT POD: Power Core & Battery Storage Vault */}
+          {/* RIGHT POD: Power Core & Kilopower KRUSTY Fission Battery Storage Vault */}
           <g
-            className="cursor-pointer transition-transform hover:opacity-95"
-            onClick={() => interactive && setInspectedModule("power")}
+            className="cursor-pointer transition-all hover:brightness-125 group"
+            onClick={() => {
+              if (interactive) {
+                setInspectedModule("power");
+                handleOpenCutaway("power_core");
+              }
+            }}
           >
             {/* Storage Vault Shell */}
             <rect x="580" y="340" width="130" height="60" rx="10" fill="#1E293B" stroke="#475569" strokeWidth="2" />
+
+            {/* Kilopower Fission Radiator Tower & Sodium Heat Pipe Assembly */}
+            <rect x="635" y="308" width="20" height="32" rx="4" fill="#B45309" stroke="#F59E0B" strokeWidth="1.5" />
+            <line x1="645" y1="308" x2="645" y2="285" stroke="#CBD5E1" strokeWidth="2" />
+            <polygon points="635,285 655,285 645,268" fill="#F59E0B" opacity="0.9" />
+            <circle cx="645" cy="324" r="4" fill="#FDE047" className="animate-pulse" />
 
             {/* 3 Large Battery Cells with Glowing Charge Levels */}
             {/* Battery 1 */}
@@ -830,8 +964,8 @@ export default function OutpostVisualizer({
               fill={isPowerCritical ? "#EF4444" : isBatteryCharging ? "#10B981" : "#06B6D4"}
               className="animate-pulse"
             />
-            <text x="595" y="396" fill="#CBD5E1" fontSize="9" fontWeight="bold" fontFamily="monospace">
-              BATTERY CORE: {powerAllocated} MW
+            <text x="592" y="396" fill="#FDE68A" fontSize="8" fontWeight="bold" fontFamily="monospace">
+              KILOPOWER &amp; BATTERY ({powerAllocated}MW)
             </text>
           </g>
 
@@ -842,8 +976,20 @@ export default function OutpostVisualizer({
           <rect x="560" y="360" width="30" height="16" fill="#334155" stroke="#64748B" strokeWidth="1.5" />
           <line x1="575" y1="360" x2="575" y2="376" stroke="#94A3B8" strokeWidth="1" />
 
-          {/* OUTSIDE EVA ASTRONAUT & SURFACE ROVER */}
-          <g>
+          {/* DUST-MITIGATION AIRLOCK & EVA PREP (Airlock Chamber & Outside Astronaut) */}
+          <g
+            className="cursor-pointer transition-all hover:brightness-125 group"
+            onClick={() => {
+              if (interactive) {
+                setInspectedModule("rover");
+                handleOpenCutaway("airlock");
+              }
+            }}
+          >
+            {/* Lower Level: Dual-Chamber Airlock Tunnel Door */}
+            <rect x="480" y="375" width="40" height="20" rx="4" fill="#3B0764" stroke="#A855F7" strokeWidth="1.8" />
+            <circle cx="500" cy="385" r="4" fill="#C084FC" className="animate-pulse" />
+
             {/* Small Surface Exploration Rover on surface (left side) */}
             <rect x="230" y="380" width="28" height="14" rx="3" fill="#E2E8F0" stroke="#0F172A" strokeWidth="1" />
             <circle cx="236" cy="394" r="5" fill="#334155" />
@@ -851,7 +997,7 @@ export default function OutpostVisualizer({
             <line x1="240" y1="380" x2="235" y2="370" stroke="#94A3B8" strokeWidth="1.5" />
             <circle cx="235" cy="370" r="2.5" fill="#06B6D4" />
 
-            {/* Astronaut on EVA (right side) */}
+            {/* Astronaut on EVA with Electrodynamic Dust Shield Tool (right side) */}
             <circle cx="730" cy="382" r="4.5" fill="#FFFFFF" stroke="#0F172A" strokeWidth="1" />
             {/* Gold visor */}
             <ellipse cx="731" cy="382" rx="2" ry="1.5" fill="#F59E0B" />
@@ -862,7 +1008,112 @@ export default function OutpostVisualizer({
             {/* Legs */}
             <line x1="728" y1="397" x2="727" y2="405" stroke="#E2E8F0" strokeWidth="2.5" strokeLinecap="round" />
             <line x1="732" y1="397" x2="733" y2="405" stroke="#E2E8F0" strokeWidth="2.5" strokeLinecap="round" />
+
+            {/* Electrostatic Dust Wave Sparkles around Spacesuit */}
+            <path d="M 740 380 Q 746 388 740 396" fill="none" stroke="#C084FC" strokeWidth="1.5" strokeDasharray="3,2" className="animate-pulse" />
           </g>
+
+          {/* ======================================================== */}
+          {/* SUBTLE PULSING INTERACTIVE TARGET RETICLES FOR 5 MODULES */}
+          {/* ======================================================== */}
+          {interactive && (
+            <g className="pointer-events-auto">
+              {/* Reticle 1: 🌿 GREENHOUSE / HYDROPONICS */}
+              <g
+                className="cursor-pointer group"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleOpenCutaway("greenhouse");
+                }}
+              >
+                <circle cx="355" cy="285" r="15" fill="none" stroke="#10B981" strokeWidth="1.5" opacity="0.6" className="animate-ping" style={{ transformOrigin: "355px 285px", animationDuration: "3s" }} />
+                <circle cx="355" cy="285" r="8" fill="#0A0F1D" stroke="#10B981" strokeWidth="2" className="group-hover:scale-125 transition-transform" />
+                <circle cx="355" cy="285" r="3" fill="#34D399" />
+                <g transform="translate(355, 265)" className="opacity-90 group-hover:opacity-100 transition-opacity">
+                  <rect x="-42" y="-11" width="84" height="14" rx="4" fill="#064E3B" stroke="#10B981" strokeWidth="1" />
+                  <text x="0" y="-1" textAnchor="middle" fill="#A7F3D0" fontSize="7.5" fontWeight="bold" fontFamily="monospace">
+                    🌿 GREENHOUSE
+                  </text>
+                </g>
+              </g>
+
+              {/* Reticle 2: 🫁 MOXIE & SABATIER LIFE SUPPORT CORE */}
+              <g
+                className="cursor-pointer group"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleOpenCutaway("life_support");
+                }}
+              >
+                <circle cx="500" cy="365" r="15" fill="none" stroke="#06B6D4" strokeWidth="1.5" opacity="0.6" className="animate-ping" style={{ transformOrigin: "500px 365px", animationDuration: "2.8s" }} />
+                <circle cx="500" cy="365" r="8" fill="#0A0F1D" stroke="#06B6D4" strokeWidth="2" className="group-hover:scale-125 transition-transform" />
+                <circle cx="500" cy="365" r="3" fill="#22D3EE" />
+                <g transform="translate(500, 395)" className="opacity-90 group-hover:opacity-100 transition-opacity">
+                  <rect x="-44" y="-11" width="88" height="14" rx="4" fill="#083344" stroke="#06B6D4" strokeWidth="1" />
+                  <text x="0" y="-1" textAnchor="middle" fill="#67E8F9" fontSize="7.5" fontWeight="bold" fontFamily="monospace">
+                    🫁 MOXIE / ECLSS
+                  </text>
+                </g>
+              </g>
+
+              {/* Reticle 3: 🛡️ REGOLITH WATER-WALL & MAGNETIC DEFLECTOR */}
+              <g
+                className="cursor-pointer group"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleOpenCutaway("radiation_shield");
+                }}
+              >
+                <circle cx="500" cy="145" r="16" fill="none" stroke="#3B82F6" strokeWidth="1.5" opacity="0.6" className="animate-ping" style={{ transformOrigin: "500px 145px", animationDuration: "3.2s" }} />
+                <circle cx="500" cy="145" r="8" fill="#0A0F1D" stroke="#3B82F6" strokeWidth="2" className="group-hover:scale-125 transition-transform" />
+                <circle cx="500" cy="145" r="3" fill="#60A5FA" />
+                <g transform="translate(500, 125)" className="opacity-90 group-hover:opacity-100 transition-opacity">
+                  <rect x="-48" y="-11" width="96" height="14" rx="4" fill="#172554" stroke="#3B82F6" strokeWidth="1" />
+                  <text x="0" y="-1" textAnchor="middle" fill="#BFDBFE" fontSize="7.5" fontWeight="bold" fontFamily="monospace">
+                    🛡️ WATER-WALL SHIELD
+                  </text>
+                </g>
+              </g>
+
+              {/* Reticle 4: ⚡ KILOPOWER REACTOR & SOLAR GRID */}
+              <g
+                className="cursor-pointer group"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleOpenCutaway("power_core");
+                }}
+              >
+                <circle cx="645" cy="335" r="15" fill="none" stroke="#F59E0B" strokeWidth="1.5" opacity="0.6" className="animate-ping" style={{ transformOrigin: "645px 335px", animationDuration: "2.7s" }} />
+                <circle cx="645" cy="335" r="8" fill="#0A0F1D" stroke="#F59E0B" strokeWidth="2" className="group-hover:scale-125 transition-transform" />
+                <circle cx="645" cy="335" r="3" fill="#FBBF24" />
+                <g transform="translate(645, 275)" className="opacity-90 group-hover:opacity-100 transition-opacity">
+                  <rect x="-42" y="-11" width="84" height="14" rx="4" fill="#451A03" stroke="#F59E0B" strokeWidth="1" />
+                  <text x="0" y="-1" textAnchor="middle" fill="#FDE68A" fontSize="7.5" fontWeight="bold" fontFamily="monospace">
+                    ⚡ KILOPOWER GRID
+                  </text>
+                </g>
+              </g>
+
+              {/* Reticle 5: 🚪 DUST AIRLOCK & EVA PREP */}
+              <g
+                className="cursor-pointer group"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleOpenCutaway("airlock");
+                }}
+              >
+                <circle cx="735" cy="370" r="15" fill="none" stroke="#A855F7" strokeWidth="1.5" opacity="0.6" className="animate-ping" style={{ transformOrigin: "735px 370px", animationDuration: "3.1s" }} />
+                <circle cx="735" cy="370" r="8" fill="#0A0F1D" stroke="#A855F7" strokeWidth="2" className="group-hover:scale-125 transition-transform" />
+                <circle cx="735" cy="370" r="3" fill="#C084FC" />
+                <g transform="translate(735, 350)" className="opacity-90 group-hover:opacity-100 transition-opacity">
+                  <rect x="-44" y="-11" width="88" height="14" rx="4" fill="#3B0764" stroke="#A855F7" strokeWidth="1" />
+                  <text x="0" y="-1" textAnchor="middle" fill="#E9D5FF" fontSize="7.5" fontWeight="bold" fontFamily="monospace">
+                    🚪 DUST AIRLOCK
+                  </text>
+                </g>
+              </g>
+            </g>
+          )}
         </svg>
 
         {/* Floating Quick Visual Status Chips (Immediate cause & effect for 7-12 yo) */}
@@ -1031,6 +1282,25 @@ export default function OutpostVisualizer({
             </div>
 
             <div className="flex items-center gap-2">
+              {/* Quick Cutaway Module Inspector trigger */}
+              <button
+                type="button"
+                onClick={() => {
+                  const mapping: Record<string, HabitatModuleId> = {
+                    hydroponics: "greenhouse",
+                    command: "life_support",
+                    shield: "radiation_shield",
+                    power: "power_core",
+                    rover: "airlock",
+                  };
+                  handleOpenCutaway(mapping[inspectedModule || ""] || "greenhouse");
+                }}
+                className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:brightness-110 active:scale-95 text-white font-mono font-bold text-xs flex items-center gap-1.5 shadow-md shadow-cyan-950/50 border border-cyan-400/40 shrink-0 cursor-pointer"
+              >
+                <BookOpen size={13} />
+                <span>NASA Blueprints &amp; BVAD</span>
+              </button>
+
               {onInspectRootCause && (
                 (inspectedModule === "power" && (isPowerCritical || isOverBudget)) ||
                 (inspectedModule === "hydroponics" && (isGreenhouseThermalShock || isGreenhouseDim || subsystems.foodProduction.health < 45)) ||
@@ -1048,7 +1318,7 @@ export default function OutpostVisualizer({
                         : "radiation_shield"
                     );
                   }}
-                  className="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-red-600 to-amber-600 hover:brightness-110 active:scale-95 text-white font-mono font-bold text-xs flex items-center gap-1.5 shadow-md shadow-red-950/50 border border-red-300/40 shrink-0"
+                  className="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-red-600 to-amber-600 hover:brightness-110 active:scale-95 text-white font-mono font-bold text-xs flex items-center gap-1.5 shadow-md shadow-red-950/50 border border-red-300/40 shrink-0 cursor-pointer"
                 >
                   <Search size={12} />
                   <span>Inspect Root Cause</span>
@@ -1058,7 +1328,7 @@ export default function OutpostVisualizer({
               <button
                 type="button"
                 onClick={() => setInspectedModule(null)}
-                className="text-slate-400 hover:text-white px-2 py-1 rounded bg-slate-800 text-[11px]"
+                className="text-slate-400 hover:text-white px-2 py-1 rounded bg-slate-800 text-[11px] cursor-pointer"
               >
                 Close ✕
               </button>
@@ -1066,6 +1336,19 @@ export default function OutpostVisualizer({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Interactive Module Inspection Modal (3 Tabs: Junior, Engineering BVAD, Live Telemetry) */}
+      <ModuleInspectModal
+        moduleId={cutawayModuleId}
+        isOpen={isCutawayOpen}
+        onClose={() => setIsCutawayOpen(false)}
+        onSelectModule={(id) => setCutawayModuleId(id)}
+        subsystems={subsystems}
+        allocation={allocation}
+        effectiveBudgetMW={effectiveBudgetMW}
+        crew={crew}
+        environment={environment}
+      />
     </div>
   );
 }

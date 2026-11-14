@@ -10,6 +10,7 @@
 // ============================================================
 
 import type { SubsystemId, PowerAllocation } from "../engine/simulationEngine";
+import { createSeededRNG } from "../utils/seededRandom";
 
 export type DifficultyTier = "cadet" | "commander" | "flight_director";
 
@@ -232,10 +233,11 @@ export const DIFFICULTY_PRESETS: Record<DifficultyTier, DifficultyConfig> = {
  */
 export function calculateThermalFatigue(
   environmentId: string,
-  _sol: number,
+  sol: number,
   allocatedShieldingMW: number,
   baselineShieldingMW: number,
-  cumulativeFatigueWearSoFar: number
+  cumulativeFatigueWearSoFar: number,
+  missionSeed?: string
 ): ThermalFatigueReport {
   // Delta T (°C) across different planetary environments:
   // - Lunar South Pole: ~227°C swing (LRO Diviner, −173°C to +54°C)
@@ -249,6 +251,14 @@ export function calculateThermalFatigue(
     solDeltaT = 160;
   } else if (environmentId === "titan_hydrocarbon") {
     solDeltaT = 200;
+  }
+
+  // Deterministic thermal swing variance governed by mission seed
+  if (missionSeed) {
+    const rng = createSeededRNG(`${missionSeed}_thermal_${environmentId}_sol${sol}`);
+    // Deterministic diurnal/orbital variation of ±12°C
+    const thermalVariance = Math.round((rng.next() - 0.5) * 24);
+    solDeltaT = Math.max(40, solDeltaT + thermalVariance);
   }
 
   // Active thermal loops and heat pipes depend on shielding/thermal power
@@ -326,16 +336,39 @@ export function calculateThermalFatigue(
 export function rollMicrometeoroidStrike(
   environmentId: string,
   sol: number,
-  cumulativeTurnScore: number
+  cumulativeTurnScore: number,
+  missionSeed?: string
 ): MicrometeoroidStrike | null {
   // Sols 3, 5, 7, and 8 are high-probability orbital crossing windows
   const candidateSols = [3, 5, 7, 8];
   if (!candidateSols.includes(sol)) return null;
 
-  // Pseudo-random hash
-  const pseudoSeed = (sol * 37 + environmentId.length * 13 + Math.floor(cumulativeTurnScore * 7)) % 100;
-  // 35% probability on candidate sols
-  if (pseudoSeed > 35) return null;
+  let strikeRolled = false;
+  let profileIndex = 0;
+  let impactVelocityKmh = 42000;
+  let particleDiameterMm = 1.0;
+
+  if (missionSeed) {
+    const rng = createSeededRNG(`${missionSeed}_mmod_${environmentId}_sol${sol}`);
+    // 35% probability on candidate sols
+    if (rng.next() <= 0.35) {
+      strikeRolled = true;
+      profileIndex = Math.floor(rng.next() * 4);
+      impactVelocityKmh = 40000 + Math.floor(rng.next() * 24000);
+      particleDiameterMm = Math.round((0.8 + rng.next() * 1.6) * 10) / 10;
+    }
+  } else {
+    // Pseudo-random hash fallback
+    const pseudoSeed = (sol * 37 + environmentId.length * 13 + Math.floor(cumulativeTurnScore * 7)) % 100;
+    if (pseudoSeed <= 35) {
+      strikeRolled = true;
+      profileIndex = (sol + pseudoSeed) % 4;
+      impactVelocityKmh = 42000 + (pseudoSeed * 300);
+      particleDiameterMm = 0.8 + (pseudoSeed % 15) * 0.1;
+    }
+  }
+
+  if (!strikeRolled) return null;
 
   const strikeProfiles: Array<{
     subsystemHit: SubsystemId;
@@ -411,15 +444,14 @@ export function rollMicrometeoroidStrike(
     },
   ];
 
-  const profileIndex = (sol + pseudoSeed) % strikeProfiles.length;
   const selected = strikeProfiles[profileIndex];
 
   return {
     id: `mmod_strike_sol_${sol}`,
     sol,
     subsystemHit: selected.subsystemHit,
-    impactVelocityKmh: 42000 + (pseudoSeed * 300),
-    particleDiameterMm: 0.8 + (pseudoSeed % 15) * 0.1,
+    impactVelocityKmh,
+    particleDiameterMm,
     pressureDropKPa: selected.pressureDrop,
     powerLossMW: selected.powerLoss,
     wearDelta: selected.wearDelta,

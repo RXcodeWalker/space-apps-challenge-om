@@ -12,15 +12,24 @@ import {
   Sparkles,
   Globe,
   Award,
+  Printer,
+  Share2,
+  Copy,
+  Check,
 } from "lucide-react";
 import type { GameState, TurnResult } from "../engine/simulationEngine";
 import type { MissionEnvironment } from "../data/nasaConstants";
 import MissionDebriefModal from "./MissionDebriefModal";
 import JuniorAstronautCertificate from "./JuniorAstronautCertificate";
+import StemDebriefWorksheet from "./StemDebriefWorksheet";
 import { calculateOutcomeRank } from "../utils/flightRecorder";
 import { DIFFICULTY_PRESETS } from "../data/difficultyTiers";
 import { useTranslation } from "../i18n/LanguageContext";
 import LanguageSelector from "./LanguageSelector";
+import {
+  buildChallengeUrl,
+  formatSeedDisplay,
+} from "../utils/seededRandom";
 
 interface MissionEndScreenProps {
   gameState: GameState;
@@ -106,9 +115,38 @@ export default function MissionEndScreen({
   const { t } = useTranslation();
   const [showDebrief, setShowDebrief] = useState(false);
   const [showCertificate, setShowCertificate] = useState(false);
+  const [showWorksheet, setShowWorksheet] = useState(false);
+  const [copiedChallenge, setCopiedChallenge] = useState(false);
+  const [copiedCodeOnly, setCopiedCodeOnly] = useState(false);
   const { finalOutcome, cumulativeScore, history: missionHistory = [] } = gameState;
 
   const outcomeRank = useMemo(() => calculateOutcomeRank(gameState), [gameState]);
+
+  const handleShareChallenge = async () => {
+    const challengeUrl = buildChallengeUrl(
+      gameState.missionSeed || "ARTEMIS-01",
+      environment.id,
+      gameState.difficulty
+    );
+    try {
+      await navigator.clipboard.writeText(challengeUrl);
+      setCopiedChallenge(true);
+      setTimeout(() => setCopiedChallenge(false), 2500);
+    } catch {
+      // fallback
+    }
+  };
+
+  const handleCopyCodeOnly = async () => {
+    const code = formatSeedDisplay(gameState.missionSeed || "ARTEMIS-01");
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopiedCodeOnly(true);
+      setTimeout(() => setCopiedCodeOnly(false), 2000);
+    } catch {
+      // fallback
+    }
+  };
 
   const isSuccess = finalOutcome === "mission_success";
   const isPartial = finalOutcome === "partial_success";
@@ -206,6 +244,68 @@ export default function MissionEndScreen({
           </div>
         </div>
 
+        {/* Classroom Mission Seed & Challenge Classmates Card */}
+        <div className="rounded-2xl bg-gradient-to-r from-slate-900/95 via-cyan-950/50 to-slate-900/95 border border-cyan-500/30 p-4 sm:p-5 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5 w-full sm:w-auto">
+            <div className="w-12 h-12 rounded-xl bg-cyan-950/80 border border-cyan-400/50 flex items-center justify-center text-cyan-300 font-mono font-black text-xl shrink-0 shadow-lg shadow-cyan-950/60">
+              #
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-mono font-bold tracking-wider text-cyan-400 uppercase">
+                  Classroom Mission Seed
+                </span>
+                <button
+                  type="button"
+                  onClick={handleCopyCodeOnly}
+                  className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-cyan-200 border border-slate-700 flex items-center gap-1 transition-all cursor-pointer"
+                  title="Click to copy raw code"
+                >
+                  {copiedCodeOnly ? (
+                    <>
+                      <Check size={10} className="text-emerald-400" />
+                      <span>Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy size={10} />
+                      <span>Copy Code</span>
+                    </>
+                  )}
+                </button>
+              </div>
+              <p className="text-lg sm:text-xl font-black font-mono text-white tracking-wider mt-0.5 truncate">
+                {formatSeedDisplay(gameState.missionSeed || "ARTEMIS-01")}
+              </p>
+              <p className="text-xs text-slate-300">
+                Challenge classmates with identical solar storms & power flux!
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleShareChallenge}
+            className={`w-full sm:w-auto px-5 py-3 rounded-xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 transition-all shadow-lg active:scale-95 border cursor-pointer shrink-0 ${
+              copiedChallenge
+                ? "bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-400 shadow-emerald-900/60"
+                : "bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white border-cyan-400/40 shadow-cyan-900/40"
+            }`}
+          >
+            {copiedChallenge ? (
+              <>
+                <Check size={16} className="text-white" />
+                <span>Challenge Link Copied! 🚀</span>
+              </>
+            ) : (
+              <>
+                <Share2 size={16} />
+                <span>Share / Challenge a Classmate</span>
+              </>
+            )}
+          </button>
+        </div>
+
         {/* Final crew stats */}
         <div className="glass-panel p-5">
           <h3 className="font-bold text-sm text-slate-300 mb-4">
@@ -275,6 +375,15 @@ export default function MissionEndScreen({
             <span>{t("debrief.viewCertificate")}</span>
           </button>
 
+          {/* STEM Debrief Worksheet Action Button */}
+          <button
+            onClick={() => setShowWorksheet(true)}
+            className="w-full flex items-center justify-center gap-2.5 bg-gradient-to-r from-emerald-600 via-teal-500 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white font-black py-3.5 rounded-xl transition-all shadow-lg shadow-teal-950/50 text-sm cursor-pointer transform hover:scale-[1.01]"
+          >
+            <Printer size={18} />
+            <span>📄 Print / Save PDF Lab Report</span>
+          </button>
+
           <button
             onClick={() => setShowDebrief(true)}
             className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white font-black py-3.5 rounded-xl transition-all shadow-lg shadow-cyan-900/40 text-sm cursor-pointer"
@@ -335,6 +444,16 @@ export default function MissionEndScreen({
             environment={environment}
             rankTitle={outcomeRank.rankTitle}
             rankTier={outcomeRank.tier}
+          />
+        )}
+
+        {/* STEM Flight Director Debrief Worksheet Modal */}
+        {showWorksheet && (
+          <StemDebriefWorksheet
+            isOpen={showWorksheet}
+            onClose={() => setShowWorksheet(false)}
+            gameState={gameState}
+            environment={environment}
           />
         )}
       </motion.div>

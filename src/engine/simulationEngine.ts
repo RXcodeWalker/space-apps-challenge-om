@@ -49,6 +49,11 @@ import {
   createInitialCrewMembers,
   INCIDENT_SPECIALIST_REPAIRS,
 } from "../data/crewData";
+import {
+  createSeededRNG,
+  generateMissionSeed,
+  normalizeSeed,
+} from "../utils/seededRandom";
 
 // Re-export difficulty & crew types for easy consumption
 export type {
@@ -163,6 +168,7 @@ export interface TurnResult {
 }
 
 export interface GameState {
+  missionSeed: string;      // Deterministic STEM Classroom Mission Seed (e.g. ARTEMIS-26)
   environment: MissionEnvironment;
   difficulty: DifficultyTier;
   currentTurn: number;      // 1-indexed; 0 = not started
@@ -752,8 +758,10 @@ function buildNarratives(
 
 export function createInitialGameState(
   environment: MissionEnvironment,
-  difficulty: DifficultyTier = "commander"
+  difficulty: DifficultyTier = "commander",
+  missionSeed?: string
 ): GameState {
+  const seed = normalizeSeed(missionSeed || generateMissionSeed());
   const config = DIFFICULTY_PRESETS[difficulty];
   const initialSub = initialSubsystems(difficulty);
   const initialCrw = initialCrew(difficulty);
@@ -770,6 +778,7 @@ export function createInitialGameState(
       : undefined;
 
   return {
+    missionSeed: seed,
     environment,
     difficulty,
     currentTurn: 0,
@@ -1024,14 +1033,45 @@ export function getDefaultAllocation(
   };
 }
 
+/**
+ * Applies deterministic, reproducible solar and space weather variance
+ * governed by the classroom mission seed.
+ */
+export function getSeededTurnEvent(
+  baseEvent: TurnEvent,
+  missionSeed: string,
+  environmentId: string,
+  sol: number
+): TurnEvent {
+  const rng = createSeededRNG(`${missionSeed}_event_${environmentId}_sol${sol}`);
+  // Natural flux / weather variance (-3 to +3 MW)
+  const fluxVariance = Math.round((rng.next() - 0.5) * 6);
+  // Solar flare / storm particle density variance (-0.2x to +0.2x)
+  const radVariance = Math.round((rng.next() - 0.5) * 0.4 * 10) / 10;
+
+  return {
+    ...baseEvent,
+    powerDeltaMW: baseEvent.powerDeltaMW + fluxVariance,
+    radiationSpikeMultiplier: Math.max(
+      1,
+      Math.round((baseEvent.radiationSpikeMultiplier + radVariance) * 10) / 10
+    ),
+  };
+}
+
 export function getEffectivePowerBudget(
   environment: MissionEnvironment,
   turn: number,
   additionalModifierMW = 0,
-  difficulty: DifficultyTier = "commander"
+  difficulty: DifficultyTier = "commander",
+  missionSeed?: string
 ): number {
   const config = DIFFICULTY_PRESETS[difficulty];
-  const event = environment.turnEvents[turn - 1];
+  const baseEvent = environment.turnEvents[turn - 1];
+  const event =
+    missionSeed && baseEvent
+      ? getSeededTurnEvent(baseEvent, missionSeed, environment.id, turn)
+      : baseEvent;
   const rtgFloor = environment.basePowerBudgetMW * config.rtgReserveFraction;
   const eventDelta = event ? event.powerDeltaMW : 0;
 
@@ -1049,7 +1089,17 @@ export function getEffectivePowerBudget(
     baseGeneration = environment.basePowerBudgetMW * environment.baselineSolarEfficiency;
   }
 
-  const effective = Math.max(rtgFloor, baseGeneration + eventDelta + additionalModifierMW);
+  // Seeded baseline power / solar flux variance
+  let seededFluxVarianceMW = 0;
+  if (missionSeed) {
+    const rng = createSeededRNG(`${missionSeed}_flux_${environment.id}_sol${turn}`);
+    seededFluxVarianceMW = Math.round((rng.next() - 0.5) * 6);
+  }
+
+  const effective = Math.max(
+    rtgFloor,
+    baseGeneration + eventDelta + additionalModifierMW + seededFluxVarianceMW
+  );
   return Math.round(effective);
 }
 
@@ -1060,12 +1110,21 @@ export function processTurn(
   const turn = gameState.currentTurn + 1;
   const { environment, difficulty } = gameState;
   const config = DIFFICULTY_PRESETS[difficulty];
-  const event = environment.turnEvents[turn - 1];
+  const baseEvent = environment.turnEvents[turn - 1];
+  const event =
+    gameState.missionSeed && baseEvent
+      ? getSeededTurnEvent(baseEvent, gameState.missionSeed, environment.id, turn)
+      : baseEvent;
 
   // 1. HARDCORE MECHANIC: Random Micro-Meteoroid Puncture Check
   let microStrike: MicrometeoroidStrike | null = null;
   if (config.enableMicrometeoroids) {
-    microStrike = rollMicrometeoroidStrike(environment.id, turn, gameState.cumulativeScore);
+    microStrike = rollMicrometeoroidStrike(
+      environment.id,
+      turn,
+      gameState.cumulativeScore,
+      gameState.missionSeed
+    );
   }
 
   // Active modifiers power sum + potential micrometeoroid power loss
@@ -1077,7 +1136,8 @@ export function processTurn(
     environment,
     turn,
     modifierPowerDelta,
-    difficulty
+    difficulty,
+    gameState.missionSeed
   );
 
   // Clamp allocation so it never exceeds the budget (simulate brownout proportionally)
@@ -1108,7 +1168,8 @@ export function processTurn(
       turn,
       clampedAllocation.radiationShielding,
       config.baselinePowerDemands.radiationShielding,
-      gameState.cumulativeThermalFatigueWear || 0
+      gameState.cumulativeThermalFatigueWear || 0,
+      gameState.missionSeed
     );
     thermalWearPerSubsystem = thermalReport.fatigueWearAdded * config.thermalFatigueMultiplier;
   }

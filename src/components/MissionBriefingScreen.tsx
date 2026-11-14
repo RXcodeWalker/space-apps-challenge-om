@@ -23,7 +23,16 @@ import {
   Flame,
   AlertTriangle,
   Award,
+  Hash,
+  Shuffle,
+  Copy,
+  Check,
 } from "lucide-react";
+import {
+  generateMissionSeed,
+  normalizeSeed,
+  formatSeedDisplay,
+} from "../utils/seededRandom";
 import type { MissionEnvironment } from "../data/nasaConstants";
 import {
   LUNAR_SOUTH_POLE,
@@ -43,8 +52,10 @@ import LanguageSelector from "./LanguageSelector";
 import PwaNavButton from "./PwaNavButton";
 
 interface MissionBriefingScreenProps {
-  onStart: (environment: MissionEnvironment, difficulty: DifficultyTier) => void;
+  onStart: (environment: MissionEnvironment, difficulty: DifficultyTier, seed: string) => void;
   onShowNasaData?: (environment: MissionEnvironment) => void;
+  initialSeed?: string;
+  initialEnvironmentId?: string;
 }
 
 interface DestinationCardData {
@@ -166,12 +177,50 @@ function resolveDestKey(id: string): "moon" | "mars" | "europa" | "titan" {
 export default function MissionBriefingScreen({
   onStart,
   onShowNasaData,
+  initialSeed,
+  initialEnvironmentId,
 }: MissionBriefingScreenProps) {
   const { t } = useTranslation();
-  const [selectedId, setSelectedId] = useState<string>(LUNAR_SOUTH_POLE.id);
+  const [selectedId, setSelectedId] = useState<string>(() => {
+    if (initialEnvironmentId && DESTINATIONS.some((d) => d.env.id === initialEnvironmentId)) {
+      return initialEnvironmentId;
+    }
+    return LUNAR_SOUTH_POLE.id;
+  });
   const [selectedDifficulty, setSelectedDifficulty] = useState<DifficultyTier>("commander");
+  const [missionSeed, setMissionSeed] = useState<string>(() => {
+    return initialSeed ? normalizeSeed(initialSeed) : generateMissionSeed();
+  });
+  const [isCopied, setIsCopied] = useState<boolean>(false);
   const [isMuted, toggleMute] = useSoundMuted();
   const [isAudioModalOpen, setIsAudioModalOpen] = useState<boolean>(false);
+
+  const handleGenerateSeed = () => {
+    soundEffects.playButtonClick();
+    const fresh = generateMissionSeed();
+    setMissionSeed(fresh);
+  };
+
+  const handleCopySeed = async () => {
+    soundEffects.playTurnChime();
+    const formatted = formatSeedDisplay(missionSeed);
+    try {
+      await navigator.clipboard.writeText(formatted);
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleLaunchMission = (env: MissionEnvironment) => {
+    soundEffects.playTurnChime();
+    const effectiveSeed = missionSeed.trim() ? normalizeSeed(missionSeed) : generateMissionSeed();
+    if (!missionSeed.trim()) {
+      setMissionSeed(effectiveSeed);
+    }
+    onStart(env, selectedDifficulty, effectiveSeed);
+  };
 
   // Sync ambient space drone chord selection with chosen planet
   useEffect(() => {
@@ -467,6 +516,116 @@ export default function MissionBriefingScreen({
           </div>
         </div>
 
+        {/* CLASSROOM MISSION SEED & REPRODUCIBLE COMPETITION SYNC */}
+        <div className="max-w-5xl mx-auto w-full mb-8">
+          <div className="flex items-center justify-between mb-3 px-1">
+            <div className="flex items-center gap-2">
+              <Hash className="w-4 h-4 text-cyan-400" />
+              <span className="text-xs font-mono font-bold tracking-wider text-cyan-300 uppercase">
+                Classroom Mission Seed
+              </span>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-300 border border-cyan-800/60 font-bold hidden sm:inline">
+                STEM Class Competitions · Deterministic Simulation
+              </span>
+            </div>
+            <span className="text-[11px] font-mono text-slate-400 hidden sm:inline">
+              Guarantees identical solar flares, dust storms & power flux for all students
+            </span>
+          </div>
+
+          <div className="rounded-2xl bg-slate-900/90 border border-slate-800 p-4 sm:p-5 shadow-xl relative overflow-hidden backdrop-blur-sm">
+            {/* Subtle background glow */}
+            <div className="absolute -top-12 -right-12 w-48 h-48 bg-cyan-500/10 rounded-full blur-2xl pointer-events-none" />
+
+            <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+              {/* Input Group */}
+              <div className="flex-1 flex flex-col gap-1.5">
+                <label htmlFor="mission-seed-input" className="text-xs font-mono text-slate-300 flex items-center gap-1.5">
+                  <span className="text-cyan-400 font-bold">Mission Code:</span>
+                  <span className="text-slate-400 text-[11px]">
+                    Share this code with your class so every run has identical events
+                  </span>
+                </label>
+                <div className="relative flex items-center">
+                  <span className="absolute left-3.5 font-mono font-black text-cyan-400 text-base select-none">
+                    #
+                  </span>
+                  <input
+                    id="mission-seed-input"
+                    type="text"
+                    value={missionSeed}
+                    onChange={(e) => setMissionSeed(e.target.value.toUpperCase())}
+                    placeholder="e.g. ARTEMIS-26"
+                    maxLength={24}
+                    className="w-full pl-8 pr-4 py-3 rounded-xl bg-slate-950/90 border border-slate-700/80 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/20 text-white font-mono font-black text-base sm:text-lg tracking-wider uppercase transition-all shadow-inner placeholder:text-slate-600"
+                  />
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2.5 sm:self-end">
+                <button
+                  type="button"
+                  onClick={handleGenerateSeed}
+                  className="flex-1 sm:flex-initial px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 hover:border-cyan-500/40 text-slate-200 hover:text-white font-mono text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer"
+                  title="Generate random authentic NASA code (e.g. APOLLO-42, ORION-07)"
+                >
+                  <Shuffle className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Generate Random Seed</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleCopySeed}
+                  className={`flex-1 sm:flex-initial px-4 py-3 rounded-xl font-mono text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 border cursor-pointer ${
+                    isCopied
+                      ? "bg-emerald-950/80 border-emerald-500 text-emerald-300 shadow-emerald-950/50"
+                      : "bg-cyan-950/70 hover:bg-cyan-900/60 border-cyan-700/60 hover:border-cyan-400 text-cyan-200 hover:text-white shadow-cyan-950/40"
+                  }`}
+                  title="Copy Mission Code to share with classmates"
+                >
+                  {isCopied ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Copied Code! ✓</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>Copy Code</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Quick NASA Mission Code Chips */}
+            <div className="mt-3.5 pt-3 border-t border-slate-800/80 flex flex-wrap items-center gap-2">
+              <span className="text-[11px] font-mono text-slate-400 mr-1 flex items-center gap-1">
+                <Sparkles className="w-3 h-3 text-amber-400" />
+                Quick Seeds:
+              </span>
+              {["ARTEMIS-26", "GALE-99", "ORION-07", "VALKYRIE-18", "SHACKLETON-42"].map((quick) => (
+                <button
+                  key={quick}
+                  type="button"
+                  onClick={() => {
+                    soundEffects.playButtonClick();
+                    setMissionSeed(quick);
+                  }}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold transition-all border cursor-pointer ${
+                    missionSeed.replace(/^#/, "") === quick
+                      ? "bg-cyan-500/20 text-cyan-300 border-cyan-400 shadow-sm"
+                      : "bg-slate-950/60 text-slate-400 border-slate-800 hover:border-slate-700 hover:text-slate-200"
+                  }`}
+                >
+                  #{quick}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
         {/* STEP 2: DESTINATION SELECTION */}
         <div className="max-w-5xl mx-auto w-full mb-3 px-1 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -649,8 +808,7 @@ export default function MissionBriefingScreen({
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      soundEffects.playTurnChime();
-                      onStart(dest.env, selectedDifficulty);
+                      handleLaunchMission(dest.env);
                     }}
                     className={`flex-1 py-3 px-4 rounded-xl font-black text-sm tracking-wide flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 ${
                       isSelected
@@ -723,11 +881,8 @@ export default function MissionBriefingScreen({
 
             <button
               type="button"
-              onClick={() => {
-                soundEffects.playTurnChime();
-                onStart(selectedDestination.env, selectedDifficulty);
-              }}
-              className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-gradient-to-r from-[#1D4ED8] via-blue-600 to-[#06B6D4] hover:brightness-110 active:scale-95 text-white font-black text-base sm:text-lg tracking-wide flex items-center justify-center gap-3 shadow-xl shadow-blue-900/60 transition-all border border-cyan-300/40 flex-shrink-0"
+              onClick={() => handleLaunchMission(selectedDestination.env)}
+              className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-gradient-to-r from-[#1D4ED8] via-blue-600 to-[#06B6D4] hover:brightness-110 active:scale-95 text-white font-black text-base sm:text-lg tracking-wide flex items-center justify-center gap-3 shadow-xl shadow-blue-900/60 transition-all border border-cyan-300/40 flex-shrink-0 cursor-pointer"
             >
               <Rocket className="w-5 h-5 -rotate-45" />
               <span>{t("briefing.launchAs", { rank: t(`difficulties.${selectedDifficulty}.title`).toUpperCase() })}</span>

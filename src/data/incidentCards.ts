@@ -5,6 +5,7 @@
 // ============================================================
 
 import type { MissionEnvironmentId } from "./nasaConstants";
+import { createSeededRNG } from "../utils/seededRandom";
 
 export interface NasaScienceBadge {
   instrument: string;
@@ -1401,10 +1402,40 @@ const INCIDENT_MAP: Record<MissionEnvironmentId, IncidentCard[]> = {
   titan_hydrocarbon: TITAN_INCIDENT_CARDS,
 };
 
+export function getSeededIncidentSchedule(
+  environmentId: MissionEnvironmentId,
+  missionSeed: string
+): Record<number, IncidentCard> {
+  const baseCards = INCIDENT_MAP[environmentId] || LUNAR_INCIDENT_CARDS;
+  const rng = createSeededRNG(`${missionSeed}_incidents_${environmentId}`);
+
+  // Candidate incident sols for this environment
+  const candidateSols = baseCards.map((c) => c.triggerSol).sort((a, b) => a - b);
+  // Deterministically shuffle cards according to classroom seed
+  const shuffledCards = rng.shuffle(baseCards);
+
+  const schedule: Record<number, IncidentCard> = {};
+  for (let i = 0; i < candidateSols.length; i++) {
+    const sol = candidateSols[i];
+    const card = shuffledCards[i % shuffledCards.length];
+    schedule[sol] = {
+      ...card,
+      triggerSol: sol,
+    };
+  }
+
+  return schedule;
+}
+
 export function getIncidentForSol(
   environmentId: MissionEnvironmentId,
-  sol: number
+  sol: number,
+  missionSeed?: string
 ): IncidentCard | undefined {
+  if (missionSeed) {
+    const schedule = getSeededIncidentSchedule(environmentId, missionSeed);
+    return schedule[sol];
+  }
   const cards = INCIDENT_MAP[environmentId] || LUNAR_INCIDENT_CARDS;
   return cards.find((c) => c.triggerSol === sol);
 }

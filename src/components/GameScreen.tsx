@@ -75,6 +75,7 @@ import {
 interface GameScreenProps {
   environment: MissionEnvironment;
   difficulty?: DifficultyTier;
+  missionSeed?: string;
   onMissionEnd: (finalState: GameState) => void;
   onShowNasaData: () => void;
   onSwitchPlanet?: () => void;
@@ -83,13 +84,14 @@ interface GameScreenProps {
 export default function GameScreen({
   environment,
   difficulty = "commander",
+  missionSeed,
   onMissionEnd,
   onShowNasaData,
   onSwitchPlanet,
 }: GameScreenProps) {
   const { t } = useTranslation();
   const [gameState, setGameState] = useState<GameState>(() =>
-    createInitialGameState(environment, difficulty)
+    createInitialGameState(environment, difficulty, missionSeed)
   );
   const [phase, setPhase] = useState<"allocate" | "result">("allocate");
   const [lastResult, setLastResult] = useState<
@@ -128,7 +130,8 @@ export default function GameScreen({
     environment,
     currentTurn,
     modifierPowerDelta,
-    gameState.difficulty
+    gameState.difficulty,
+    gameState.missionSeed
   );
   const currentEvent = environment.turnEvents[currentTurn - 1];
 
@@ -136,10 +139,14 @@ export default function GameScreen({
     getDefaultAllocation(effectiveBudget, gameState.difficulty)
   );
 
-  // Check for dynamic incidents on Sol start
+  // Check for dynamic incidents on Sol start (governed deterministically by missionSeed)
   useEffect(() => {
     if (phase === "allocate" && currentTurn <= TOTAL_TURNS) {
-      const incident = getIncidentForSol(environment.id, currentTurn);
+      const incident = getIncidentForSol(
+        environment.id,
+        currentTurn,
+        gameState.missionSeed
+      );
       const alreadyHandled = gameState.incidentHistory?.some(
         (h) => h.sol === currentTurn && h.incidentId === incident?.id
       );
@@ -201,11 +208,12 @@ export default function GameScreen({
         environment,
         gameState.currentTurn + 1,
         modPower,
-        gameState.difficulty
+        gameState.difficulty,
+        gameState.missionSeed
       );
       setAllocation(getDefaultAllocation(budget, gameState.difficulty));
     }
-  }, [gameState.currentTurn, phase, environment, gameState.activeModifiers, gameState.difficulty]);
+  }, [gameState.currentTurn, phase, environment, gameState.activeModifiers, gameState.difficulty, gameState.missionSeed]);
 
   const handleAllocationChange = useCallback((next: PowerAllocation) => {
     setAllocation(next);
@@ -236,7 +244,8 @@ export default function GameScreen({
         environment,
         currentTurn,
         modPower,
-        updatedState.difficulty
+        updatedState.difficulty,
+        updatedState.missionSeed
       );
       setAllocation(getDefaultAllocation(newBudget, updatedState.difficulty));
     },
@@ -275,16 +284,16 @@ export default function GameScreen({
 
   // One-Click Play Again Handler
   const handlePlayAgain = useCallback(() => {
-    const freshState = createInitialGameState(environment, gameState.difficulty);
+    const freshState = createInitialGameState(environment, gameState.difficulty, gameState.missionSeed);
     setGameState(freshState);
     setPhase("allocate");
     setLastResult(null);
     setActiveIncident(null);
     setDismissedIncidents({});
     setShowDebriefModal(false);
-    const initialBudget = getEffectivePowerBudget(environment, 1, 0, gameState.difficulty);
+    const initialBudget = getEffectivePowerBudget(environment, 1, 0, gameState.difficulty, gameState.missionSeed);
     setAllocation(getDefaultAllocation(initialBudget, gameState.difficulty));
-  }, [environment, gameState.difficulty]);
+  }, [environment, gameState.difficulty, gameState.missionSeed]);
 
   // Switch Planet Handler
   const handleSwitchPlanetAction = useCallback(() => {
@@ -632,6 +641,7 @@ export default function GameScreen({
               <ControlDeck
                 environment={environment}
                 difficulty={gameState.difficulty}
+                missionSeed={gameState.missionSeed}
                 currentTurn={currentTurn}
                 totalTurns={TOTAL_TURNS}
                 effectiveBudgetMW={effectiveBudget}
@@ -696,6 +706,14 @@ export default function GameScreen({
                       ? t("destinations.mars.name")
                       : environment.name}
                   </span>
+                  {gameState.missionSeed && (
+                    <span
+                      className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-950/80 text-cyan-300 border border-cyan-700/50 font-mono font-bold"
+                      title="Classroom Mission Seed"
+                    >
+                      #{gameState.missionSeed}
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2">

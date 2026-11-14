@@ -15,12 +15,14 @@ import {
   Database,
   Sparkles,
   ShieldAlert,
+  Printer,
 } from "lucide-react";
 
 import type { GameState } from "../engine/simulationEngine";
 import type { MissionEnvironment } from "../data/nasaConstants";
 import FlightRecorderReplay from "./FlightRecorderReplay";
 import JuniorAstronautCertificate from "./JuniorAstronautCertificate";
+import StemDebriefWorksheet from "./StemDebriefWorksheet";
 import { calculateOutcomeRank } from "../utils/flightRecorder";
 import { DIFFICULTY_PRESETS } from "../data/difficultyTiers";
 import { useTranslation } from "../i18n/LanguageContext";
@@ -184,6 +186,7 @@ export default function MissionDebriefModal({
 }: MissionDebriefModalProps) {
   const { t } = useTranslation();
   const [showCertificate, setShowCertificate] = useState(false);
+  const [showWorksheet, setShowWorksheet] = useState(false);
 
   if (!isOpen || !gameState) return null;
 
@@ -228,8 +231,8 @@ export default function MissionDebriefModal({
                 {environment.id === "lunar_south_pole"
                   ? t("destinations.moon.name")
                   : environment.id === "mars_gale_crater"
-                  ? t("destinations.mars.name")
-                  : environment.name}
+                    ? t("destinations.mars.name")
+                    : environment.name}
               </span>
               <LanguageSelector compact />
             </div>
@@ -270,7 +273,7 @@ export default function MissionDebriefModal({
                   {outcomeRank.evaluation}
                 </p>
 
-                {/* Junior Astronaut Certificate Action Pill */}
+                {/* Action Pills */}
                 <div className="mt-4 flex flex-wrap items-center gap-2">
                   <button
                     type="button"
@@ -279,6 +282,15 @@ export default function MissionDebriefModal({
                   >
                     <Award className="w-4 h-4 text-black" />
                     <span>Astronaut Mission Certificate (PDF / PNG)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowWorksheet(true)}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-mono font-black text-xs shadow-lg shadow-teal-950/60 transition-all cursor-pointer transform hover:scale-[1.02]"
+                  >
+                    <Printer className="w-4 h-4" />
+                    <span>📄 Print / Save PDF Lab Report</span>
                   </button>
                 </div>
               </div>
@@ -379,12 +391,12 @@ export default function MissionDebriefModal({
                       member.status === "nominal"
                         ? "text-emerald-400 bg-emerald-950/80 border-emerald-500/40"
                         : member.status === "heroic"
-                        ? "text-cyan-400 bg-cyan-950/80 border-cyan-500/40"
-                        : member.status === "irradiated"
-                        ? "text-purple-400 bg-purple-950/80 border-purple-500/40"
-                        : member.status === "fatigued"
-                        ? "text-amber-400 bg-amber-950/80 border-amber-500/40"
-                        : "text-red-400 bg-red-950/80 border-red-500/40";
+                          ? "text-cyan-400 bg-cyan-950/80 border-cyan-500/40"
+                          : member.status === "irradiated"
+                            ? "text-purple-400 bg-purple-950/80 border-purple-500/40"
+                            : member.status === "fatigued"
+                              ? "text-amber-400 bg-amber-950/80 border-amber-500/40"
+                              : "text-red-400 bg-red-950/80 border-red-500/40";
 
                     return (
                       <div
@@ -511,6 +523,18 @@ export default function MissionDebriefModal({
             )}
 
             <div className="flex items-center gap-3 w-full sm:w-auto">
+              {/* STEM Flight Director Lab Report Button */}
+              <motion.button
+                type="button"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setShowWorksheet(true)}
+                className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs sm:text-sm shadow-lg shadow-teal-950/60 cursor-pointer"
+              >
+                <Printer className="w-4 h-4" />
+                <span>📄 Print / Save PDF Lab Report</span>
+              </motion.button>
+
               {/* Junior Astronaut Certificate Button */}
               <motion.button
                 type="button"
@@ -560,6 +584,16 @@ export default function MissionDebriefModal({
           environment={environment}
           rankTitle={outcomeRank.rankTitle}
           rankTier={outcomeRank.tier}
+        />
+      )}
+
+      {/* STEM Flight Director Debrief Worksheet Modal */}
+      {showWorksheet && (
+        <StemDebriefWorksheet
+          isOpen={showWorksheet}
+          onClose={() => setShowWorksheet(false)}
+          gameState={gameState}
+          environment={environment}
         />
       )}
     </AnimatePresence>

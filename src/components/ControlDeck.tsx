@@ -61,6 +61,7 @@ import PwaNavButton from "./PwaNavButton";
 export interface ControlDeckProps {
   environment: MissionEnvironment;
   difficulty?: DifficultyTier;
+  missionSeed?: string;
   currentTurn: number; // 1 to 10
   totalTurns?: number;
   effectiveBudgetMW: number;
@@ -81,6 +82,7 @@ export interface ControlDeckProps {
 export default function ControlDeck({
   environment,
   difficulty = "commander",
+  missionSeed,
   currentTurn,
   totalTurns = TOTAL_TURNS,
   effectiveBudgetMW,
@@ -339,6 +341,14 @@ export default function ControlDeck({
                   ? t("destinations.mars.name")
                   : environment.name}
               </span>
+              {missionSeed && (
+                <span
+                  className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-950/80 text-cyan-300 border border-cyan-700/50 font-mono font-bold"
+                  title="Classroom Mission Seed"
+                >
+                  #{missionSeed}
+                </span>
+              )}
             </div>
             <p className="text-sm font-black text-white leading-tight">
               {currentEvent?.id && t(`events.${currentEvent.id}.label`) !== `events.${currentEvent.id}.label`
