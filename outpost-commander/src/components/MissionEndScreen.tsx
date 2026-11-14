@@ -1,10 +1,20 @@
 // ============================================================
 // MissionEndScreen — results, outcome, retry, and scoring
 // ============================================================
+import { useState } from "react";
 import { motion } from "framer-motion";
-import { Trophy, AlertCircle, RefreshCw, RotateCcw, ChevronRight, Satellite } from "lucide-react";
+import {
+  Trophy,
+  AlertCircle,
+  RefreshCw,
+  RotateCcw,
+  Satellite,
+  Sparkles,
+  Globe,
+} from "lucide-react";
 import type { GameState, TurnResult } from "../engine/simulationEngine";
 import type { MissionEnvironment } from "../data/nasaConstants";
+import MissionDebriefModal from "./MissionDebriefModal";
 
 interface MissionEndScreenProps {
   gameState: GameState;
@@ -87,6 +97,7 @@ export default function MissionEndScreen({
   onShowNasaData,
   kidMode,
 }: MissionEndScreenProps) {
+  const [showDebrief, setShowDebrief] = useState(false);
   const { finalOutcome, cumulativeScore, history } = gameState;
 
   const isSuccess = finalOutcome === "mission_success";
@@ -221,29 +232,57 @@ export default function MissionEndScreen({
         )}
 
         {/* Actions */}
-        <div className="flex flex-col sm:flex-row gap-3">
+        <div className="flex flex-col gap-3">
           <button
-            onClick={onRetry}
-            className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition-colors"
+            onClick={() => setShowDebrief(true)}
+            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white font-black py-3.5 rounded-xl transition-all shadow-lg shadow-cyan-900/40 text-sm"
           >
-            <RotateCcw size={16} />
-            Retry {environment.name}
+            <Sparkles size={18} />
+            View NASA Engineering Debrief & Telemetry Chart
           </button>
-          <button
-            onClick={onNewMission}
-            className="flex-1 flex items-center justify-center gap-2 bg-white/10 hover:bg-white/15 text-white font-bold py-3 rounded-xl transition-colors"
-          >
-            <ChevronRight size={16} />
-            New Mission
-          </button>
-          <button
-            onClick={onShowNasaData}
-            className="flex-1 flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-slate-300 font-semibold py-3 rounded-xl transition-colors"
-          >
-            <Satellite size={16} />
-            NASA Data
-          </button>
+
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button
+              onClick={onRetry}
+              className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition-colors"
+            >
+              <RotateCcw size={16} />
+              Retry {environment.name}
+            </button>
+            <button
+              onClick={onNewMission}
+              className="flex-1 flex items-center justify-center gap-2 bg-white/10 hover:bg-white/15 text-white font-bold py-3 rounded-xl transition-colors"
+            >
+              <Globe size={16} />
+              Switch Planet
+            </button>
+            <button
+              onClick={onShowNasaData}
+              className="flex-1 flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-slate-300 font-semibold py-3 rounded-xl transition-colors"
+            >
+              <Satellite size={16} />
+              NASA Data
+            </button>
+          </div>
         </div>
+
+        {/* Engineering Debrief Modal */}
+        {showDebrief && (
+          <MissionDebriefModal
+            isOpen={showDebrief}
+            gameState={gameState}
+            environment={environment}
+            onPlayAgain={() => {
+              setShowDebrief(false);
+              onRetry();
+            }}
+            onSwitchPlanet={() => {
+              setShowDebrief(false);
+              onNewMission();
+            }}
+            onShowNasaData={onShowNasaData}
+          />
+        )}
       </motion.div>
     </div>
   );

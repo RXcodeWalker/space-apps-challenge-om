@@ -5,6 +5,7 @@
 // ============================================================
 
 import type { MissionEnvironment, TurnEvent } from "../data/nasaConstants";
+import type { IncidentCard, IncidentChoice } from "../data/incidentCards";
 import {
   TOTAL_TURNS,
   MIN_SYSTEM_HEALTH,
@@ -56,6 +57,23 @@ export type MissionOutcome =
   | "partial_success"
   | "critical_alert";
 
+export interface IncidentChoiceRecord {
+  incidentId: string;
+  incidentTitle: string;
+  sol: number;
+  choiceId: string;
+  choiceLabel: string;
+  tradeOffSummary: string;
+  engineeringTakeaway: string;
+}
+
+export interface ActiveModifier {
+  id: string;
+  name: string;
+  powerDeltaMW?: number;
+  turnsRemaining?: number; // undefined = permanent
+}
+
 export interface TurnResult {
   turn: number;             // 1–10
   event: TurnEvent;
@@ -78,6 +96,9 @@ export interface GameState {
   crew: CrewState;
   finalOutcome: MissionOutcome;
   cumulativeScore: number;
+  incidentHistory: IncidentChoiceRecord[];
+  activeModifiers: ActiveModifier[];
+  permanentWaterO2Bonus: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -490,6 +511,96 @@ export function createInitialGameState(environment: MissionEnvironment): GameSta
     crew: initialCrew(),
     finalOutcome: "ongoing",
     cumulativeScore: 0,
+    incidentHistory: [],
+    activeModifiers: [],
+    permanentWaterO2Bonus: 0,
+  };
+}
+
+export function applyIncidentChoice(
+  state: GameState,
+  incident: IncidentCard,
+  choice: IncidentChoice
+): GameState {
+  const { effects } = choice;
+
+  // Clone subsystems
+  const newSubsystems = {
+    powerGrid: {
+      ...state.subsystems.powerGrid,
+      health: clamp(
+        state.subsystems.powerGrid.health + (effects.powerGridHealthDelta ?? 0),
+        MIN_SYSTEM_HEALTH,
+        MAX_SYSTEM_HEALTH
+      ),
+    },
+    lifeSupport: {
+      ...state.subsystems.lifeSupport,
+      health: clamp(
+        state.subsystems.lifeSupport.health + (effects.lifeSupportHealthDelta ?? 0),
+        MIN_SYSTEM_HEALTH,
+        MAX_SYSTEM_HEALTH
+      ),
+    },
+    radiationShielding: {
+      ...state.subsystems.radiationShielding,
+      health: clamp(
+        state.subsystems.radiationShielding.health + (effects.shieldingHealthDelta ?? 0),
+        MIN_SYSTEM_HEALTH,
+        MAX_SYSTEM_HEALTH
+      ),
+    },
+  };
+
+  // Clone crew
+  const newCrew: CrewState = {
+    ...state.crew,
+    morale: clamp(state.crew.morale + (effects.moraleDelta ?? 0), 0, 100),
+    radiationExposureMSv: Math.max(
+      0,
+      Math.round((state.crew.radiationExposureMSv + (effects.radiationDeltaMSv ?? 0)) * 100) / 100
+    ),
+    foodReserveDays: clamp(
+      Math.round((state.crew.foodReserveDays + (effects.foodDaysDelta ?? 0)) * 10) / 10,
+      0,
+      30
+    ),
+    oxygenBufferPercent: clamp(
+      Math.round((state.crew.oxygenBufferPercent + (effects.oxygenBufferDelta ?? 0)) * 10) / 10,
+      0,
+      100
+    ),
+  };
+
+  const choiceRecord: IncidentChoiceRecord = {
+    incidentId: incident.id,
+    incidentTitle: incident.title,
+    sol: incident.triggerSol,
+    choiceId: choice.id,
+    choiceLabel: choice.label,
+    tradeOffSummary: choice.tradeOffSummary,
+    engineeringTakeaway: choice.engineeringTakeaway,
+  };
+
+  const newModifiers = [...(state.activeModifiers || [])];
+  if (effects.powerDeltaMW && effects.powerDeltaMW !== 0) {
+    newModifiers.push({
+      id: `${incident.id}_power`,
+      name: `${incident.title}: ${choice.shortTag}`,
+      powerDeltaMW: effects.powerDeltaMW,
+      turnsRemaining: 1, // impacts this sol
+    });
+  }
+
+  const bonus = (state.permanentWaterO2Bonus || 0) + (effects.permanentWaterO2Bonus || 0);
+
+  return {
+    ...state,
+    subsystems: newSubsystems,
+    crew: newCrew,
+    incidentHistory: [...(state.incidentHistory || []), choiceRecord],
+    activeModifiers: newModifiers,
+    permanentWaterO2Bonus: bonus,
   };
 }
 
@@ -507,12 +618,14 @@ export function getDefaultAllocation(effectiveBudgetMW: number): PowerAllocation
 
 export function getEffectivePowerBudget(
   environment: MissionEnvironment,
-  turn: number
+  turn: number,
+  additionalModifierMW = 0
 ): number {
   const event = environment.turnEvents[turn - 1];
   const rtgFloor = environment.basePowerBudgetMW * RTG_RESERVE_FRACTION;
   const solar = environment.basePowerBudgetMW * environment.baselineSolarEfficiency;
-  const effective = Math.max(rtgFloor, solar + event.powerDeltaMW);
+  const eventDelta = event ? event.powerDeltaMW : 0;
+  const effective = Math.max(rtgFloor, solar + eventDelta + additionalModifierMW);
   return Math.round(effective);
 }
 
@@ -524,7 +637,11 @@ export function processTurn(
   const { environment } = gameState;
   const event = environment.turnEvents[turn - 1];
 
-  const effectiveBudgetMW = getEffectivePowerBudget(environment, turn);
+  const modifierPowerDelta = (gameState.activeModifiers || []).reduce(
+    (sum, m) => sum + (m.powerDeltaMW || 0),
+    0
+  );
+  const effectiveBudgetMW = getEffectivePowerBudget(environment, turn, modifierPowerDelta);
 
   // Clamp allocation so it never exceeds the budget (simulate brownout proportionally)
   const totalRequested = totalAllocatedMW(allocation);
@@ -578,7 +695,10 @@ export function processTurn(
     clampedAllocation.lifeSupport - SUBSYSTEM_BASELINE_POWER.lifeSupport
   );
 
-  const oxygenDelta = lsExcess * OXYGEN_RECOVERY_PER_MW_EXCESS - lsDeficit * OXYGEN_LOSS_PER_MW_DEFICIT;
+  const bonusFactor = 1 + (gameState.permanentWaterO2Bonus || 0) / 100;
+  const oxygenDelta =
+    lsExcess * OXYGEN_RECOVERY_PER_MW_EXCESS * bonusFactor -
+    lsDeficit * OXYGEN_LOSS_PER_MW_DEFICIT;
   const newOxygenBuffer = clamp(
     gameState.crew.oxygenBufferPercent + oxygenDelta * event.lifeSupportStressFactor,
     0,
@@ -586,7 +706,7 @@ export function processTurn(
   );
 
   const foodDelta =
-    lsExcess * FOOD_HYDROPONICS_BONUS_PER_MW - FOOD_CONSUMED_PER_TURN;
+    lsExcess * FOOD_HYDROPONICS_BONUS_PER_MW * bonusFactor - FOOD_CONSUMED_PER_TURN;
   const newFoodReserve = clamp(gameState.crew.foodReserveDays + foodDelta, 0, 30);
 
   let moraleDelta = 0;
@@ -617,6 +737,13 @@ export function processTurn(
   const outcome = computeOutcome(turn, nextSubsystems, nextCrew, score);
   const { summary, kidSummary } = buildNarratives(turn, event, nextSubsystems, nextCrew, alerts);
 
+  // Age one-shot active modifiers
+  const nextModifiers = (gameState.activeModifiers || [])
+    .map((m) =>
+      m.turnsRemaining !== undefined ? { ...m, turnsRemaining: m.turnsRemaining - 1 } : m
+    )
+    .filter((m) => m.turnsRemaining === undefined || m.turnsRemaining > 0);
+
   const result: TurnResult = {
     turn,
     event,
@@ -639,6 +766,7 @@ export function processTurn(
     crew: nextCrew,
     finalOutcome: outcome,
     cumulativeScore: score,
+    activeModifiers: nextModifiers,
   };
 
   return { nextState, result };

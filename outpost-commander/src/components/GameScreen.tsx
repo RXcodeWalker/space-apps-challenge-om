@@ -1,14 +1,29 @@
 // ============================================================
-// GameScreen — the main 10-turn mission gameplay view
-// Powered by OutpostVisualizer & ControlDeck
+// GameScreen — Outpost Commander 10-Sol Mission Gameplay
+// Features:
+// 1. Dynamic NASA-Grounded Incident Triggering & IncidentModal
+// 2. OutpostVisualizer & Tactile ControlDeck
+// 3. Sol Debrief View with Active Telemetry & Alerts
+// 4. End-of-Mission Engineering Debrief Modal (Rank, SVG Chart, Personalized Insights)
+// 5. NASA Data Modal accessible from the header at any time
 // ============================================================
 import { useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronRight, Award, History } from "lucide-react";
+import {
+  ChevronRight,
+  Award,
+  History,
+  Database,
+  Radio,
+  Sparkles,
+  RotateCcw,
+} from "lucide-react";
 
 import OutpostVisualizer from "./OutpostVisualizer";
 import ControlDeck from "./ControlDeck";
 import AlertBanner from "./AlertBanner";
+import IncidentModal from "./IncidentModal";
+import MissionDebriefModal from "./MissionDebriefModal";
 
 import type { MissionEnvironment } from "../data/nasaConstants";
 import { TOTAL_TURNS } from "../data/nasaConstants";
@@ -17,20 +32,28 @@ import {
   processTurn,
   getDefaultAllocation,
   getEffectivePowerBudget,
+  applyIncidentChoice,
   type GameState,
   type PowerAllocation,
 } from "../engine/simulationEngine";
+import {
+  getIncidentForSol,
+  type IncidentCard,
+  type IncidentChoice,
+} from "../data/incidentCards";
 
 interface GameScreenProps {
   environment: MissionEnvironment;
   onMissionEnd: (finalState: GameState) => void;
   onShowNasaData: () => void;
+  onSwitchPlanet?: () => void;
 }
 
 export default function GameScreen({
   environment,
   onMissionEnd,
   onShowNasaData,
+  onSwitchPlanet,
 }: GameScreenProps) {
   const [gameState, setGameState] = useState<GameState>(() =>
     createInitialGameState(environment)
@@ -40,48 +63,163 @@ export default function GameScreen({
     ReturnType<typeof processTurn>["result"] | null
   >(null);
 
+  // Dynamic Incident State
+  const [activeIncident, setActiveIncident] = useState<IncidentCard | null>(null);
+  const [dismissedIncidents, setDismissedIncidents] = useState<Record<number, boolean>>({});
+
+  // End-of-Mission Engineering Debrief State
+  const [showDebriefModal, setShowDebriefModal] = useState<boolean>(false);
+
   const currentTurn = gameState.currentTurn + 1;
-  const effectiveBudget = getEffectivePowerBudget(environment, currentTurn);
+
+  // Active power modifiers from incidents
+  const modifierPowerDelta = (gameState.activeModifiers || []).reduce(
+    (sum, m) => sum + (m.powerDeltaMW || 0),
+    0
+  );
+  const effectiveBudget = getEffectivePowerBudget(
+    environment,
+    currentTurn,
+    modifierPowerDelta
+  );
   const currentEvent = environment.turnEvents[currentTurn - 1];
 
   const [allocation, setAllocation] = useState<PowerAllocation>(() =>
     getDefaultAllocation(effectiveBudget)
   );
 
-  // Recalculate budget when turn changes
+  // Check for dynamic incidents on Sol start
+  useEffect(() => {
+    if (phase === "allocate" && currentTurn <= TOTAL_TURNS) {
+      const incident = getIncidentForSol(environment.id, currentTurn);
+      const alreadyHandled = gameState.incidentHistory?.some(
+        (h) => h.sol === currentTurn && h.incidentId === incident?.id
+      );
+
+      if (incident && !alreadyHandled && !dismissedIncidents[currentTurn]) {
+        setActiveIncident(incident);
+      }
+    }
+  }, [currentTurn, environment.id, phase, gameState.incidentHistory, dismissedIncidents]);
+
+  // Recalculate budget when turn or modifiers change
   useEffect(() => {
     if (phase === "allocate") {
-      const budget = getEffectivePowerBudget(environment, gameState.currentTurn + 1);
+      const modPower = (gameState.activeModifiers || []).reduce(
+        (sum, m) => sum + (m.powerDeltaMW || 0),
+        0
+      );
+      const budget = getEffectivePowerBudget(
+        environment,
+        gameState.currentTurn + 1,
+        modPower
+      );
       setAllocation(getDefaultAllocation(budget));
     }
-  }, [gameState.currentTurn, phase, environment]);
+  }, [gameState.currentTurn, phase, environment, gameState.activeModifiers]);
 
   const handleAllocationChange = useCallback((next: PowerAllocation) => {
     setAllocation(next);
   }, []);
 
+  // Handle Incident Directive Choice
+  const handleSelectIncidentChoice = useCallback(
+    (choice: IncidentChoice) => {
+      if (!activeIncident) return;
+      const updatedState = applyIncidentChoice(gameState, activeIncident, choice);
+      setGameState(updatedState);
+      setDismissedIncidents((prev) => ({ ...prev, [currentTurn]: true }));
+      setActiveIncident(null);
+
+      // Re-evaluate budget immediately with new choice
+      const modPower = (updatedState.activeModifiers || []).reduce(
+        (sum, m) => sum + (m.powerDeltaMW || 0),
+        0
+      );
+      const newBudget = getEffectivePowerBudget(environment, currentTurn, modPower);
+      setAllocation(getDefaultAllocation(newBudget));
+    },
+    [activeIncident, gameState, environment, currentTurn]
+  );
+
+  // Advance Sol Turn
   const handleConfirmTurn = useCallback(() => {
     const { nextState, result } = processTurn(gameState, allocation);
     setGameState(nextState);
     setLastResult(result);
     setPhase("result");
 
+    // Check for mission completion or early critical threshold
     if (result.outcome !== "ongoing") {
-      setTimeout(() => onMissionEnd(nextState), 2800);
+      setTimeout(() => {
+        setShowDebriefModal(true);
+      }, 1400);
     }
-  }, [gameState, allocation, onMissionEnd]);
+  }, [gameState, allocation]);
 
   const handleNextTurn = useCallback(() => {
     setPhase("allocate");
     setLastResult(null);
   }, []);
 
+  // One-Click Play Again Handler
+  const handlePlayAgain = useCallback(() => {
+    const freshState = createInitialGameState(environment);
+    setGameState(freshState);
+    setPhase("allocate");
+    setLastResult(null);
+    setActiveIncident(null);
+    setDismissedIncidents({});
+    setShowDebriefModal(false);
+    const initialBudget = getEffectivePowerBudget(environment, 1);
+    setAllocation(getDefaultAllocation(initialBudget));
+  }, [environment]);
+
+  // Switch Planet Handler
+  const handleSwitchPlanetAction = useCallback(() => {
+    setShowDebriefModal(false);
+    if (onSwitchPlanet) {
+      onSwitchPlanet();
+    } else {
+      onMissionEnd(gameState);
+    }
+  }, [onSwitchPlanet, onMissionEnd, gameState]);
+
+  // Last incident chosen this sol (if any)
+  const currentSolIncidentChoice = gameState.incidentHistory?.find(
+    (h) => h.sol === currentTurn
+  );
+
   return (
     <div
       className={`min-h-screen bg-gradient-to-br ${environment.backgroundGradient} text-slate-100 flex flex-col justify-between`}
     >
+      {/* Dynamic Mid-Mission Incident Modal */}
+      {activeIncident && (
+        <IncidentModal
+          incident={activeIncident}
+          isOpen={activeIncident !== null}
+          onSelectChoice={handleSelectIncidentChoice}
+        />
+      )}
+
+      {/* End-of-Mission Engineering Debrief Modal */}
+      {showDebriefModal && (
+        <MissionDebriefModal
+          isOpen={showDebriefModal}
+          gameState={gameState}
+          environment={environment}
+          onPlayAgain={handlePlayAgain}
+          onSwitchPlanet={handleSwitchPlanetAction}
+          onShowNasaData={onShowNasaData}
+        />
+      )}
+
       <main className="flex-1 max-w-7xl mx-auto w-full px-3 sm:px-6 py-4 sm:py-6 flex flex-col gap-5">
         <AnimatePresence mode="wait">
+          {/* ========================================================= */}
+          {/* 1. ALLOCATION PHASE: CONTROL DECK & VISUALIZER */}
+          {/* ========================================================= */}
           {phase === "allocate" && (
             <motion.div
               key={`allocate-${currentTurn}`}
@@ -91,6 +229,24 @@ export default function GameScreen({
               transition={{ duration: 0.3 }}
               className="flex flex-col gap-4"
             >
+              {/* Active Incident Notification Banner if resolved this Sol */}
+              {currentSolIncidentChoice && (
+                <div className="flex items-center justify-between p-3 rounded-2xl bg-cyan-950/60 border border-cyan-500/40 text-xs font-mono">
+                  <div className="flex items-center gap-2">
+                    <Radio className="w-4 h-4 text-cyan-400 animate-pulse" />
+                    <span className="text-cyan-300 font-bold">
+                      ACTIVE DIRECTIVE (SOL {currentTurn}):
+                    </span>
+                    <span className="text-white font-medium">
+                      {currentSolIncidentChoice.choiceLabel}
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-slate-400 hidden sm:inline">
+                    {currentSolIncidentChoice.tradeOffSummary}
+                  </span>
+                </div>
+              )}
+
               <ControlDeck
                 environment={environment}
                 currentTurn={currentTurn}
@@ -117,6 +273,9 @@ export default function GameScreen({
             </motion.div>
           )}
 
+          {/* ========================================================= */}
+          {/* 2. RESULT PHASE: SOL DEBRIEF & TELEMETRY */}
+          {/* ========================================================= */}
           {phase === "result" && lastResult && (
             <motion.div
               key={`result-${lastResult.turn}`}
@@ -124,8 +283,44 @@ export default function GameScreen({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.3 }}
-              className="flex flex-col gap-5"
+              className="flex flex-col gap-4"
             >
+              {/* Header Telemetry Bar (accessible NASA Data anytime) */}
+              <div className="flex items-center justify-between p-3 rounded-2xl bg-[#090E1A] border border-cyan-900/40 shadow-lg">
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-mono font-bold tracking-wider text-[#06B6D4] uppercase">
+                    MISSION SOL {lastResult.turn} OF {TOTAL_TURNS}
+                  </span>
+                  <span className="text-xs text-slate-400 hidden sm:inline">
+                    {environment.name} · {environment.subtitle}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {/* NASA Data Header Button */}
+                  <button
+                    type="button"
+                    onClick={onShowNasaData}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-cyan-300 text-xs font-bold font-mono transition-colors"
+                  >
+                    <Database className="w-3.5 h-3.5 text-[#06B6D4]" />
+                    <span>NASA Data</span>
+                  </button>
+
+                  {/* View Full Debrief if mission finished */}
+                  {lastResult.outcome !== "ongoing" && (
+                    <button
+                      type="button"
+                      onClick={() => setShowDebriefModal(true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 text-white text-xs font-bold font-mono shadow-md"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Engineering Debrief</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
               {/* Habitat Cross-Section after Sol Events */}
               <OutpostVisualizer
                 environment={environment}
@@ -187,8 +382,8 @@ export default function GameScreen({
                     </div>
                   </div>
 
-                  {/* Proceed Button */}
-                  {lastResult.outcome === "ongoing" && (
+                  {/* Proceed Button or Debrief Trigger */}
+                  {lastResult.outcome === "ongoing" ? (
                     <div className="pt-2">
                       <motion.button
                         whileHover={{ scale: 1.015 }}
@@ -199,6 +394,27 @@ export default function GameScreen({
                         <span>Start Sol {lastResult.turn + 1} Operations</span>
                         <ChevronRight className="w-5 h-5" />
                       </motion.button>
+                    </div>
+                  ) : (
+                    <div className="pt-2 flex flex-col sm:flex-row gap-3">
+                      <motion.button
+                        whileHover={{ scale: 1.015 }}
+                        whileTap={{ scale: 0.985 }}
+                        onClick={() => setShowDebriefModal(true)}
+                        className="flex-1 py-4 rounded-xl bg-gradient-to-r from-blue-600 via-cyan-500 to-emerald-500 text-white font-black text-base flex items-center justify-center gap-2 shadow-lg shadow-cyan-900/50"
+                      >
+                        <Sparkles className="w-5 h-5" />
+                        <span>Open NASA Engineering Debrief</span>
+                      </motion.button>
+
+                      <button
+                        type="button"
+                        onClick={handlePlayAgain}
+                        className="px-5 py-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm flex items-center justify-center gap-2 border border-slate-700"
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                        <span>Play Again</span>
+                      </button>
                     </div>
                   )}
                 </div>

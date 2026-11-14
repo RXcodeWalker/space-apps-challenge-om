@@ -18,8 +18,16 @@ export default function App() {
   const [phase, setPhase] = useState<AppPhase>("menu");
   const [selectedEnvironment, setSelectedEnvironment] = useState<MissionEnvironment | null>(null);
   const [finalGameState, setFinalGameState] = useState<GameState | null>(null);
+  const [isNasaModalOpen, setIsNasaModalOpen] = useState(false);
   const [nasaModalEnv, setNasaModalEnv] = useState<MissionEnvironment | null>(null);
   const [kidMode] = useState(true);
+
+  function handleOpenNasaData(env?: MissionEnvironment | null) {
+    if (env) {
+      setNasaModalEnv(env);
+    }
+    setIsNasaModalOpen(true);
+  }
 
   function handleStartMission(env: MissionEnvironment) {
     setSelectedEnvironment(env);
@@ -48,13 +56,11 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-950">
       {/* NASA Data Modal (accessible from any phase) */}
-      {nasaModalEnv && (
-        <NasaDataModal
-          environment={nasaModalEnv}
-          isOpen={nasaModalEnv !== null}
-          onClose={() => setNasaModalEnv(null)}
-        />
-      )}
+      <NasaDataModal
+        environment={nasaModalEnv || selectedEnvironment}
+        isOpen={isNasaModalOpen}
+        onClose={() => setIsNasaModalOpen(false)}
+      />
 
       <AnimatePresence mode="wait">
         {phase === "menu" && (
@@ -67,7 +73,7 @@ export default function App() {
           >
             <MissionBriefingScreen
               onStart={handleStartMission}
-              onShowNasaData={(env) => setNasaModalEnv(env)}
+              onShowNasaData={(env) => handleOpenNasaData(env)}
             />
           </motion.div>
         )}
@@ -83,7 +89,8 @@ export default function App() {
             <GameScreen
               environment={selectedEnvironment}
               onMissionEnd={handleMissionEnd}
-              onShowNasaData={() => setNasaModalEnv(selectedEnvironment)}
+              onShowNasaData={() => handleOpenNasaData(selectedEnvironment)}
+              onSwitchPlanet={handleNewMission}
             />
           </motion.div>
         )}
@@ -102,7 +109,7 @@ export default function App() {
               environment={selectedEnvironment}
               onRetry={handleRetry}
               onNewMission={handleNewMission}
-              onShowNasaData={() => setNasaModalEnv(selectedEnvironment)}
+              onShowNasaData={() => handleOpenNasaData(selectedEnvironment)}
               kidMode={kidMode}
             />
           </motion.div>
