@@ -225,7 +225,11 @@ export default function MissionDebriefModal({
             </div>
             <div className="flex items-center gap-3">
               <span className="text-slate-400 hidden sm:inline">
-                {t(`destinations.${environment.id === "lunar_south_pole" ? "moon" : "mars"}.name`)}
+                {environment.id === "lunar_south_pole"
+                  ? t("destinations.moon.name")
+                  : environment.id === "mars_gale_crater"
+                  ? t("destinations.mars.name")
+                  : environment.name}
               </span>
               <LanguageSelector compact />
             </div>
