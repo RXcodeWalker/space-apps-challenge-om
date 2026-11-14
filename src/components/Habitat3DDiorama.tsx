@@ -1051,7 +1051,21 @@ export default function Habitat3DDiorama({
           )}
 
           {/* USER REQUIREMENT 2: Lunar Frost Accumulation Status */}
-          {!isMars && (
+          {isEuropa ? (
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full font-mono text-[11px] font-bold backdrop-blur-md border shadow-lg bg-cyan-950/80 border-cyan-400/60 text-cyan-200">
+              <Sparkles className="w-3.5 h-3.5 text-cyan-300" />
+              <span>
+                {hasSolarFlare
+                  ? "Jovian Magnetosphere Plasma Surge ⚡"
+                  : "Cryo-Geothermal Baseload & Zero Solar ❄️"}
+              </span>
+            </div>
+          ) : isTitan ? (
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full font-mono text-[11px] font-bold backdrop-blur-md border shadow-lg bg-amber-950/80 border-amber-500/60 text-amber-300">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+              <span>Dense N₂ Air (1.45 bar) · Kraken Mare Sink 🪐</span>
+            </div>
+          ) : !isMars ? (
             <div
               className={`flex items-center gap-1.5 px-3 py-1 rounded-full font-mono text-[11px] font-bold backdrop-blur-md border shadow-lg ${
                 frostFactor > 0.4
@@ -1066,7 +1080,7 @@ export default function Habitat3DDiorama({
                   : "Thermal Baseline: Sunlit Rim ☀️"}
               </span>
             </div>
-          )}
+          ) : null}
 
           {/* USER REQUIREMENT 3: Glowing Magnetic Deflector Shield Indicator */}
           <div

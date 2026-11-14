@@ -25,6 +25,7 @@ import {
   AlertTriangle,
   Flame,
   ShieldAlert,
+  Search,
 } from "lucide-react";
 
 import OutpostVisualizer from "./OutpostVisualizer";
@@ -63,7 +64,6 @@ import {
   type GameState,
   type PowerAllocation,
   type DifficultyTier,
-  type MissionAlert,
 } from "../engine/simulationEngine";
 import { DIFFICULTY_PRESETS } from "../data/difficultyTiers";
 import {
