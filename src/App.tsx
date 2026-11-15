@@ -1,10 +1,14 @@
 // ============================================================
 // App.tsx — root state machine: menu → game → results
 // ============================================================
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 
-import MissionBriefingScreen from "./components/MissionBriefingScreen";
+import LandingPage from "./pages/LandingPage";
+import MissionDataPage from "./pages/MissionDataPage";
+import TeacherPage from "./pages/TeacherPage";
+import SettingsPage from "./pages/SettingsPage";
+import { AppNav, MissionLogDrawer } from "./ui";
 import GameScreen from "./components/GameScreen";
 import MissionEndScreen from "./components/MissionEndScreen";
 import NasaDataModal from "./components/NasaDataModal";
@@ -37,6 +41,13 @@ import {
 import { soundEffects } from "./utils/soundEffects";
 
 type AppPhase = "menu" | "game" | "end";
+type MenuPage = "play" | "data" | "teachers" | "settings";
+const MENU_PAGES = [
+  { id: "play", label: "Mission" },
+  { id: "data", label: "Data" },
+  { id: "teachers", label: "Teachers" },
+  { id: "settings", label: "Settings" },
+] as const;
 
 const ALL_ENVIRONMENTS: MissionEnvironment[] = [
   LUNAR_SOUTH_POLE,
@@ -82,6 +93,10 @@ export default function App() {
   const [sol9CrisisTrigger, setSol9CrisisTrigger] = useState<number>(0);
   const [isSolarTrackerOpen, setIsSolarTrackerOpen] = useState<boolean>(false);
   const [isPatchDesignerOpen, setIsPatchDesignerOpen] = useState<boolean>(false);
+  const [menuPage, setMenuPage] = useState<MenuPage>("play");
+  const [isLogOpen, setIsLogOpen] = useState(false);
+  const [preview, setPreview] = useState("");
+  const closeLog = useCallback(() => setIsLogOpen(false), []);
 
   function handleOpenNasaData(env?: MissionEnvironment | null) {
     soundEffects.playButtonClick();
@@ -256,6 +271,8 @@ export default function App() {
         />
       )}
 
+      <MissionLogDrawer open={isLogOpen} onClose={closeLog} />
+
       <AnimatePresence mode="wait">
         {phase === "menu" && (
           <motion.div
@@ -265,16 +282,35 @@ export default function App() {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3 }}
           >
-            <MissionBriefingScreen
-              onStart={handleStartMission}
-              onShowNasaData={(env) => handleOpenNasaData(env)}
-              initialSeed={selectedSeed}
-              initialEnvironmentId={selectedEnvironment?.id}
-              initialScenarioId={selectedScenario?.id}
-              onToggleDemoBar={handleToggleDemoBar}
-              isDemoBarOpen={isDemoDrawerOpen}
-              onOpenPatchDesigner={() => setIsPatchDesignerOpen(true)}
-            />
+            <div className="oc-shell flex min-h-screen flex-col bg-oc-void text-oc-text-1 font-oc-ui">
+              <AppNav
+                pages={MENU_PAGES}
+                current={menuPage}
+                onNavigate={(id) => setMenuPage(id as MenuPage)}
+                onOpenLog={() => setIsLogOpen(true)}
+                subtitle="Junior astronaut mission trainer"
+                ticker={preview ? [preview] : []}
+                cta={menuPage === "play" ? undefined : { label: "Begin mission", onClick: () => setMenuPage("play") }}
+              />
+              {menuPage === "play" && (
+                <LandingPage
+                  onStart={handleStartMission}
+                  seed={selectedSeed}
+                  onSeedChange={setSelectedSeed}
+                  initialEnvironmentId={selectedEnvironment?.id}
+                  initialScenarioId={selectedScenario?.id}
+                  initialDifficulty={selectedDifficulty}
+                  onPreview={setPreview}
+                />
+              )}
+              {menuPage === "data" && (
+                <MissionDataPage initialEnvironmentId={selectedEnvironment?.id} onOpenExplorer={(env) => handleOpenNasaData(env)} />
+              )}
+              {menuPage === "teachers" && (
+                <TeacherPage seed={selectedSeed} onUseSeed={(seed) => setSelectedSeed(normalizeSeed(seed))} onGoPlay={() => setMenuPage("play")} />
+              )}
+              {menuPage === "settings" && <SettingsPage />}
+            </div>
           </motion.div>
         )}
 

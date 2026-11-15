@@ -11,6 +11,8 @@ export { Slider, type SliderProps } from './components/Slider';
 export { Button, type ButtonProps } from './components/Button';
 export { Toggle, Segmented, type ToggleProps, type SegmentedProps } from './components/Toggle';
 export { RankHud } from './components/RankHud';
+export { AppNav, type AppNavProps, type NavPage } from './components/AppNav';
+export { MissionLogDrawer } from './components/MissionLogDrawer';
 export { statusVars, cx } from './components/statusVars';
 
 export { RANKS, OBJECTIVES, OBJECTIVE_IDS, rankInfo, rankIndex, type ObjectiveId, type ObjectiveDef, type Rank } from './game/objectives';

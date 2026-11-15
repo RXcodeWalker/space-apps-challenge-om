@@ -139,3 +139,55 @@
 .oc-rank-hud__text { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
 .oc-rank-hud__name { font-family: var(--oc-font-label); font-weight: 600; font-size: 14px; line-height: 14px; letter-spacing: 0.1em; }
 .oc-rank-hud__xp { font-family: var(--oc-font-data); font-size: 12px; line-height: 14px; color: var(--oc-text-2); font-variant-numeric: tabular-nums; }
+
+/* ---------- App nav (+ ticker) ---------- */
+.oc-nav { position: sticky; top: 0; z-index: 30; background: var(--oc-bg-void); border-bottom: 1px solid var(--oc-line); }
+.oc-nav__bar { min-height: 56px; display: flex; align-items: center; gap: var(--oc-space-2); padding: var(--oc-space-1) var(--oc-space-2); flex-wrap: wrap; }
+.oc-nav__brand { flex: none; background: none; border: 0; padding: 0; cursor: pointer; color: var(--oc-text-1); font-family: var(--oc-font-label); font-weight: 600; font-size: 20px; line-height: 24px; letter-spacing: 0.08em; text-transform: uppercase; }
+.oc-nav__brand:focus-visible, .oc-nav__chip:focus-visible { outline: 2px solid var(--oc-accent); outline-offset: 2px; }
+.oc-nav__sub { flex: none; font: var(--oc-type-code); letter-spacing: 0.08em; color: var(--oc-text-3); text-transform: uppercase; }
+.oc-nav__chips { flex: 1 1 240px; min-width: 0; display: flex; gap: var(--oc-space-0-5); overflow-x: auto; scrollbar-width: none; }
+.oc-nav__chips::-webkit-scrollbar { display: none; }
+.oc-nav__chip { flex: none; height: 32px; display: flex; align-items: center; gap: var(--oc-space-1); padding: 0 var(--oc-space-1); background: transparent; color: var(--oc-text-3); border: 1px solid transparent; border-radius: var(--oc-radius-1); cursor: pointer; transition: background var(--oc-dur-fast), color var(--oc-dur-fast), border-color var(--oc-dur-fast); }
+.oc-nav__chip:hover { color: var(--oc-text-1); }
+.oc-nav__chip[aria-current="page"] { background: var(--oc-bg-raised); color: var(--oc-text-1); border-color: var(--oc-accent); }
+.oc-nav__chip-n { font: var(--oc-type-code); }
+.oc-nav__chip-label { font: var(--oc-type-label); letter-spacing: 0.08em; text-transform: uppercase; }
+.oc-nav__chip i { display: block; width: 6px; height: 6px; background: var(--oc-line-strong); clip-path: circle(50% at 50% 50%); }
+.oc-nav__chip[aria-current="page"] i { background: var(--oc-accent); clip-path: inset(0 0 0 0); }
+.oc-nav__right { flex: none; display: flex; align-items: center; gap: var(--oc-space-2); margin-left: auto; }
+.oc-nav__prog { height: 2px; background: var(--oc-bg-panel); }
+.oc-nav__prog > div { height: 2px; background: var(--oc-accent); transition: width 640ms var(--oc-ease-inout); }
+.oc-ticker { height: 24px; display: flex; align-items: center; overflow: hidden; background: var(--oc-bg-inset); }
+.oc-ticker__track { flex: none; display: flex; white-space: nowrap; animation: oc-marquee 48s linear infinite; }
+.oc-ticker__item { flex: none; padding-right: var(--oc-space-6); font: var(--oc-type-code); letter-spacing: 0.08em; color: var(--oc-text-2); text-transform: uppercase; }
+@keyframes oc-marquee { from { transform: translateX(0) } to { transform: translateX(-50%) } }
+@media (prefers-reduced-motion: reduce) { .oc-ticker__track { animation: none; } }
+[data-oc-reduce-motion="true"] .oc-ticker__track { animation: none; }
+
+/* ---------- Mission log drawer ---------- */
+.oc-scrim { position: fixed; inset: 0; z-index: 54; background: var(--oc-bg-void); opacity: 0; pointer-events: none; transition: opacity 320ms var(--oc-ease-out); }
+.oc-scrim--open { opacity: 0.7; pointer-events: auto; }
+.oc-drawer { position: fixed; top: 0; right: 0; bottom: 0; z-index: 55; width: min(400px, 100vw); display: flex; flex-direction: column; background: var(--oc-bg-inset); border-left: 1px solid var(--oc-line-strong); transform: translateX(105%); visibility: hidden; transition: transform 320ms var(--oc-ease-out), visibility 0s linear 320ms; }
+.oc-drawer--open { transform: none; visibility: visible; transition: transform 320ms var(--oc-ease-out), visibility 0s; }
+.oc-drawer__head { flex: none; height: 56px; display: flex; align-items: center; justify-content: space-between; padding: 0 var(--oc-space-2); border-bottom: 1px solid var(--oc-line); }
+.oc-drawer__rank { flex: none; display: flex; flex-direction: column; gap: var(--oc-space-2); padding: var(--oc-space-3) var(--oc-space-2); border-bottom: 1px solid var(--oc-line); }
+.oc-drawer__xp { display: flex; justify-content: space-between; gap: var(--oc-space-1); font: var(--oc-type-code); letter-spacing: 0.08em; color: var(--oc-text-2); }
+.oc-ladder { display: grid; grid-template-columns: repeat(5, 1fr); gap: var(--oc-space-0-5); }
+.oc-ladder > div { display: flex; flex-direction: column; gap: var(--oc-space-0-5); font: var(--oc-type-code); color: var(--oc-text-3); }
+.oc-ladder > div[data-reached="true"] { color: var(--oc-text-1); }
+.oc-ladder i { display: block; height: 4px; background: var(--oc-line-strong); transition: background var(--oc-dur-slow); }
+.oc-ladder > div[data-reached="true"] i { background: var(--oc-accent); }
+.oc-drawer__list { flex: 1; min-height: 0; overflow-y: auto; margin: 0; padding: 0; list-style: none; }
+.oc-obj { display: flex; align-items: center; gap: 12px; padding: 12px var(--oc-space-2); border-bottom: 1px solid var(--oc-line); }
+.oc-obj__shape { flex: none; display: block; width: 10px; height: 10px; background: var(--oc-line-strong); clip-path: circle(50% at 50% 50%); transition: background var(--oc-dur-base); }
+.oc-obj__title { flex: 1; min-width: 0; font-size: 14px; line-height: 20px; color: var(--oc-text-1); }
+.oc-obj__tail { flex: none; font-family: var(--oc-font-data); font-size: 12px; color: var(--oc-text-3); font-variant-numeric: tabular-nums; }
+.oc-obj[data-done="true"] .oc-obj__shape { background: var(--oc-accent); clip-path: inset(0 0 0 0); }
+.oc-obj[data-done="true"] .oc-obj__title { color: var(--oc-text-3); }
+.oc-obj[data-done="true"] .oc-obj__tail { color: var(--oc-accent); }
+.oc-obj[data-secret="true"] .oc-obj__title { color: var(--oc-text-3); font-style: italic; }
+.oc-drawer__foot { flex: none; display: flex; align-items: center; gap: var(--oc-space-1); padding: var(--oc-space-2); border-top: 1px solid var(--oc-line); }
+.oc-drawer__foot span { flex: 1; font: var(--oc-type-code); letter-spacing: 0.08em; color: var(--oc-text-3); text-transform: uppercase; }
+@media (prefers-reduced-motion: reduce) { .oc-drawer, .oc-scrim { transition-duration: 0ms; } }
+[data-oc-reduce-motion="true"] .oc-drawer, [data-oc-reduce-motion="true"] .oc-scrim { transition-duration: 0ms; }
