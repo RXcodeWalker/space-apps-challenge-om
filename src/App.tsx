@@ -2,6 +2,7 @@
 // App.tsx — root state machine: menu → game → results
 // ============================================================
 import { useCallback, useState } from "react";
+import { useTranslation } from "./i18n/LanguageContext";
 import { AnimatePresence, motion } from "framer-motion";
 
 import LandingPage from "./pages/LandingPage";
@@ -43,12 +44,12 @@ import { soundEffects } from "./utils/soundEffects";
 
 type AppPhase = "menu" | "game" | "end";
 type MenuPage = "play" | "data" | "teachers" | "settings" | "design";
-const MENU_PAGES = [
-  { id: "play", label: "Mission" },
-  { id: "data", label: "Data" },
-  { id: "teachers", label: "Teachers" },
-  { id: "settings", label: "Settings" },
-  { id: "design", label: "Design" },
+const MENU_PAGE_IDS = [
+  ["play", "shell.navMission"],
+  ["data", "shell.navData"],
+  ["teachers", "shell.navTeachers"],
+  ["settings", "shell.navSettings"],
+  ["design", "shell.navDesign"],
 ] as const;
 
 const ALL_ENVIRONMENTS: MissionEnvironment[] = [
@@ -59,6 +60,7 @@ const ALL_ENVIRONMENTS: MissionEnvironment[] = [
 ];
 
 export default function App() {
+  const { t } = useTranslation();
   const [urlParams] = useState(() => parseMissionParamsFromUrl());
   const [phase, setPhase] = useState<AppPhase>("menu");
   const [selectedEnvironment, setSelectedEnvironment] = useState<MissionEnvironment | null>(() => {
@@ -286,13 +288,13 @@ export default function App() {
           >
             <div className="oc-shell flex min-h-screen flex-col bg-oc-void text-oc-text-1 font-oc-ui">
               <AppNav
-                pages={MENU_PAGES}
+                pages={MENU_PAGE_IDS.map(([id, key]) => ({ id, label: t(key) }))}
                 current={menuPage}
                 onNavigate={(id) => setMenuPage(id as MenuPage)}
                 onOpenLog={() => setIsLogOpen(true)}
-                subtitle="Junior astronaut mission trainer"
+                subtitle={t("shell.subtitle")}
                 ticker={preview ? [preview] : []}
-                cta={menuPage === "play" ? undefined : { label: "Begin mission", onClick: () => setMenuPage("play") }}
+                cta={menuPage === "play" ? undefined : { label: t("shell.beginMission"), onClick: () => setMenuPage("play") }}
               />
               {menuPage === "play" && (
                 <LandingPage

@@ -2,6 +2,7 @@ import { RankHud } from './RankHud';
 import { Button } from './Button';
 import { useProgress, useRank } from '../hooks';
 import { cx } from './statusVars';
+import { useTranslation } from '../../i18n/LanguageContext';
 
 export interface NavPage { id: string; label: string }
 
@@ -23,11 +24,12 @@ export interface AppNavProps {
 export function AppNav({ pages, current, onNavigate, onOpenLog, cta, ticker = [], subtitle }: AppNavProps) {
   const { xp, rank, next, frac } = useRank();
   const { last } = useProgress();
+  const { t } = useTranslation();
   const items = [
     ...ticker,
-    `RANK ${rank.name} · ${xp} XP`,
-    next ? `${next.xp - xp} XP TO ${next.name}` : 'MAX RANK',
-    last ? `LAST UNLOCK · ${last}` : 'NO OBJECTIVES CLEARED YET',
+    `${t('shell.rank')} ${rank.name} · ${xp} XP`,
+    next ? `${next.xp - xp} ${t('shell.xpTo')} ${next.name}` : t('shell.maxRank'),
+    last ? `${t('shell.lastUnlock')} · ${last}` : t('shell.noObjectives'),
   ];
   return (
     <header className="oc-nav">

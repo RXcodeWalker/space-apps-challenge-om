@@ -23,38 +23,38 @@ type MotionChoice = 'system' | 'on' | 'off';
 export default function SettingsPage() {
   const s = useSettings();
   const { colorblindMode, setColorblindMode } = useAccessibility();
-  const { language, setLanguage, languages } = useTranslation();
+  const { language, setLanguage, languages, t } = useTranslation();
   const [muted, toggleMute] = useSoundMuted();
   const motion: MotionChoice = s.reduceMotion === null ? 'system' : s.reduceMotion ? 'on' : 'off';
 
   return (
-    <PageFrame eyebrow="SETTINGS · THIS DEVICE" title="Settings" lead="Changes apply right away and stay on this device.">
-      <Panel size="lg" title="Display" meta="Motion and color">
-        <Row name="Reduce motion" text="Shortens the day simulation and stops the blinking alarms. System follows your device.">
-          <Segmented label="Reduce motion" value={motion} onChange={v => updateSettings({ reduceMotion: v === 'system' ? null : v === 'on' })}
-            options={[{ value: 'system', label: 'System' }, { value: 'on', label: 'On' }, { value: 'off', label: 'Off' }]} />
+    <PageFrame eyebrow={t('shell.setEyebrow')} title={t('shell.setTitle')} lead={t('shell.setLead')}>
+      <Panel size="lg" title={t('shell.display')} meta={t('shell.displayMeta')}>
+        <Row name={t('shell.reduceMotion')} text={t('shell.reduceMotionText')}>
+          <Segmented label={t('shell.reduceMotion')} value={motion} onChange={v => updateSettings({ reduceMotion: v === 'system' ? null : v === 'on' })}
+            options={[{ value: 'system', label: t('shell.system') }, { value: 'on', label: t('shell.on') }, { value: 'off', label: t('shell.off') }]} />
         </Row>
-        <Row name="Colorblind-safe palette" text="Swaps status colors for a palette that stays distinct. Shapes and words always show too.">
-          <Toggle on={colorblindMode} onChange={setColorblindMode}>Colorblind palette</Toggle>
+        <Row name={t('shell.colorblind')} text={t('shell.colorblindText')}>
+          <Toggle on={colorblindMode} onChange={setColorblindMode}>{t('shell.colorblindToggle')}</Toggle>
         </Row>
-        <Row name="Celebrations" text="Bursts and pop-ups when you clear an objective.">
-          <Segmented label="Celebrations" value={s.celebrate} onChange={(v: CelebrateLevel) => updateSettings({ celebrate: v })}
-            options={[{ value: 'full', label: 'Full' }, { value: 'subtle', label: 'Subtle' }, { value: 'off', label: 'Off' }]} />
-        </Row>
-      </Panel>
-
-      <Panel size="lg" title="Sound" meta="Synthesised, no files">
-        <Row name="Interface sounds" text="Slider ticks, day chimes and alarms.">
-          <Toggle on={s.sfx} onChange={on => { updateSettings({ sfx: on }); if (on) sfx.play('chime'); }}>Sound</Toggle>
-        </Row>
-        <Row name="Mute everything" text="One switch that silences every sound in the app, including older screens.">
-          <Toggle on={muted} onChange={() => toggleMute()}>Muted</Toggle>
+        <Row name={t('shell.celebrations')} text={t('shell.celebrationsText')}>
+          <Segmented label={t('shell.celebrations')} value={s.celebrate} onChange={(v: CelebrateLevel) => updateSettings({ celebrate: v })}
+            options={[{ value: 'full', label: t('shell.full') }, { value: 'subtle', label: t('shell.subtle') }, { value: 'off', label: t('shell.off') }]} />
         </Row>
       </Panel>
 
-      <Panel size="lg" title="Language" meta={`${languages.length} available`}>
-        <Row name="Interface language" text="Mission text, reports and menus.">
-          <Segmented label="Language" value={language} onChange={(v: SupportedLanguage) => setLanguage(v)}
+      <Panel size="lg" title={t('shell.soundPanel')} meta={t('shell.soundMeta')}>
+        <Row name={t('shell.interfaceSounds')} text={t('shell.interfaceSoundsText')}>
+          <Toggle on={s.sfx} onChange={on => { updateSettings({ sfx: on }); if (on) sfx.play('chime'); }}>{t('shell.soundToggle')}</Toggle>
+        </Row>
+        <Row name={t('shell.muteAll')} text={t('shell.muteAllText')}>
+          <Toggle on={muted} onChange={() => toggleMute()}>{t('shell.muted')}</Toggle>
+        </Row>
+      </Panel>
+
+      <Panel size="lg" title={t('shell.language')} meta={`${languages.length} ${t('shell.available')}`}>
+        <Row name={t('shell.interfaceLanguage')} text={t('shell.interfaceLanguageText')}>
+          <Segmented label={t('shell.language')} value={language} onChange={(v: SupportedLanguage) => setLanguage(v)}
             options={languages.map(l => ({ value: l.code, label: l.code.toUpperCase() }))} />
         </Row>
       </Panel>
