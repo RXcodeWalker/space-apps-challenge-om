@@ -16,6 +16,7 @@ import {
   Sparkles,
   ShieldAlert,
   Printer,
+  X,
 } from "lucide-react";
 
 import type { GameState } from "../engine/simulationEngine";
@@ -35,6 +36,7 @@ interface MissionDebriefModalProps {
   onPlayAgain: () => void;
   onSwitchPlanet: () => void;
   onShowNasaData?: () => void;
+  onClose?: () => void;
 }
 
 function generatePersonalizedInsights(
@@ -183,6 +185,7 @@ export default function MissionDebriefModal({
   onPlayAgain,
   onSwitchPlanet,
   onShowNasaData,
+  onClose,
 }: MissionDebriefModalProps) {
   const { t } = useTranslation();
   const [showCertificate, setShowCertificate] = useState(false);
@@ -207,6 +210,7 @@ export default function MissionDebriefModal({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
+          onClick={onClose}
           className="fixed inset-0 bg-black/85 backdrop-blur-md"
         />
 
@@ -237,6 +241,16 @@ export default function MissionDebriefModal({
                     : environment.name}
               </span>
               <LanguageSelector compact />
+              {onClose && (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all border border-slate-700 ml-1"
+                  title="Close Debrief Modal"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
             </div>
           </div>
 

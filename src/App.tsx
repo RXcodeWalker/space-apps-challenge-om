@@ -9,6 +9,14 @@ import GameScreen from "./components/GameScreen";
 import MissionEndScreen from "./components/MissionEndScreen";
 import NasaDataModal from "./components/NasaDataModal";
 import PwaStatusBanner from "./components/PwaStatusBanner";
+import JudgeDemoBar from "./components/JudgeDemoBar";
+import CrisisMinigameModal from "./components/CrisisMinigameModal";
+import MissionDebriefModal from "./components/MissionDebriefModal";
+import StemDebriefWorksheet from "./components/StemDebriefWorksheet";
+import {
+  createSol9CrisisGameState,
+  createCompletedMissionGameState,
+} from "./utils/judgeDemoData";
 
 import type { MissionEnvironment } from "./data/nasaConstants";
 import {
@@ -62,6 +70,15 @@ export default function App() {
   const [isNasaModalOpen, setIsNasaModalOpen] = useState(false);
   const [nasaModalEnv, setNasaModalEnv] = useState<MissionEnvironment | null>(null);
 
+  // Judge Express Demo Bar State
+  const [isDemoDrawerOpen, setIsDemoDrawerOpen] = useState<boolean>(() => urlParams.demo);
+  const [isCrisisMinigameModalOpen, setIsCrisisMinigameModalOpen] = useState<boolean>(false);
+  const [isDebriefModalOpen, setIsDebriefModalOpen] = useState<boolean>(false);
+  const [isPrintWorksheetOpen, setIsPrintWorksheetOpen] = useState<boolean>(false);
+  const [demoCompletedGameState, setDemoCompletedGameState] = useState<GameState | null>(null);
+  const [initialGameStateOverride, setInitialGameStateOverride] = useState<GameState | null>(null);
+  const [sol9CrisisTrigger, setSol9CrisisTrigger] = useState<number>(0);
+
   function handleOpenNasaData(env?: MissionEnvironment | null) {
     soundEffects.playButtonClick();
     if (env) {
@@ -83,6 +100,7 @@ export default function App() {
     }
     setSelectedScenario(scenario || null);
     setFinalGameState(null);
+    setInitialGameStateOverride(null);
     setPhase("game");
   }
 
@@ -94,6 +112,7 @@ export default function App() {
   function handleRetry() {
     if (selectedEnvironment) {
       setFinalGameState(null);
+      setInitialGameStateOverride(null);
       setPhase("game");
     }
   }
@@ -102,7 +121,60 @@ export default function App() {
     setSelectedEnvironment(null);
     setSelectedScenario(null);
     setFinalGameState(null);
+    setInitialGameStateOverride(null);
     setPhase("menu");
+  }
+
+  // Judge Express Demo Bar Handlers
+  function handleToggleDemoBar() {
+    setIsDemoDrawerOpen((prev) => !prev);
+  }
+
+  function handleJumpToSol9Crisis() {
+    soundEffects.playButtonClick();
+    const env = selectedEnvironment || LUNAR_SOUTH_POLE;
+    setSelectedEnvironment(env);
+    const crisisState = createSol9CrisisGameState(
+      env,
+      selectedDifficulty,
+      selectedSeed,
+      selectedScenario || undefined
+    );
+    setInitialGameStateOverride(crisisState);
+    setFinalGameState(null);
+    setPhase("game");
+    setSol9CrisisTrigger((prev) => prev + 1);
+  }
+
+  function handleTriggerMinigame() {
+    soundEffects.playButtonClick();
+    setIsCrisisMinigameModalOpen(true);
+  }
+
+  function handleViewMissionDebrief() {
+    soundEffects.playButtonClick();
+    const env = selectedEnvironment || LUNAR_SOUTH_POLE;
+    const completedState = createCompletedMissionGameState(
+      env,
+      selectedDifficulty,
+      selectedSeed,
+      selectedScenario || undefined
+    );
+    setDemoCompletedGameState(completedState);
+    setIsDebriefModalOpen(true);
+  }
+
+  function handlePreviewPrintableLabReport() {
+    soundEffects.playButtonClick();
+    const env = selectedEnvironment || LUNAR_SOUTH_POLE;
+    const completedState = createCompletedMissionGameState(
+      env,
+      selectedDifficulty,
+      selectedSeed,
+      selectedScenario || undefined
+    );
+    setDemoCompletedGameState(completedState);
+    setIsPrintWorksheetOpen(true);
   }
 
   return (
@@ -116,6 +188,51 @@ export default function App() {
         isOpen={isNasaModalOpen}
         onClose={() => setIsNasaModalOpen(false)}
       />
+
+      {/* Judge Express Demo Bar Floating Drawer & Collapsed Pill */}
+      <JudgeDemoBar
+        isOpen={isDemoDrawerOpen}
+        onToggle={handleToggleDemoBar}
+        onJumpToSol9={handleJumpToSol9Crisis}
+        onTriggerMinigame={handleTriggerMinigame}
+        onViewDebrief={handleViewMissionDebrief}
+        onPreviewLabReport={handlePreviewPrintableLabReport}
+      />
+
+      {/* 15-Second Flight Director Crisis Minigame Sandbox Modal */}
+      <CrisisMinigameModal
+        isOpen={isCrisisMinigameModalOpen}
+        onClose={() => setIsCrisisMinigameModalOpen(false)}
+      />
+
+      {/* End-of-Mission Engineering Debrief Modal (when triggered via Demo Bar) */}
+      {isDebriefModalOpen && demoCompletedGameState && (
+        <MissionDebriefModal
+          isOpen={isDebriefModalOpen}
+          gameState={demoCompletedGameState}
+          environment={demoCompletedGameState.environment}
+          onClose={() => setIsDebriefModalOpen(false)}
+          onPlayAgain={() => {
+            setIsDebriefModalOpen(false);
+            handleRetry();
+          }}
+          onSwitchPlanet={() => {
+            setIsDebriefModalOpen(false);
+            handleNewMission();
+          }}
+          onShowNasaData={() => handleOpenNasaData(demoCompletedGameState.environment)}
+        />
+      )}
+
+      {/* STEM Flight Director Lab Report Worksheet Modal (when triggered via Demo Bar) */}
+      {isPrintWorksheetOpen && demoCompletedGameState && (
+        <StemDebriefWorksheet
+          isOpen={isPrintWorksheetOpen}
+          onClose={() => setIsPrintWorksheetOpen(false)}
+          gameState={demoCompletedGameState}
+          environment={demoCompletedGameState.environment}
+        />
+      )}
 
       <AnimatePresence mode="wait">
         {phase === "menu" && (
@@ -132,6 +249,8 @@ export default function App() {
               initialSeed={selectedSeed}
               initialEnvironmentId={selectedEnvironment?.id}
               initialScenarioId={selectedScenario?.id}
+              onToggleDemoBar={handleToggleDemoBar}
+              isDemoBarOpen={isDemoDrawerOpen}
             />
           </motion.div>
         )}
@@ -152,6 +271,10 @@ export default function App() {
               onMissionEnd={handleMissionEnd}
               onShowNasaData={() => handleOpenNasaData(selectedEnvironment)}
               onSwitchPlanet={handleNewMission}
+              onToggleDemoBar={handleToggleDemoBar}
+              isDemoBarOpen={isDemoDrawerOpen}
+              initialGameStateOverride={initialGameStateOverride}
+              sol9CrisisTrigger={sol9CrisisTrigger}
             />
           </motion.div>
         )}
@@ -172,6 +295,8 @@ export default function App() {
               onNewMission={handleNewMission}
               onShowNasaData={() => handleOpenNasaData(selectedEnvironment)}
               kidMode={selectedDifficulty === "cadet"}
+              onToggleDemoBar={handleToggleDemoBar}
+              isDemoBarOpen={isDemoDrawerOpen}
             />
           </motion.div>
         )}

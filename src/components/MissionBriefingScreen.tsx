@@ -263,7 +263,7 @@ export default function MissionBriefingScreen({
   });
   const [isCopied, setIsCopied] = useState<boolean>(false);
   const [isMuted, toggleMute] = useSoundMuted();
-  const { colorblindMode, toggleColorblindMode } = useAccessibility();
+  const { colorblindMode, toggleColorblindMode, shapes } = useAccessibility();
   const [isAudioModalOpen, setIsAudioModalOpen] = useState<boolean>(false);
   const [isEducatorHubOpen, setIsEducatorHubOpen] = useState<boolean>(false);
 

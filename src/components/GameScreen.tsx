@@ -982,6 +982,35 @@ export default function GameScreen({
                     <span className="hidden sm:inline">{isMuted ? t("common.muted") : t("common.sound")}</span>
                   </button>
 
+                  {/* Vision / Accessibility Toggle */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundEffects.playButtonClick();
+                      toggleColorblindMode();
+                    }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold font-mono transition-colors ${
+                      colorblindMode
+                        ? "bg-sky-950/70 border-sky-400 text-sky-200 shadow-sm shadow-sky-950/50 ring-1 ring-sky-400/40"
+                        : "bg-slate-900 hover:bg-slate-800 border-slate-700 text-slate-300 hover:text-sky-300"
+                    }`}
+                    title={
+                      colorblindMode
+                        ? "Vision / Accessibility: Colorblind-Safe Mode ACTIVE (Click to switch to Standard)"
+                        : "Vision / Accessibility: Enable Colorblind-Safe & High-Contrast Mode"
+                    }
+                    aria-pressed={colorblindMode}
+                    aria-label="Vision and Accessibility: Toggle Colorblind-Safe Mode"
+                  >
+                    <Eye className={`w-3.5 h-3.5 ${colorblindMode ? "text-sky-400" : "text-slate-400"}`} />
+                    <span className="hidden sm:inline">Vision / Accessibility</span>
+                    {colorblindMode && (
+                      <span className="text-[10px] bg-sky-500/20 text-sky-300 px-1 py-0.2 rounded font-mono font-bold">
+                        {shapes.nominal} SAFE
+                      </span>
+                    )}
+                  </button>
+
                   {/* Procedural Space Audio Synthesizer Deck Modal Trigger */}
                   <button
                     type="button"

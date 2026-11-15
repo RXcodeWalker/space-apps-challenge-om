@@ -1,7 +1,9 @@
 // ============================================================
 // SubsystemCard — health display for one outpost system
+// Universal Classroom Accessibility & High-Contrast Support
 // ============================================================
 import { motion, AnimatePresence } from "framer-motion";
+import { useAccessibility } from "../utils/AccessibilityContext";
 
 interface SubsystemCardProps {
   label: string;
@@ -15,19 +17,6 @@ interface SubsystemCardProps {
   accentColor: string;
 }
 
-function healthColor(health: number): string {
-  if (health < 30) return "#ef4444";
-  if (health < 60) return "#eab308";
-  return "#10b981";
-}
-
-function healthLabel(health: number): string {
-  if (health < 30) return "CRITICAL";
-  if (health < 60) return "WARNING";
-  if (health < 80) return "FAIR";
-  return "GOOD";
-}
-
 export default function SubsystemCard({
   label,
   icon,
@@ -39,19 +28,44 @@ export default function SubsystemCard({
   kidMode,
   accentColor,
 }: SubsystemCardProps) {
-  const color = healthColor(health);
-  const hLabel = healthLabel(health);
+  const { colorblindMode, tokens, shapes } = useAccessibility();
+
+  const color = colorblindMode
+    ? health < 30
+      ? tokens.danger // #f97316
+      : health < 60
+      ? tokens.warning // #facc15
+      : tokens.nominal // #0284c7
+    : health < 30
+    ? "#ef4444"
+    : health < 60
+    ? "#eab308"
+    : "#10b981";
+
+  const hLabel =
+    health < 30
+      ? `${shapes.brownout} CRITICAL`
+      : health < 60
+      ? `${shapes.warning} WARNING`
+      : health < 80
+      ? `${shapes.surplus} FAIR`
+      : `${shapes.nominal} NOMINAL`;
+
   const wearPct = Math.round(wearAccumulated * 100);
 
   return (
-    <div className="glass-panel p-4 flex flex-col gap-3">
+    <div
+      className={`glass-panel p-4 flex flex-col gap-3 ${
+        colorblindMode ? "border-slate-700/80" : ""
+      }`}
+    >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-2xl">{icon}</span>
+          <span className="text-2xl" aria-hidden="true">{icon}</span>
           <span className="font-bold text-sm text-slate-100">{label}</span>
         </div>
         <span
-          className="text-xs font-bold px-2 py-0.5 rounded-full"
+          className="text-xs font-bold font-mono px-2 py-0.5 rounded-full border border-white/10"
           style={{ backgroundColor: `${color}30`, color }}
         >
           {hLabel}
@@ -60,9 +74,9 @@ export default function SubsystemCard({
 
       {/* Health bar */}
       <div>
-        <div className="flex justify-between text-xs text-slate-400 mb-1">
+        <div className="flex justify-between text-xs text-slate-400 mb-1 font-mono">
           <span>Health</span>
-          <span className="font-mono font-bold" style={{ color }}>
+          <span className="font-bold" style={{ color }}>
             {health.toFixed(0)}%
           </span>
         </div>
@@ -78,9 +92,9 @@ export default function SubsystemCard({
 
       {/* Wear bar */}
       <div>
-        <div className="flex justify-between text-xs text-slate-400 mb-1">
+        <div className="flex justify-between text-xs text-slate-400 mb-1 font-mono">
           <span>Wear & Tear</span>
-          <span className="font-mono" style={{ color: wearPct > 60 ? "#f97316" : "#94a3b8" }}>
+          <span style={{ color: wearPct > 60 ? "#f97316" : "#94a3b8" }}>
             {wearPct}%
           </span>
         </div>
@@ -94,9 +108,9 @@ export default function SubsystemCard({
       </div>
 
       {/* Power row */}
-      <div className="flex items-center justify-between text-xs">
+      <div className="flex items-center justify-between text-xs font-mono">
         <span className="text-slate-400">Power Draw</span>
-        <span className="font-mono font-bold" style={{ color: accentColor }}>
+        <span className="font-bold" style={{ color: colorblindMode && accentColor.toLowerCase().includes("10b981") ? tokens.nominal : accentColor }}>
           {powerDrawMW} MW
         </span>
       </div>
@@ -108,7 +122,7 @@ export default function SubsystemCard({
           initial={{ opacity: 0, y: 4 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -4 }}
-          className="text-xs text-slate-400 leading-relaxed border-t border-white/5 pt-2"
+          className="text-xs text-slate-300 leading-relaxed border-t border-white/5 pt-2"
         >
           {kidMode ? kidFriendlyStatus : statusMessage}
         </motion.p>

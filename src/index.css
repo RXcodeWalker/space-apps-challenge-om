@@ -43,6 +43,17 @@
     @apply bg-emerald-400;
   }
 
+  /* High-Contrast & Colorblind-Safe Theme Overrides (Okabe-Ito / ColorBrewer) */
+  .colorblind-mode .health-bar-critical,
+  [data-colorblind="true"] .health-bar-critical {
+    background-color: #f97316 !important;
+  }
+
+  .colorblind-mode .health-bar-good,
+  [data-colorblind="true"] .health-bar-good {
+    background-color: #0284c7 !important;
+  }
+
   .glass-panel {
     @apply bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl;
   }
