@@ -48,6 +48,12 @@ export const OBJECTIVES = {
   'ds-crit': { title: 'Push the oxygen lab into critical', unlock: 'Oxygen into the red', xp: 75 },
   'ds-gray': { title: 'Run the grayscale check at critical', unlock: 'Reads without color', xp: 75 },
   'ds-type': { title: 'Send a message through the type tester', unlock: 'Message to the crew', xp: 25 },
+  'ds-xray': { title: 'X-ray a readout', unlock: 'Saw through the readout', xp: 25 },
+  'ds-tablet': { title: 'Reflow the game for tablet', unlock: 'Reflowed for tablet', xp: 25 },
+  'ds-fire6': { title: 'Fire all six motion curves', unlock: 'Every curve fired', xp: 75, need: 6 },
+  'ds-scrub': { title: 'Play the day through to the report', unlock: 'Day played to the report', xp: 50 },
+  'ds-sounds6': { title: 'Play every sound', unlock: 'Full sound check', xp: 100, need: 6 },
+  'ds-bench': { title: 'Trip the bench into critical by hand', unlock: 'Bench tripped to critical', xp: 50 },
 } as const satisfies Record<string, ObjectiveDef>;
 
 export type ObjectiveId = keyof typeof OBJECTIVES;
