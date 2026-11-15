@@ -2,6 +2,7 @@
 @import "./ui/theme.css";
 @import "./ui/components.css";
 @import "./ui/modal.css";
+@import "./ui/legacy.css";
 
 @layer base {
   :root {

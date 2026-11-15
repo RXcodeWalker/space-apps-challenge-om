@@ -133,3 +133,13 @@
 .oc-demo-pill { background: var(--oc-bg-panel); border-color: var(--oc-caution); color: var(--oc-caution); }
 .oc-demo-pill:hover { background: var(--oc-bg-raised); }
 .oc-demo-pill .oc-btn__right { color: var(--oc-text-3); }
+
+/* Site footer on menu pages (holds the Design system link) */
+.oc-sitefoot {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px;
+  margin-top: auto; padding: 14px 16px;
+  border-top: 1px solid var(--oc-line);
+  font: 500 11px/16px var(--oc-font-data);
+  letter-spacing: .06em; text-transform: uppercase; color: var(--oc-text-3);
+}
+.oc-sitefoot .oc-linkbtn[aria-current="page"] { color: var(--oc-accent); }

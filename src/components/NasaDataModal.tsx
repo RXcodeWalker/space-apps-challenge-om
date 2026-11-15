@@ -151,31 +151,32 @@ export default function NasaDataModal({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 15 }}
           transition={{ type: "spring", damping: 25, stiffness: 300 }}
-          className="relative w-full max-w-3xl rounded-3xl bg-[#090E1A] border-2 border-cyan-500/40 shadow-2xl shadow-cyan-950/60 overflow-hidden flex flex-col max-h-[88vh] my-auto"
+          className="relative w-full max-w-3xl rounded-3xl bg-[#090E1A] border-2 border-cyan-500/40 shadow-2xl shadow-cyan-950/60 overflow-hidden flex flex-col max-h-[92dvh] my-auto"
         >
           {/* Header */}
-          <div className="flex items-center justify-between p-5 border-b border-white/10 bg-slate-950/80">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-blue-500/20 rounded-xl text-blue-400 border border-blue-500/30">
+          <div className="flex flex-wrap items-center justify-between gap-2 p-3 sm:p-5 border-b border-white/10 bg-slate-950/80">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              <div className="hidden sm:block shrink-0 p-2.5 bg-blue-500/20 rounded-xl text-blue-400 border border-blue-500/30">
                 <Satellite size={22} className="text-cyan-400" />
               </div>
               <div>
-                <h2 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
+                <h2 className="text-base sm:text-lg font-black text-white flex flex-wrap items-center gap-x-2">
                   <span>{t("nasaModal.title")}</span>
                   <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-300 border border-cyan-700/50">
                     REAL DATA
                   </span>
                 </h2>
-                <p className="text-xs text-slate-400 font-mono">
+                <p className="hidden sm:block text-xs text-slate-400 font-mono">
                   {t("nasaModal.subtitle")}
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex shrink-0 items-center gap-2">
               <LanguageSelector compact />
               <button
                 onClick={onClose}
-                className="p-2 hover:bg-white/10 rounded-xl transition-colors text-slate-400 hover:text-white"
+                aria-label="Close"
+                className="grid h-11 w-11 place-items-center hover:bg-white/10 rounded-xl transition-colors text-slate-400 hover:text-white"
               >
                 <X size={20} />
               </button>
@@ -183,7 +184,7 @@ export default function NasaDataModal({
           </div>
 
           {/* Navigation Tabs */}
-          <div className="flex items-center gap-2 px-5 pt-3 pb-2 border-b border-white/10 bg-slate-900/60">
+          <div className="flex items-center gap-2 px-3 sm:px-5 pt-3 pb-2 border-b border-white/10 bg-slate-900/60 overflow-x-auto [&>button]:shrink-0 [&>button]:whitespace-nowrap">
             <button
               onClick={() => setActiveTab("calibration")}
               className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold font-mono transition-all ${
@@ -238,7 +239,7 @@ export default function NasaDataModal({
           </div>
 
           {/* Body Content */}
-          <div className="overflow-y-auto p-5 flex flex-col gap-5 [&>*]:shrink-0">
+          <div className="overflow-y-auto p-3 sm:p-5 flex flex-col gap-5 [&>*]:shrink-0">
             {/* TAB 1: CALIBRATION & SIMULATION RULES */}
             {activeTab === "calibration" && (
               <div className="flex flex-col gap-4">

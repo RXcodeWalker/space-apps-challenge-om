@@ -49,7 +49,6 @@ const MENU_PAGE_IDS = [
   ["data", "shell.navData"],
   ["teachers", "shell.navTeachers"],
   ["settings", "shell.navSettings"],
-  ["design", "shell.navDesign"],
 ] as const;
 
 const ALL_ENVIRONMENTS: MissionEnvironment[] = [
@@ -315,6 +314,17 @@ export default function App() {
               )}
               {menuPage === "settings" && <SettingsPage />}
               {menuPage === "design" && <DesignSystemPage />}
+              <footer className="oc-sitefoot">
+                <span>{t("common.footerTagline")}</span>
+                <button
+                  type="button"
+                  className="oc-linkbtn"
+                  aria-current={menuPage === "design" ? "page" : undefined}
+                  onClick={() => { setMenuPage("design"); window.scrollTo({ top: 0 }); }}
+                >
+                  {t("shell.navDesign")}
+                </button>
+              </footer>
             </div>
           </motion.div>
         )}

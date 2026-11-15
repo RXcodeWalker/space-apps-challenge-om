@@ -161,16 +161,16 @@ export default function EducatorHubModal({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 15 }}
           transition={{ duration: 0.25, ease: "easeOut" }}
-          className="relative w-full max-w-5xl max-h-[92vh] bg-[#0B1120] border border-cyan-500/40 rounded-3xl shadow-2xl shadow-cyan-950/80 flex flex-col overflow-hidden text-slate-100 z-10 no-print"
+          className="relative w-full max-w-5xl max-h-[92dvh] bg-[#0B1120] border border-cyan-500/40 rounded-3xl shadow-2xl shadow-cyan-950/80 flex flex-col overflow-hidden text-slate-100 z-10 no-print"
         >
           {/* Header */}
-          <div className="px-5 py-4 border-b border-cyan-900/40 bg-gradient-to-r from-blue-950/60 via-slate-900/90 to-cyan-950/60 flex flex-wrap items-center justify-between gap-3 shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-500 to-rose-500 flex items-center justify-center shadow-lg shadow-amber-950/50 border border-amber-300/40 shrink-0 text-xl">
+          <div className="px-3 sm:px-5 py-3 sm:py-4 border-b border-cyan-900/40 bg-gradient-to-r from-blue-950/60 via-slate-900/90 to-cyan-950/60 flex flex-wrap items-center justify-between gap-3 shrink-0">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              <div className="hidden sm:flex w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-500 to-rose-500 flex items-center justify-center shadow-lg shadow-amber-950/50 border border-amber-300/40 shrink-0 text-xl">
                 🍎
               </div>
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <span className="text-[10px] font-mono font-bold tracking-widest uppercase text-amber-400 px-2 py-0.5 rounded-full bg-amber-950/60 border border-amber-600/40">
                     NASA STEM Curriculum Hub
                   </span>
@@ -178,18 +178,18 @@ export default function EducatorHubModal({
                     NGSS ALIGNED · GRADES 6–12
                   </span>
                 </div>
-                <h2 className="text-lg sm:text-xl font-black text-white tracking-tight flex items-center gap-2">
+                <h2 className="text-base sm:text-xl font-black text-white tracking-tight">
                   Educator Hub & NGSS Curriculum
                 </h2>
               </div>
             </div>
 
             {/* Header Actions */}
-            <div className="flex items-center gap-2">
+            <div className="flex shrink-0 items-center gap-2">
               <button
                 type="button"
                 onClick={handlePrint}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-cyan-700/50 hover:border-cyan-400 text-cyan-300 text-xs font-mono font-bold transition-all shadow-sm cursor-pointer"
+                className="flex min-h-11 min-w-11 items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-cyan-700/50 hover:border-cyan-400 text-cyan-300 text-xs font-mono font-bold transition-all shadow-sm cursor-pointer"
                 title="Print Teacher Guide / Save as PDF"
               >
                 <Printer className="w-3.5 h-3.5" />
@@ -199,7 +199,7 @@ export default function EducatorHubModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="p-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-700/60 hover:border-slate-500 transition-all cursor-pointer"
+                className="grid h-11 w-11 place-items-center rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-700/60 hover:border-slate-500 transition-all cursor-pointer"
                 aria-label="Close Educator Hub"
               >
                 <X className="w-4 h-4" />
@@ -208,7 +208,7 @@ export default function EducatorHubModal({
           </div>
 
           {/* Navigation Tabs */}
-          <div className="px-4 sm:px-6 pt-3 border-b border-slate-800 bg-slate-950/50 flex flex-wrap gap-1.5 sm:gap-2 shrink-0">
+          <div className="px-4 sm:px-6 pt-3 border-b border-slate-800 bg-slate-950/50 flex flex-nowrap gap-1.5 sm:gap-2 shrink-0 overflow-x-auto [&>button]:shrink-0 [&>button]:whitespace-nowrap">
             <button
               type="button"
               onClick={() => {

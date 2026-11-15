@@ -310,7 +310,7 @@ export default function StemDebriefWorksheet({
             <div
               ref={worksheetRef}
               id="printable-stem-debrief-worksheet"
-              className="stem-worksheet-printable bg-white text-slate-900 rounded-xl border-2 border-slate-900 p-6 sm:p-8 md:p-10 shadow-2xl mx-auto max-w-[850px] font-sans text-xs leading-normal"
+              className="oc-doc stem-worksheet-printable bg-white text-slate-900 rounded-xl border-2 border-slate-900 p-6 sm:p-8 md:p-10 shadow-2xl mx-auto max-w-[850px] font-sans text-xs leading-normal"
             >
               {/* ============================================================ */}
               {/* HEADER: Official NASA Junior Flight Director Mission Log     */}

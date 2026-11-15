@@ -454,7 +454,7 @@ export default function JuniorAstronautCertificate({
             <div
               ref={certificateContainerRef}
               id="printable-astronaut-certificate"
-              className="certificate-printable-container relative w-full max-w-[940px] sm:aspect-[16/10] bg-gradient-to-b from-[#081128] via-[#040916] to-[#02040A] rounded-2xl border-[8px] border-[#D4AF37] p-6 sm:p-10 shadow-2xl flex flex-col justify-between text-center overflow-hidden"
+              className="oc-doc certificate-printable-container relative w-full max-w-[940px] sm:aspect-[16/10] bg-gradient-to-b from-[#081128] via-[#040916] to-[#02040A] rounded-2xl border-[8px] border-[#D4AF37] p-6 sm:p-10 shadow-2xl flex flex-col justify-between text-center overflow-hidden"
               style={{
                 boxShadow: "0 0 60px rgba(212, 175, 55, 0.2), inset 0 0 40px rgba(0, 0, 0, 0.8)",
               }}
