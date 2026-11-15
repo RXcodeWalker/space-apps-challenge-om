@@ -8,6 +8,7 @@ import LandingPage from "./pages/LandingPage";
 import MissionDataPage from "./pages/MissionDataPage";
 import TeacherPage from "./pages/TeacherPage";
 import SettingsPage from "./pages/SettingsPage";
+import DesignSystemPage from "./pages/DesignSystemPage";
 import { AppNav, MissionLogDrawer } from "./ui";
 import GameScreen from "./components/GameScreen";
 import MissionEndScreen from "./components/MissionEndScreen";
@@ -41,12 +42,13 @@ import {
 import { soundEffects } from "./utils/soundEffects";
 
 type AppPhase = "menu" | "game" | "end";
-type MenuPage = "play" | "data" | "teachers" | "settings";
+type MenuPage = "play" | "data" | "teachers" | "settings" | "design";
 const MENU_PAGES = [
   { id: "play", label: "Mission" },
   { id: "data", label: "Data" },
   { id: "teachers", label: "Teachers" },
   { id: "settings", label: "Settings" },
+  { id: "design", label: "Design" },
 ] as const;
 
 const ALL_ENVIRONMENTS: MissionEnvironment[] = [
@@ -310,6 +312,7 @@ export default function App() {
                 <TeacherPage seed={selectedSeed} onUseSeed={(seed) => setSelectedSeed(normalizeSeed(seed))} onGoPlay={() => setMenuPage("play")} />
               )}
               {menuPage === "settings" && <SettingsPage />}
+              {menuPage === "design" && <DesignSystemPage />}
             </div>
           </motion.div>
         )}

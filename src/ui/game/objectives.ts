@@ -42,6 +42,12 @@ export const OBJECTIVES = {
   'flight-director': { title: 'Complete a mission at Flight Director difficulty', unlock: 'Flight Director cleared', xp: 200 },
   'mission-data': { title: 'Open the NASA mission data', unlock: 'Read the sources', xp: 25 },
   'patch': { title: 'Design a mission patch', unlock: 'Patch designer', xp: 50 },
+  'ds-drill': { title: 'Finish the anomaly drill', unlock: 'Eyes on the panel', xp: 150 },
+  'ds-drill-s': { title: 'Score an S in the anomaly drill', unlock: 'S-rank reflexes', xp: 150 },
+  'ds-copy3': { title: 'Copy three color swatches', unlock: 'Palette collector', xp: 50, need: 3 },
+  'ds-crit': { title: 'Push the oxygen lab into critical', unlock: 'Oxygen into the red', xp: 75 },
+  'ds-gray': { title: 'Run the grayscale check at critical', unlock: 'Reads without color', xp: 75 },
+  'ds-type': { title: 'Send a message through the type tester', unlock: 'Message to the crew', xp: 25 },
 } as const satisfies Record<string, ObjectiveDef>;
 
 export type ObjectiveId = keyof typeof OBJECTIVES;
