@@ -4,6 +4,7 @@ import './index.css'
 import App from './App.tsx'
 import { LanguageProvider } from './i18n/LanguageContext'
 import { AccessibilityProvider } from './utils/AccessibilityContext'
+import { CelebrationLayer } from './ui/fx/CelebrationLayer'
 import * as serviceWorkerRegistration from './serviceWorkerRegistration'
 
 createRoot(document.getElementById('root')!).render(
@@ -11,6 +12,7 @@ createRoot(document.getElementById('root')!).render(
     <AccessibilityProvider>
       <LanguageProvider>
         <App />
+        <CelebrationLayer />
       </LanguageProvider>
     </AccessibilityProvider>
   </StrictMode>,
