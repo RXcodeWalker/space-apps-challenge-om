@@ -78,9 +78,10 @@ let europaGame = createInitialGameState(EUROPA_UNDER_ICE, "commander");
 for (let sol = 1; sol <= 10; sol++) {
   const budget = getEffectivePowerBudget(EUROPA_UNDER_ICE, sol);
   const alloc = {
-    powerGrid: Math.round(budget * 0.3),
-    lifeSupport: Math.round(budget * 0.4),
-    radiationShielding: Math.round(budget * 0.3),
+    powerGrid: Math.round(budget * 0.22),
+    lifeSupport: Math.round(budget * 0.28),
+    radiationShielding: Math.round(budget * 0.26),
+    foodProduction: Math.round(budget * 0.24),
   };
   const step = processTurn(europaGame, alloc);
   europaGame = step.nextState;
@@ -96,9 +97,10 @@ let titanGame = createInitialGameState(TITAN_HYDROCARBON, "commander");
 for (let sol = 1; sol <= 10; sol++) {
   const budget = getEffectivePowerBudget(TITAN_HYDROCARBON, sol);
   const alloc = {
-    powerGrid: Math.round(budget * 0.3),
-    lifeSupport: Math.round(budget * 0.4),
-    radiationShielding: Math.round(budget * 0.3),
+    powerGrid: Math.round(budget * 0.22),
+    lifeSupport: Math.round(budget * 0.28),
+    radiationShielding: Math.round(budget * 0.26),
+    foodProduction: Math.round(budget * 0.24),
   };
   const step = processTurn(titanGame, alloc);
   titanGame = step.nextState;

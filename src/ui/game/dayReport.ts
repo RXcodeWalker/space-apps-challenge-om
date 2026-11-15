@@ -4,7 +4,7 @@
 // Pure function — no React, no engine mutation.
 // ============================================================
 import { STATUS, STATUS_RANK, statusOf, type Status } from '../tokens';
-import type { CrewState, SubsystemId, SubsystemState, TurnResult } from '../../engine/simulationEngine';
+import type { CrewState, MissionLossDiagnosis, SubsystemId, SubsystemState, TurnResult } from '../../engine/simulationEngine';
 import type { CrewMember } from '../../data/crewData';
 
 export interface ReportLine { status: Status; text: string; delta: string }
@@ -21,6 +21,8 @@ export interface DayReport {
   /** The shield stopped a flare this day. */
   flareBlocked: boolean;
   cta: string;
+  /** Lost missions only: what ended it, the one decision behind it, and what to try next. */
+  cause?: { headline: string; decision: string; fix: string };
 }
 
 export interface DaySnapshot {
@@ -35,7 +37,7 @@ const signed = (d: number, decimals: number, unit: string) => `${d >= 0 ? '+' : 
 /** Crew health as the member list the card and report both use. */
 export const membersOf = (crew: CrewState, fallback: CrewMember[]): CrewMember[] => (crew.members?.length ? crew.members : fallback);
 
-export function buildDayReport(prev: DaySnapshot, result: TurnResult, totalDays: number): DayReport {
+export function buildDayReport(prev: DaySnapshot, result: TurnResult, totalDays: number, loss?: MissionLossDiagnosis | null): DayReport {
   const lines: Array<ReportLine> = [];
   const push = (status: Status, text: string, delta: string) => lines.push({ status, text, delta });
 
@@ -92,10 +94,11 @@ export function buildDayReport(prev: DaySnapshot, result: TurnResult, totalDays:
     caption: `DAY ${pad(result.turn)} REPORT`,
     headline,
     status: lost ? 'crit' : worst,
-    lines: lines.slice(0, 5),
+    lines: lines.slice(0, lost && loss ? 3 : 5),
     end: lost || done,
     lost,
     flareBlocked: flare && shieldBlocked >= 50,
     cta: lost || done ? 'See mission debrief' : `Plan day ${result.turn + 1}`,
+    cause: lost && loss ? { headline: loss.headline, decision: loss.decisionText, fix: loss.fixText } : undefined,
   };
 }
