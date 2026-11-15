@@ -64,6 +64,8 @@ import { soundEffects, useSoundMuted } from "../utils/soundEffects";
 import { ambientAudio } from "../utils/ambientAudio";
 import AmbientAudioModal from "./AmbientAudioModal";
 import EducatorHubModal from "./EducatorHubModal";
+import MissionPatchDesigner, { MissionPatchView } from "./MissionPatchDesigner";
+import { loadSavedPatch, type MissionPatchState } from "../data/patchAssets";
 import LiveSpaceWeatherBadge from "./LiveSpaceWeatherBadge";
 import {
   DIFFICULTY_PRESETS,
@@ -87,6 +89,7 @@ interface MissionBriefingScreenProps {
   initialScenarioId?: ScenarioId;
   onToggleDemoBar?: () => void;
   isDemoBarOpen?: boolean;
+  onOpenPatchDesigner?: () => void;
 }
 
 interface DestinationCardData {
@@ -236,6 +239,7 @@ export default function MissionBriefingScreen({
   initialScenarioId,
   onToggleDemoBar,
   isDemoBarOpen,
+  onOpenPatchDesigner,
 }: MissionBriefingScreenProps) {
   const { t } = useTranslation();
 
@@ -267,6 +271,25 @@ export default function MissionBriefingScreen({
   const { colorblindMode, toggleColorblindMode, shapes } = useAccessibility();
   const [isAudioModalOpen, setIsAudioModalOpen] = useState<boolean>(false);
   const [isEducatorHubOpen, setIsEducatorHubOpen] = useState<boolean>(false);
+  const [isPatchModalOpen, setIsPatchModalOpen] = useState<boolean>(false);
+  const [customPatch, setCustomPatch] = useState<MissionPatchState>(() => loadSavedPatch());
+
+  // Listen for patch state updates from localStorage or custom events
+  useEffect(() => {
+    const handlePatchUpdate = () => {
+      setCustomPatch(loadSavedPatch());
+    };
+    if (typeof window !== "undefined") {
+      window.addEventListener("outpost_patch_saved", handlePatchUpdate);
+      window.addEventListener("storage", handlePatchUpdate);
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("outpost_patch_saved", handlePatchUpdate);
+        window.removeEventListener("storage", handlePatchUpdate);
+      }
+    };
+  }, []);
 
   const selectedDestination =
     DESTINATIONS.find((d) => d.env.id === selectedId) ?? DESTINATIONS[0];
@@ -392,6 +415,27 @@ export default function MissionBriefingScreen({
             )}
             <PwaNavButton />
             <LanguageSelector />
+
+            {/* Mission Patch Designer Studio Button */}
+            <motion.button
+              type="button"
+              whileHover={{ scale: 1.04 }}
+              whileTap={{ scale: 0.96 }}
+              onClick={() => {
+                soundEffects.playButtonClick();
+                if (onOpenPatchDesigner) {
+                  onOpenPatchDesigner();
+                } else {
+                  setIsPatchModalOpen(true);
+                }
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-purple-500/50 hover:border-purple-400 bg-purple-950/40 hover:bg-purple-900/50 text-purple-300 text-xs font-mono font-bold transition-all shadow-sm shadow-purple-950/40 cursor-pointer"
+              title="Mission Patch Designer: Customize Crew Insignia & Team Patch"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+              <span className="hidden sm:inline">Mission Patch</span>
+              <span className="sm:hidden">Patch</span>
+            </motion.button>
 
             {/* Educator Hub & NGSS Curriculum Button */}
             <motion.button
@@ -802,6 +846,55 @@ export default function MissionBriefingScreen({
                 </button>
               ))}
             </div>
+          </div>
+        </div>
+
+        {/* EXPEDITION MISSION PATCH PREVIEW & CUSTOMIZER CALLOUT */}
+        <div className="max-w-5xl mx-auto w-full mb-8">
+          <div className="rounded-2xl bg-gradient-to-r from-slate-900/95 via-purple-950/30 to-slate-900/95 border border-purple-500/30 p-4 sm:p-5 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-4 w-full sm:w-auto">
+              {/* Miniature Patch Preview */}
+              <div
+                onClick={() => {
+                  soundEffects.playButtonClick();
+                  if (onOpenPatchDesigner) onOpenPatchDesigner();
+                  else setIsPatchModalOpen(true);
+                }}
+                className="w-16 h-16 sm:w-20 sm:h-20 flex items-center justify-center shrink-0 cursor-pointer transform hover:scale-105 transition-transform"
+                title="Click to customize team patch"
+              >
+                <MissionPatchView patch={customPatch} size="100%" showShadow={false} />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-mono font-bold tracking-widest text-purple-400 uppercase">
+                    OFFICIAL CREW INSIGNIA
+                  </span>
+                  <span className="text-[10px] font-mono px-2 py-0.2 rounded bg-purple-950 border border-purple-800 text-purple-300">
+                    CDR. {customPatch.commanderCallsign}
+                  </span>
+                </div>
+                <h4 className="text-base sm:text-lg font-black font-serif text-white tracking-wide mt-0.5 truncate">
+                  {customPatch.outpostName}
+                </h4>
+                <p className="text-xs text-slate-300 italic">
+                  "{customPatch.motto}" · Embroidered Merrowed Patch
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                soundEffects.playButtonClick();
+                if (onOpenPatchDesigner) onOpenPatchDesigner();
+                else setIsPatchModalOpen(true);
+              }}
+              className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-700 via-indigo-600 to-cyan-600 hover:from-purple-600 hover:to-cyan-500 text-white font-mono font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-lg shadow-purple-950/50 border border-purple-400/40 cursor-pointer shrink-0 active:scale-95"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+              <span>Customize Team Patch</span>
+            </button>
           </div>
         </div>
 
@@ -1359,6 +1452,14 @@ export default function MissionBriefingScreen({
         isOpen={isEducatorHubOpen}
         onClose={() => setIsEducatorHubOpen(false)}
         onSelectSeed={(seed) => setMissionSeed(seed)}
+      />
+
+      <MissionPatchDesigner
+        isOpen={isPatchModalOpen}
+        onClose={() => {
+          setIsPatchModalOpen(false);
+          setCustomPatch(loadSavedPatch());
+        }}
       />
     </div>
   );

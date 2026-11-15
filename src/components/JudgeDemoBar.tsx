@@ -29,6 +29,7 @@ interface JudgeDemoBarProps {
   onViewDebrief: () => void;
   onPreviewLabReport: () => void;
   onOpenSolarTracker?: () => void;
+  onOpenPatchDesigner?: () => void;
 }
 
 /**
@@ -72,6 +73,7 @@ export default function JudgeDemoBar({
   onViewDebrief,
   onPreviewLabReport,
   onOpenSolarTracker,
+  onOpenPatchDesigner,
 }: JudgeDemoBarProps) {
   // Global keyboard shortcut ('d' or 'D') to toggle drawer if not focused on inputs
   useEffect(() => {
@@ -301,6 +303,35 @@ export default function JudgeDemoBar({
                     </div>
                     <p className="text-[11px] text-slate-300 leading-snug">
                       Inspect Moon 1.5° grazing sun vs Mars 25.2° diurnal arc, 20km crater shadows & Artemis vertical solar masts.
+                    </p>
+                  </div>
+                </button>
+              )}
+
+              {/* 6. 🎨 Mission Patch Designer */}
+              {onOpenPatchDesigner && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    soundEffects.playButtonClick();
+                    onOpenPatchDesigner();
+                  }}
+                  className="group p-3 rounded-xl bg-gradient-to-br from-purple-950/50 via-indigo-950/40 to-slate-900/90 hover:from-purple-900/50 hover:to-slate-800 border-2 border-purple-500/60 hover:border-purple-400 transition-all text-left flex items-start gap-3 shadow-md hover:shadow-purple-950/50 cursor-pointer sm:col-span-2"
+                >
+                  <div className="p-2 rounded-lg bg-purple-500/20 text-purple-300 group-hover:scale-110 transition-transform shrink-0 border border-purple-500/30">
+                    <Sparkles className="w-4 h-4 text-amber-300" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-1 mb-0.5">
+                      <span className="text-xs font-black text-white group-hover:text-purple-200 transition-colors">
+                        🎨 Mission Patch Designer Studio (Apollo, Artemis & Custom)
+                      </span>
+                      <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-purple-950 text-purple-300 border border-purple-600/50 font-bold uppercase shrink-0">
+                        Vector SVG
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-300 leading-snug">
+                      Customize embroidered expedition patch: 4 historic crest shapes, 6 SVG insignia symbols, NASA color schemes, and SVG/PNG export.
                     </p>
                   </div>
                 </button>

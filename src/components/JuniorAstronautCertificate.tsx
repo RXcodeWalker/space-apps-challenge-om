@@ -27,6 +27,8 @@ import { soundEffects } from "../utils/soundEffects";
 import { buildFlightRecorderData } from "../utils/flightRecorder";
 import { useTranslation } from "../i18n/LanguageContext";
 import LanguageSelector from "./LanguageSelector";
+import MissionPatchDesigner, { MissionPatchView } from "./MissionPatchDesigner";
+import { loadSavedPatch, type MissionPatchState } from "../data/patchAssets";
 
 
 interface JuniorAstronautCertificateProps {
@@ -47,10 +49,33 @@ export default function JuniorAstronautCertificate({
   rankTier: _rankTier,
 }: JuniorAstronautCertificateProps) {
   const { t } = useTranslation();
-  const [commanderName, setCommanderName] = useState<string>("Commander Alex");
+  const [customPatch, setCustomPatch] = useState<MissionPatchState>(() => loadSavedPatch());
+  const [isPatchModalOpen, setIsPatchModalOpen] = useState<boolean>(false);
+  const [commanderName, setCommanderName] = useState<string>(() => {
+    const saved = loadSavedPatch();
+    return saved.commanderCallsign ? `Commander ${saved.commanderCallsign}` : "Commander Alex";
+  });
   const [isEditingName, setIsEditingName] = useState<boolean>(false);
   const [downloadSuccess, setDownloadSuccess] = useState<boolean>(false);
   const certificateContainerRef = useRef<HTMLDivElement>(null);
+
+  // Sync custom patch updates from storage or designer modal
+  useEffect(() => {
+    const handlePatchUpdate = () => {
+      const updated = loadSavedPatch();
+      setCustomPatch(updated);
+    };
+    if (typeof window !== "undefined") {
+      window.addEventListener("outpost_patch_saved", handlePatchUpdate);
+      window.addEventListener("storage", handlePatchUpdate);
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("outpost_patch_saved", handlePatchUpdate);
+        window.removeEventListener("storage", handlePatchUpdate);
+      }
+    };
+  }, []);
 
   const { cumulativeScore } = gameState;
   const flightData = buildFlightRecorderData(gameState, environment);
@@ -484,9 +509,17 @@ export default function JuniorAstronautCertificate({
               <div className="relative z-10 mx-auto w-full max-w-2xl bg-black/60 border border-cyan-500/40 rounded-2xl p-3 sm:p-4 shadow-lg flex items-center justify-between gap-4">
                 {/* Left: Vector Mission Badge */}
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-amber-400/20 to-cyan-500/20 border border-amber-400/60 flex items-center justify-center shrink-0">
-                    <Award className="w-7 h-7 sm:w-8 sm:h-8 text-amber-400 animate-pulse" />
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundEffects.playButtonClick();
+                      setIsPatchModalOpen(true);
+                    }}
+                    className="w-12 h-12 sm:w-16 sm:h-16 flex items-center justify-center shrink-0 cursor-pointer hover:scale-105 transition-transform"
+                    title="Click to customize expedition patch"
+                  >
+                    <MissionPatchView patch={customPatch} size="100%" showShadow={false} />
+                  </button>
                   <div className="text-left">
                     <div className="text-[9px] font-mono font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
                       <span>OFFICIAL CONFERRED RANK</span>
@@ -568,6 +601,15 @@ export default function JuniorAstronautCertificate({
             Click <strong>Download Image</strong> for a 2400×1500 high-res PNG or <strong>Print / PDF</strong> to save directly to paper or PDF document.
           </div>
         </motion.div>
+
+        {/* Mission Patch Designer Modal Triggered from Certificate */}
+        <MissionPatchDesigner
+          isOpen={isPatchModalOpen}
+          onClose={() => {
+            setIsPatchModalOpen(false);
+            setCustomPatch(loadSavedPatch());
+          }}
+        />
       </div>
     </AnimatePresence>
   );

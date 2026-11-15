@@ -1,7 +1,7 @@
 // ============================================================
 // MissionEndScreen — results, outcome, retry, and scoring
 // ============================================================
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   Trophy,
@@ -22,6 +22,8 @@ import type { MissionEnvironment } from "../data/nasaConstants";
 import MissionDebriefModal from "./MissionDebriefModal";
 import JuniorAstronautCertificate from "./JuniorAstronautCertificate";
 import StemDebriefWorksheet from "./StemDebriefWorksheet";
+import MissionPatchDesigner, { MissionPatchView } from "./MissionPatchDesigner";
+import { loadSavedPatch, type MissionPatchState } from "../data/patchAssets";
 import { calculateOutcomeRank } from "../utils/flightRecorder";
 import { DIFFICULTY_PRESETS } from "../data/difficultyTiers";
 import { useTranslation } from "../i18n/LanguageContext";
@@ -41,6 +43,7 @@ interface MissionEndScreenProps {
   kidMode: boolean;
   onToggleDemoBar?: () => void;
   isDemoBarOpen?: boolean;
+  onOpenPatchDesigner?: () => void;
 }
 
 function ScoreRing({ score }: { score: number }) {
@@ -116,13 +119,33 @@ export default function MissionEndScreen({
   kidMode,
   onToggleDemoBar,
   isDemoBarOpen,
+  onOpenPatchDesigner,
 }: MissionEndScreenProps) {
   const { t } = useTranslation();
   const [showDebrief, setShowDebrief] = useState(false);
   const [showCertificate, setShowCertificate] = useState(false);
   const [showWorksheet, setShowWorksheet] = useState(false);
+  const [showPatchDesigner, setShowPatchDesigner] = useState(false);
+  const [customPatch, setCustomPatch] = useState<MissionPatchState>(() => loadSavedPatch());
   const [copiedChallenge, setCopiedChallenge] = useState(false);
   const [copiedCodeOnly, setCopiedCodeOnly] = useState(false);
+
+  // Sync custom patch from localStorage / dispatch events
+  useEffect(() => {
+    const handlePatchUpdate = () => {
+      setCustomPatch(loadSavedPatch());
+    };
+    if (typeof window !== "undefined") {
+      window.addEventListener("outpost_patch_saved", handlePatchUpdate);
+      window.addEventListener("storage", handlePatchUpdate);
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("outpost_patch_saved", handlePatchUpdate);
+        window.removeEventListener("storage", handlePatchUpdate);
+      }
+    };
+  }, []);
   const { finalOutcome, cumulativeScore, history: missionHistory = [] } = gameState;
 
   const outcomeRank = useMemo(() => calculateOutcomeRank(gameState), [gameState]);
@@ -384,6 +407,33 @@ export default function MissionEndScreen({
             <span>{t("debrief.viewCertificate")}</span>
           </button>
 
+          {/* Expedition Mission Patch Action Button */}
+          <button
+            onClick={() => {
+              if (onOpenPatchDesigner) onOpenPatchDesigner();
+              else setShowPatchDesigner(true);
+            }}
+            className="w-full flex items-center justify-between bg-gradient-to-r from-purple-900/80 via-indigo-900/70 to-slate-900 hover:from-purple-800 hover:to-slate-800 text-white font-bold py-3.5 px-4 rounded-xl transition-all shadow-lg shadow-purple-950/40 border border-purple-500/40 text-sm cursor-pointer transform hover:scale-[1.01]"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-9 h-9 shrink-0 flex items-center justify-center">
+                <MissionPatchView patch={customPatch} size={36} showShadow={false} />
+              </div>
+              <div className="text-left min-w-0">
+                <div className="text-[10px] font-mono text-purple-300 font-bold uppercase tracking-wider">
+                  TEAM EXPEDITION EMBLEM
+                </div>
+                <div className="text-sm font-black text-white truncate font-serif">
+                  {customPatch.outpostName}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 text-xs font-mono font-bold text-amber-300 bg-purple-950/80 px-2.5 py-1 rounded-lg border border-purple-600/50">
+              <Sparkles size={14} className="text-amber-400" />
+              <span>Customize Patch 🎨</span>
+            </div>
+          </button>
+
           {/* STEM Debrief Worksheet Action Button */}
           <button
             onClick={() => setShowWorksheet(true)}
@@ -463,6 +513,17 @@ export default function MissionEndScreen({
             onClose={() => setShowWorksheet(false)}
             gameState={gameState}
             environment={environment}
+          />
+        )}
+
+        {/* Interactive Expedition Mission Patch Designer Modal */}
+        {showPatchDesigner && (
+          <MissionPatchDesigner
+            isOpen={showPatchDesigner}
+            onClose={() => {
+              setShowPatchDesigner(false);
+              setCustomPatch(loadSavedPatch());
+            }}
           />
         )}
       </motion.div>

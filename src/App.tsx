@@ -14,6 +14,7 @@ import CrisisMinigameModal from "./components/CrisisMinigameModal";
 import MissionDebriefModal from "./components/MissionDebriefModal";
 import StemDebriefWorksheet from "./components/StemDebriefWorksheet";
 import SolarElevationTracker from "./components/SolarElevationTracker";
+import MissionPatchDesigner from "./components/MissionPatchDesigner";
 import {
   createSol9CrisisGameState,
   createCompletedMissionGameState,
@@ -80,6 +81,7 @@ export default function App() {
   const [initialGameStateOverride, setInitialGameStateOverride] = useState<GameState | null>(null);
   const [sol9CrisisTrigger, setSol9CrisisTrigger] = useState<number>(0);
   const [isSolarTrackerOpen, setIsSolarTrackerOpen] = useState<boolean>(false);
+  const [isPatchDesignerOpen, setIsPatchDesignerOpen] = useState<boolean>(false);
 
   function handleOpenNasaData(env?: MissionEnvironment | null) {
     soundEffects.playButtonClick();
@@ -200,6 +202,13 @@ export default function App() {
         onViewDebrief={handleViewMissionDebrief}
         onPreviewLabReport={handlePreviewPrintableLabReport}
         onOpenSolarTracker={() => setIsSolarTrackerOpen(true)}
+        onOpenPatchDesigner={() => setIsPatchDesignerOpen(true)}
+      />
+
+      {/* Standalone Interactive NASA Expedition Mission Patch Designer Modal */}
+      <MissionPatchDesigner
+        isOpen={isPatchDesignerOpen}
+        onClose={() => setIsPatchDesignerOpen(false)}
       />
 
       {/* Standalone Solar Elevation & Shadow Tracker Modal */}
@@ -264,6 +273,7 @@ export default function App() {
               initialScenarioId={selectedScenario?.id}
               onToggleDemoBar={handleToggleDemoBar}
               isDemoBarOpen={isDemoDrawerOpen}
+              onOpenPatchDesigner={() => setIsPatchDesignerOpen(true)}
             />
           </motion.div>
         )}
@@ -310,6 +320,7 @@ export default function App() {
               kidMode={selectedDifficulty === "cadet"}
               onToggleDemoBar={handleToggleDemoBar}
               isDemoBarOpen={isDemoDrawerOpen}
+              onOpenPatchDesigner={() => setIsPatchDesignerOpen(true)}
             />
           </motion.div>
         )}
