@@ -126,7 +126,7 @@ assert(deltaZero.shape === "✔", "Zero delta meta uses ✔");
 
 console.log("\n=== 4. CODEBASE AUDIT: UI INTEGRATION & ARIA ===");
 
-const basePath = path.resolve(__dirname, "..");
+const basePath = process.cwd();
 
 // Check ControlDeck.tsx
 const controlDeckPath = path.join(basePath, "src", "components", "ControlDeck.tsx");
