@@ -71,6 +71,8 @@ import {
   getDefaultAllocation,
   getEffectivePowerBudget,
   applyIncidentChoice,
+  describeForecast,
+  diagnoseMissionLoss,
   type GameState,
   type PowerAllocation,
   type DifficultyTier,
@@ -78,6 +80,7 @@ import {
 } from "../engine/simulationEngine";
 import { DIFFICULTY_PRESETS } from "../data/difficultyTiers";
 import { getIncidentForSol, type IncidentCard, type IncidentChoice } from "../data/incidentCards";
+import { useAccessibility } from "../utils/AccessibilityContext";
 import { createSol9CrisisGameState, getSpeIncidentForEnvironment } from "../utils/judgeDemoData";
 
 interface GameScreenProps {
@@ -132,6 +135,7 @@ export default function GameScreen({
 }: GameScreenProps) {
   const reduce = useReducedMotion();
   const settings = useSettings();
+  const { colorblindMode, toggleColorblindMode } = useAccessibility();
   const { language, setLanguage, languages } = useTranslation();
   const [gameState, setGameState] = useState<GameState>(() =>
     initialGameStateOverride || createInitialGameState(environment, difficulty, missionSeed, scenario)
@@ -377,6 +381,9 @@ export default function GameScreen({
     }
   }, [phase, over, currentTurn, gameState, allocation]);
 
+  // One line saying what this split will do, shown above the Run button.
+  const forecast = proj ? describeForecast(gameState, proj) : null;
+
   const doseStatus = (mSv: number): Status => statusOf("dose", (mSv / limit) * 100);
   const resources = [
     { key: "grid", code: "EPS", name: "Power grid", unit: "%", value: now.grid, dec: 0, max: 100, ticks: [20, 40], good: 1 as const, status: statusOf("battery", now.grid), note: "Dark hours wear the grid down", next: proj?.subsystems.powerGrid.health, nextStatus: proj && statusOf("battery", proj.subsystems.powerGrid.health) },
@@ -435,7 +442,7 @@ export default function GameScreen({
     const from = gameState;
     const usedMW = used;
     const { nextState, result } = processTurn(from, allocation);
-    const rep = buildDayReport({ subsystems: from.subsystems, crew: from.crew, members: membersOf(from.crew, fallbackCrew) }, result, TOTAL_TURNS);
+    const rep = buildDayReport({ subsystems: from.subsystems, crew: from.crew, members: membersOf(from.crew, fallbackCrew) }, result, TOTAL_TURNS, diagnoseMissionLoss(from, result));
     const dur = motionMs("sim", reduce);
 
     setSim({ result });
@@ -556,6 +563,7 @@ export default function GameScreen({
     { title: "How to play", sub: "Replay the 3-step tutorial", act: () => { setMenuOpen(false); setIsTutorialOpen(true); } },
     { title: "Crew roster", sub: "Dossiers, skills and morale", value: "4", act: () => { setMenuOpen(false); setIsCrewModalOpen(true); } },
     { title: "Reduce motion", sub: "Shorter day simulation, no blinking alarms", value: settings.reduceMotion === null ? "SYSTEM" : settings.reduceMotion ? "ON" : "OFF", act: () => updateSettings({ reduceMotion: settings.reduceMotion === null ? true : settings.reduceMotion ? false : null }) },
+    { title: "Vision / Accessibility", sub: "Colorblind-safe colors and shapes", value: colorblindMode ? "ON" : "OFF", act: () => toggleColorblindMode() },
     { title: "Language", sub: languages.map((l) => l.code.toUpperCase()).join(" · "), value: language.toUpperCase(), act: () => setLanguage(languages[(languages.findIndex((l) => l.code === language) + 1) % languages.length].code) },
     { title: "Sound", sub: "Slider clicks, alarms, CAPCOM voice", value: isMuted ? "OFF" : "ON", warn: isMuted, act: () => toggleMute() },
     { title: "Ambient audio", sub: "Procedural habitat sounds", act: () => { setMenuOpen(false); setIsAudioModalOpen(true); } },
@@ -715,6 +723,14 @@ export default function GameScreen({
                     <span className="oc-type-code text-oc-text-3">{report.caption}</span>
                     <h2 className="oc-type-display m-0" style={{ color: report.status === "ok" ? "var(--oc-text-1)" : STATUS[report.status].fg }}>{report.headline}</h2>
                   </div>
+                  {report.cause && (
+                    <div className="flex flex-col gap-1 rounded-oc-2 border border-oc-line-strong p-3" style={{ borderColor: STATUS.crit.fg }}>
+                      <span className="oc-type-code text-oc-text-3">What caused it</span>
+                      <span className="oc-type-body font-semibold !leading-5 text-pretty">{report.cause.headline}.</span>
+                      <span className="oc-type-body !leading-5 text-pretty">{report.cause.decision}</span>
+                      <span className="oc-type-body !leading-5 text-pretty text-oc-text-2">Next time: {report.cause.fix}</span>
+                    </div>
+                  )}
                   <div className="flex flex-col border-t border-oc-line">
                     {report.lines.map((l, i) => (
                       <div key={i} className="flex items-start gap-4 border-b border-oc-line py-2 animate-[oc-in_240ms_var(--oc-ease-out)_both]" style={{ animationDelay: `${i * 80}ms` }}>
@@ -782,6 +798,13 @@ export default function GameScreen({
               />
             ))}
           </div>
+
+          {phase === "allocate" && forecast && (
+            <div className="flex flex-col gap-1" aria-live="polite">
+              <span className="oc-type-code text-oc-text-3">Forecast for day {pad(day)}</span>
+              <StatusText status={forecast.status} className="!text-base !leading-5 font-medium">{forecast.text}</StatusText>
+            </div>
+          )}
 
           {/* Phones: pinned to the bottom edge while the sliders are on screen (see .oc-runbar). */}
           <div className="oc-runbar">

@@ -29,19 +29,29 @@ const cadetState = createInitialGameState(LUNAR_SOUTH_POLE, "cadet");
 assert(cadetState.difficulty === "cadet", "Difficulty correctly set to cadet");
 assert(cadetState.crew.morale >= 90, "Cadet crew starts with elevated morale buffer (>=90%)");
 assert(cadetState.crew.foodReserveDays === 18, "Cadet crew starts with 18 food days buffer");
-assert(cadetState.subsystems.lifeSupport.health === 95, "Cadet subsystems start at 95% health");
+assert(
+  cadetState.subsystems.lifeSupport.health === DIFFICULTY_PRESETS.cadet.startingHealth.lifeSupport &&
+    cadetState.subsystems.lifeSupport.health >= DIFFICULTY_PRESETS.commander.startingHealth.lifeSupport,
+  `Cadet subsystems start at the Cadet starting health (${cadetState.subsystems.lifeSupport.health}%), no lower than Commander`
+);
 
-// Baseline power demand for cadet is 28 MW (life support) vs 35 MW standard
+// Safe minimums: Cadet asks for less power than Commander, which asks for less than Flight Director,
+// and Cadet/Commander minimums fit inside a normal day-1 budget on every world.
 const cadetConfig = DIFFICULTY_PRESETS.cadet;
-assert(cadetConfig.baselinePowerDemands.lifeSupport === 28, "Cadet Life Support baseline demand is 28 MW");
-assert(cadetConfig.baselinePowerDemands.radiationShielding === 24, "Cadet Shielding baseline demand is 24 MW");
-assert(cadetConfig.baselinePowerDemands.powerGrid === 20, "Cadet Grid baseline demand is 20 MW");
+const sumMins = (t: keyof typeof DIFFICULTY_PRESETS) =>
+  Object.values(DIFFICULTY_PRESETS[t].baselinePowerDemands).reduce((a, b) => a + b, 0);
+assert(sumMins("cadet") < sumMins("commander"), `Cadet safe minimums (${sumMins("cadet")} MW) are below Commander (${sumMins("commander")} MW)`);
+assert(sumMins("commander") < sumMins("flight_director"), `Commander safe minimums are below Flight Director (${sumMins("flight_director")} MW)`);
+for (const env of [LUNAR_SOUTH_POLE, MARS_GALE_CRATER]) {
+  const day1 = getEffectivePowerBudget(env, 1, 0, "commander");
+  assert(sumMins("commander") <= day1, `${env.name}: Commander safe minimums (${sumMins("commander")} MW) fit the ${day1} MW day-1 budget`);
+}
 
 // Test automated gentle hints when life support drops below threshold
 const hints = generateCadetAutomatedHints(
   cadetState.subsystems,
   { ...cadetState.crew, oxygenBufferPercent: 62 },
-  { powerGrid: 30, lifeSupport: 22, radiationShielding: 25 },
+  { powerGrid: 30, lifeSupport: cadetConfig.baselinePowerDemands.lifeSupport - 4, radiationShielding: 25, foodProduction: 20 },
   77,
   2
 );
@@ -53,18 +63,21 @@ assert(
 console.log("Cadet hint sample:", hints[0].kidFriendlyMessage);
 
 // Test Turn Simulation for Cadet
-const cadetTurn1 = processTurn(cadetState, { powerGrid: 25, lifeSupport: 35, radiationShielding: 26 });
+const cadetTurn1 = processTurn(cadetState, { powerGrid: 20, lifeSupport: 26, radiationShielding: 22, foodProduction: 20 });
 assert(cadetTurn1.result.subsystems.lifeSupport.health >= 95, "High margin of error maintains health under moderate power");
 assert(cadetTurn1.result.difficulty === "cadet", "Turn result carries difficulty tier");
 
 console.log("\n=== 2. TESTING COMMANDER TIER (STANDARD BASELINE) ===");
 const commState = createInitialGameState(LUNAR_SOUTH_POLE, "commander");
 assert(commState.difficulty === "commander", "Difficulty correctly set to commander");
-assert(commState.subsystems.lifeSupport.powerDrawMW === 35, "Commander baseline demand is 35 MW");
+assert(
+  commState.subsystems.lifeSupport.powerDrawMW === DIFFICULTY_PRESETS.commander.baselinePowerDemands.lifeSupport,
+  `Commander life support starts at its ${DIFFICULTY_PRESETS.commander.baselinePowerDemands.lifeSupport} MW safe minimum`
+);
 assert(commState.crew.foodReserveDays === 15, "Commander starts with 15 food days");
 
-// Lunar South Pole Sol 1 budget is ~77 MW. Allocate 75 MW (within budget, full 35 MW to life support):
-const commTurn1 = processTurn(commState, { powerGrid: 20, lifeSupport: 35, radiationShielding: 20 });
+// A day-1 split that meets every Commander safe minimum keeps systems nominal:
+const commTurn1 = processTurn(commState, { ...DIFFICULTY_PRESETS.commander.baselinePowerDemands });
 console.log("commTurn1 lifeSupport health:", commTurn1.result.subsystems.lifeSupport.health);
 assert(commTurn1.result.subsystems.lifeSupport.health >= 88, "Standard baseline turn maintains nominal health (~90%)");
 

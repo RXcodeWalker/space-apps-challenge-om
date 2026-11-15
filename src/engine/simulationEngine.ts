@@ -13,13 +13,13 @@
 
 import type { MissionEnvironment, TurnEvent } from "../data/nasaConstants";
 import type { IncidentCard, IncidentChoice } from "../data/incidentCards";
+import { getIncidentById } from "../data/incidentCards";
 import type { FlightDirectorInterventionResult } from "../types/intervention";
 import type { HistoricScenario } from "../data/scenarioData";
 import {
   TOTAL_TURNS,
   MIN_SYSTEM_HEALTH,
   MAX_SYSTEM_HEALTH,
-  GREENHOUSE_BASELINE_POWER_MW,
   GREENHOUSE_THERMAL_SHOCK_THRESHOLD_MW,
   GREENHOUSE_THERMAL_SHOCK_PROGRESS_PENALTY,
   HARVEST_CYCLE_SOLS,
@@ -211,6 +211,12 @@ const MORALE_LOSS_LIFE_SUPPORT_LOW = 8;
 const MORALE_LOSS_RADIATION_HIGH = 6;
 const MORALE_LOSS_FOOD_LOW = 10;
 
+/** Lunar RTG baseload. */
+const LUNAR_RTG_BASELOAD_MW = 4;
+
+/** Mars Fission Surface Power baseload (dust-proof). */
+const MARS_FISSION_BASELOAD_MW = 30;
+
 /** Oxygen baseline rates. */
 const OXYGEN_RECOVERY_PER_MW_EXCESS = 2;    // % O₂ buffer per MW excess
 const OXYGEN_LOSS_PER_MW_DEFICIT = 4;       // % O₂ loss per MW deficit
@@ -243,7 +249,7 @@ function initialSubsystems(difficulty: DifficultyTier): Record<SubsystemId, Subs
     powerGrid: {
       id: "powerGrid",
       label: "Power Grid",
-      health: isCadet ? 92 : isHardcore ? 80 : 85,
+      health: config.startingHealth.powerGrid,
       wearAccumulated: isCadet ? 0.02 : isHardcore ? 0.08 : 0.05,
       powerDrawMW: baselines.powerGrid,
       statusMessage: "Solar arrays nominal. RTG on standby.",
@@ -253,7 +259,7 @@ function initialSubsystems(difficulty: DifficultyTier): Record<SubsystemId, Subs
     lifeSupport: {
       id: "lifeSupport",
       label: "Life Support (ECLSS)",
-      health: isCadet ? 95 : isHardcore ? 85 : 90,
+      health: config.startingHealth.lifeSupport,
       wearAccumulated: isCadet ? 0.01 : isHardcore ? 0.05 : 0.02,
       powerDrawMW: baselines.lifeSupport,
       statusMessage: "O₂ scrubbers and closed-loop water recycling nominal.",
@@ -263,7 +269,7 @@ function initialSubsystems(difficulty: DifficultyTier): Record<SubsystemId, Subs
     radiationShielding: {
       id: "radiationShielding",
       label: "Radiation & Thermal Shielding",
-      health: isCadet ? 90 : isHardcore ? 75 : 80,
+      health: config.startingHealth.radiationShielding,
       wearAccumulated: isCadet ? 0.03 : isHardcore ? 0.12 : 0.08,
       powerDrawMW: baselines.radiationShielding,
       statusMessage: "Magnetic wall and regolith shielding at standard deflection.",
@@ -273,7 +279,7 @@ function initialSubsystems(difficulty: DifficultyTier): Record<SubsystemId, Subs
     foodProduction: {
       id: "foodProduction",
       label: "Hydroponic Bay (Food)",
-      health: isCadet ? 95 : isHardcore ? 80 : 88,
+      health: config.startingHealth.foodProduction,
       wearAccumulated: isCadet ? 0.01 : isHardcore ? 0.06 : 0.03,
       powerDrawMW: baselines.foodProduction,
       statusMessage: "Aeroponic nutrient misting, atmospheric heater, and full-spectrum LED arrays nominal.",
@@ -338,12 +344,14 @@ function processSubsystem(
     config.recoveryMultiplier *
     (1 / Math.max(0.5, eventStressFactor));
 
-  // Scaled deficit loss with difficulty penalty
-  healthDelta -=
+  // Scaled deficit loss with difficulty penalty, capped so one bad day can't wipe out a healthy system
+  healthDelta -= Math.min(
+    config.maxHealthLossPerDay,
     deficit *
-    HEALTH_LOSS_PER_DEFICIT_MW *
-    config.deficitPenaltyMultiplier *
-    eventStressFactor;
+      HEALTH_LOSS_PER_DEFICIT_MW *
+      config.deficitPenaltyMultiplier *
+      eventStressFactor
+  );
 
   let newWear = previous.wearAccumulated + extraWear * config.wearRateMultiplier + thermalFatigueWear;
   if (overloadFraction > OVERLOAD_THRESHOLD_FRACTION) {
@@ -763,8 +771,8 @@ function computeOutcome(
   score: number,
   config: DifficultyConfig
 ): MissionOutcome {
-  const criticalHealthFloor = config.id === "cadet" ? 8 : config.id === "flight_director" ? 20 : 15;
-  const criticalO2Floor = config.id === "cadet" ? 5 : config.id === "flight_director" ? 15 : 10;
+  const criticalHealthFloor = config.criticalHealthFloor;
+  const criticalO2Floor = config.criticalOxygenFloor;
 
   const anySystemCritical = Object.values(subsystems).some((s) => s.health < criticalHealthFloor);
   const crewInDanger =
@@ -777,8 +785,8 @@ function computeOutcome(
   }
 
   if (turn === TOTAL_TURNS) {
-    const successThreshold = config.id === "cadet" ? 60 : config.id === "flight_director" ? 75 : 70;
-    const partialThreshold = config.id === "cadet" ? 38 : config.id === "flight_director" ? 50 : 45;
+    const successThreshold = config.successScoreThreshold;
+    const partialThreshold = config.partialScoreThreshold;
 
     if (score >= successThreshold) return "mission_success";
     if (score >= partialThreshold) return "partial_success";
@@ -1190,16 +1198,18 @@ export function applyIncidentChoice(
 
 export function getDefaultAllocation(
   effectiveBudgetMW: number,
-  _difficulty: DifficultyTier = "commander"
+  difficulty: DifficultyTier = "commander"
 ): PowerAllocation {
-  // 4-way balanced allocation (25% each on 100 MW budget)
-  const powerGrid = Math.round(effectiveBudgetMW * 0.25);
-  const lifeSupport = Math.round(effectiveBudgetMW * 0.25);
-  const radiationShielding = Math.round(effectiveBudgetMW * 0.25);
-  const foodProduction = Math.max(
-    0,
-    effectiveBudgetMW - powerGrid - lifeSupport - radiationShielding
-  );
+  // Split the budget in proportion to each system's safe minimum. On a normal day every slider
+  // starts at or above its marker; on a short day every system is short by the same fraction.
+  const base = DIFFICULTY_PRESETS[difficulty].baselinePowerDemands;
+  const baseTotal = base.powerGrid + base.lifeSupport + base.radiationShielding + base.foodProduction;
+  const share = (mw: number) => Math.floor((effectiveBudgetMW * mw) / baseTotal);
+  const powerGrid = share(base.powerGrid);
+  const radiationShielding = share(base.radiationShielding);
+  const foodProduction = share(base.foodProduction);
+  // Rounding leftovers go to life support (air first).
+  const lifeSupport = Math.max(0, effectiveBudgetMW - powerGrid - radiationShielding - foodProduction);
 
   return {
     powerGrid,
@@ -1296,9 +1306,13 @@ export function getEffectivePowerBudget(
     // Dense atmosphere & cryogenic methane lakes:
     // Powered by Dragonfly MMRTG (52 MW) + Cryogenic Methane Lake Carnot Heat Exchanger (32 MW) + trace solar (1 MW) = 85 MW baseline
     baseGeneration = 85;
+  } else if (environment.id === "mars_gale_crater") {
+    // Mars: dusty photovoltaic arrays (60 MW) + Fission Surface Power baseload (30 MW) = 90 MW.
+    // Dust storms dim only the solar share, so the reactor keeps the lights on.
+    baseGeneration = environment.basePowerBudgetMW * environment.baselineSolarEfficiency + MARS_FISSION_BASELOAD_MW;
   } else {
-    // Lunar & Mars: Photovoltaic arrays + Fission/RTG baseload
-    baseGeneration = environment.basePowerBudgetMW * environment.baselineSolarEfficiency;
+    // Lunar: Photovoltaic arrays at 86% illumination (86 MW) + RTG baseload (4 MW) = 90 MW
+    baseGeneration = environment.basePowerBudgetMW * environment.baselineSolarEfficiency + LUNAR_RTG_BASELOAD_MW;
   }
 
   const effective = Math.max(
@@ -1448,8 +1462,10 @@ export function processTurn(
     lsDeficit * OXYGEN_LOSS_PER_MW_DEFICIT * config.oxygenLossRateMultiplier -
     (microStrike?.o2LeakPercent ?? 0);
 
+  // One day can drain at most maxOxygenLossPerDay, so the crew always gets a warning day.
   const newOxygenBuffer = clamp(
-    gameState.crew.oxygenBufferPercent + oxygenDelta * event.lifeSupportStressFactor,
+    gameState.crew.oxygenBufferPercent +
+      Math.max(-config.maxOxygenLossPerDay, oxygenDelta * event.lifeSupportStressFactor),
     0,
     100
   );
@@ -1465,19 +1481,21 @@ export function processTurn(
 
   // Thermal Shock: power cut to <10 MW during cold nights or dust storms
   const isThermalShock = foodPower < GREENHOUSE_THERMAL_SHOCK_THRESHOLD_MW;
+  // Crops grow at full speed at the rank's Food safe minimum (the slider marker the player sees).
+  const greenhouseBaselineMW = config.baselinePowerDemands.foodProduction;
   let progressDelta = 0;
   if (isThermalShock) {
     // Crops enter "Thermal Shock" and lose 25% growth progress per Sol
     progressDelta = -GREENHOUSE_THERMAL_SHOCK_PROGRESS_PENALTY;
-  } else if (foodPower >= GREENHOUSE_BASELINE_POWER_MW) {
+  } else if (foodPower >= greenhouseBaselineMW) {
     // 0% to 100% maturity over 3 Sols if powered adequately (>=20 MW)
     const baseProgress = 100 / HARVEST_CYCLE_SOLS;
     // Power boost for extra lighting (up to 1.35x rate at max allocation)
-    const powerBoost = Math.min(1.35, 1 + ((foodPower - GREENHOUSE_BASELINE_POWER_MW) / GREENHOUSE_BASELINE_POWER_MW) * 0.35);
+    const powerBoost = Math.min(1.35, 1 + ((foodPower - greenhouseBaselineMW) / greenhouseBaselineMW) * 0.35);
     progressDelta = baseProgress * powerBoost * (0.6 + 0.4 * ghHealth);
   } else {
     // Underpowered (10 - 19 MW): stunted crop growth
-    const powerRatio = foodPower / GREENHOUSE_BASELINE_POWER_MW;
+    const powerRatio = foodPower / greenhouseBaselineMW;
     progressDelta = (100 / HARVEST_CYCLE_SOLS) * powerRatio * 0.7 * (0.6 + 0.4 * ghHealth);
   }
 
@@ -1769,4 +1787,210 @@ export function getTradeOffHints(
   }
 
   return hints;
+}
+
+// ---------------------------------------------------------------------------
+// Cause & effect: a one-line forecast before a day runs, and the single
+// decision behind a lost mission. Both are pure and deterministic.
+// ---------------------------------------------------------------------------
+
+export type ForecastStatus = "ok" | "warn" | "crit";
+
+export interface DayForecast {
+  status: ForecastStatus;
+  /** One short line, e.g. "Oxygen will drop to 28%". */
+  text: string;
+  /** The projected turn, for callers that also want the numbers. */
+  result: TurnResult;
+}
+
+const SUBSYSTEM_NAMES: Record<SubsystemId, string> = {
+  powerGrid: "Power grid",
+  lifeSupport: "Life support",
+  radiationShielding: "Radiation shield",
+  foodProduction: "Greenhouse",
+};
+
+/** Slider labels as the power panel shows them. */
+const SLIDER_NAMES: Record<SubsystemId, string> = {
+  powerGrid: "Batteries",
+  lifeSupport: "Life support",
+  radiationShielding: "Shield",
+  foodProduction: "Food",
+};
+
+const STATUS_WEIGHT: Record<ForecastStatus, number> = { ok: 0, warn: 1, crit: 2 };
+const r0 = (n: number) => Math.round(n);
+const eventName = (e: TurnEvent) => e.label.replace(/^Sol \d+\s*[—-]\s*/, "");
+
+/**
+ * What running `allocation` today will do, in one line.
+ * Picks the most worrying change; when nothing is worrying, says what holds.
+ */
+export function forecastDay(state: GameState, allocation: PowerAllocation): DayForecast | null {
+  if (state.currentTurn >= TOTAL_TURNS) return null;
+  const { result } = processTurn(state, allocation);
+  return { ...describeForecast(state, result), result };
+}
+
+/** The forecast line for an already-projected turn (`result` = processTurn(state, …).result). */
+export function describeForecast(state: GameState, result: TurnResult): { status: ForecastStatus; text: string } {
+  const config = DIFFICULTY_PRESETS[state.difficulty];
+  if (result.outcome === "critical_alert") {
+    const d = diagnoseMissionLoss(state, result);
+    return { status: "crit", text: `This split ends the mission: ${d ? d.headline.charAt(0).toLowerCase() + d.headline.slice(1) : "a system fails"}.` };
+  }
+
+  type Line = { status: ForecastStatus; drop: number; text: string };
+  const lines: Line[] = [];
+
+  const o2Before = state.crew.oxygenBufferPercent;
+  const o2After = result.crew.oxygenBufferPercent;
+  const o2Status: ForecastStatus = o2After < 35 ? "crit" : o2After < 60 ? "warn" : "ok";
+  if (o2After < o2Before - 0.5) lines.push({ status: o2Status, drop: o2Before - o2After, text: `Oxygen will drop to ${r0(o2After)}%` });
+
+  for (const id of ["lifeSupport", "powerGrid", "radiationShielding", "foodProduction"] as SubsystemId[]) {
+    const before = state.subsystems[id].health;
+    const after = result.subsystems[id].health;
+    const st: ForecastStatus = after < config.criticalHealthFloor + 15 ? "crit" : after < 45 ? "warn" : "ok";
+    if (after < before - 0.5) lines.push({ status: st, drop: before - after, text: `${SUBSYSTEM_NAMES[id]} will fall to ${r0(after)}%` });
+  }
+
+  const foodAfter = result.crew.foodReserveDays;
+  if (foodAfter < 4) {
+    lines.push({ status: foodAfter < 2 ? "crit" : "warn", drop: 4 - foodAfter, text: foodAfter <= 0 ? "Food will run out" : `Food will be down to ${foodAfter.toFixed(1)} days` });
+  }
+
+  const limit = result.crew.safeRadiationLimitMSv || config.missionRadiationLimitMSv;
+  const dosePct = (result.crew.radiationExposureMSv / limit) * 100;
+  if (dosePct >= 50) {
+    lines.push({ status: dosePct >= 80 ? "crit" : "warn", drop: dosePct, text: `Radiation dose will reach ${result.crew.radiationExposureMSv.toFixed(1)} of ${limit} mSv` });
+  }
+
+  const bad = lines
+    .filter((l) => l.status !== "ok")
+    .sort((a, b) => STATUS_WEIGHT[b.status] - STATUS_WEIGHT[a.status] || b.drop - a.drop);
+  if (bad.length) return { status: bad[0].status, text: bad[0].text };
+
+  const biggestDrop = lines.filter((l) => l.drop >= 3).sort((a, b) => b.drop - a.drop)[0];
+  if (biggestDrop) return { status: "ok", text: `${biggestDrop.text}. Still safe.` };
+  if (o2After > o2Before + 0.5) return { status: "ok", text: `Oxygen will recover to ${r0(o2After)}%. Everything else holds.` };
+  return { status: "ok", text: `Everything holds. Oxygen stays at ${r0(o2After)}%.` };
+}
+
+export interface MissionLossDiagnosis {
+  /** Machine-readable cause: "oxygen", "radiation", "career-dose", "<subsystem>-failed" or "low-score". */
+  cause: string;
+  /** What ended the mission, e.g. "Oxygen fell to 4%". */
+  headline: string;
+  /** The day of the decision that did the most damage. */
+  decisionDay: number;
+  /** The one decision, e.g. "Day 4: Life support got 9 MW, 13 below its 22 MW safe minimum." */
+  decisionText: string;
+  /** What to try next time. */
+  fixText: string;
+}
+
+/**
+ * For a lost mission, name what ended it and the single decision that did the most damage.
+ * `prev` is the state the losing day was planned from; `result` is that day's TurnResult.
+ */
+export function diagnoseMissionLoss(prev: GameState, result: TurnResult): MissionLossDiagnosis | null {
+  if (result.outcome !== "critical_alert") return null;
+  const config = DIFFICULTY_PRESETS[prev.difficulty];
+  const base = config.baselinePowerDemands;
+  const ids: SubsystemId[] = ["lifeSupport", "powerGrid", "radiationShielding", "foodProduction"];
+
+  // 1. What ended it (same order the engine checks).
+  let cause: string;
+  let subsystem: SubsystemId;
+  let headline: string;
+  if (result.crew.oxygenBufferPercent < config.criticalOxygenFloor) {
+    cause = "oxygen";
+    subsystem = "lifeSupport";
+    headline = `Oxygen fell to ${r0(result.crew.oxygenBufferPercent)}%`;
+  } else if (result.crew.radiationExposureMSv > config.missionRadiationLimitMSv) {
+    cause = "radiation";
+    subsystem = "radiationShielding";
+    headline = `Radiation dose passed the ${config.missionRadiationLimitMSv} mSv limit`;
+  } else if (config.strictCareerLimitEnforcement && result.crew.careerRadiationExposureMSv > config.careerRadiationLimitMSv) {
+    cause = "career-dose";
+    subsystem = "radiationShielding";
+    headline = `Career radiation dose passed ${config.careerRadiationLimitMSv} mSv`;
+  } else {
+    const failed = ids
+      .filter((id) => result.subsystems[id].health < config.criticalHealthFloor)
+      .sort((a, b) => result.subsystems[a].health - result.subsystems[b].health)[0];
+    if (failed) {
+      cause = `${failed}-failed`;
+      subsystem = failed;
+      headline = `${SUBSYSTEM_NAMES[failed]} broke down at ${r0(result.subsystems[failed].health)}%`;
+    } else {
+      cause = "low-score";
+      subsystem = ids.reduce((w, id) => (result.subsystems[id].health < result.subsystems[w].health ? id : w));
+      headline = `Mission score ${result.missionScorePercent}% was below the ${config.partialScoreThreshold}% needed`;
+    }
+  }
+
+  // 2. The day that hurt most: biggest single-day drop in the measure that ended the mission.
+  type Snap = { subsystems: Record<SubsystemId, SubsystemState>; crew: CrewState };
+  const measure = (t: Snap) =>
+    cause === "oxygen"
+      ? t.crew.oxygenBufferPercent
+      : cause === "radiation" || cause === "career-dose"
+        ? -t.crew.radiationExposureMSv
+        : t.subsystems[subsystem].health;
+  const fresh = createInitialGameState(prev.environment, prev.difficulty, prev.missionSeed, prev.scenario);
+  let before = measure(fresh);
+  let worst: TurnResult = result;
+  let worstDrop = -Infinity;
+  for (const t of [...prev.history, result]) {
+    const after = measure(t);
+    if (before - after >= worstDrop) {
+      worstDrop = before - after;
+      worst = t;
+    }
+    before = after;
+  }
+
+  // 3. Name the decision made on that day.
+  const day = worst.turn;
+  const given = worst.allocation[subsystem];
+  const min = base[subsystem];
+  const slider = SLIDER_NAMES[subsystem];
+  const record = (prev.incidentHistory || []).find((h) => h.sol === day);
+  const card = record ? getIncidentById(record.incidentId) : undefined;
+  const fx = card?.choices.find((c) => c?.id === record?.choiceId)?.effects;
+  const directHit =
+    cause === "oxygen"
+      ? (fx?.oxygenBufferDelta ?? 0) + (fx?.lifeSupportHealthDelta ?? 0) / 2
+      : subsystem === "lifeSupport"
+        ? fx?.lifeSupportHealthDelta ?? 0
+        : subsystem === "powerGrid"
+          ? fx?.powerGridHealthDelta ?? 0
+          : subsystem === "radiationShielding"
+            ? (fx?.shieldingHealthDelta ?? 0) - (fx?.radiationDeltaMSv ?? 0) * 5
+            : 0;
+  const powerCut = Math.min(0, fx?.powerDeltaMW ?? 0);
+  const shortBy = Math.max(0, min - given);
+  const minsTotal = ids.reduce((t, id) => t + base[id], 0);
+  const roughDay = worst.event.lifeSupportStressFactor > 1.1 || worst.event.radiationSpikeMultiplier > 1.6 || worst.powerBudgetMW < minsTotal;
+
+  let decisionText: string;
+  let fixText: string;
+  if (record && directHit <= -8) {
+    decisionText = `Day ${day}: choosing “${record.choiceLabel}” hit ${cause === "oxygen" ? "the oxygen supply" : SUBSYSTEM_NAMES[subsystem].toLowerCase()} directly.`;
+    fixText = `Read what each choice card costs. Another option on day ${day} would have spared ${slider.toLowerCase()}.`;
+  } else if (record && powerCut <= -8 && shortBy > 0 && worst.powerBudgetMW < minsTotal) {
+    decisionText = `Day ${day}: choosing “${record.choiceLabel}” cut ${-powerCut} MW, so ${slider} got only ${given} MW (safe minimum ${min}).`;
+    fixText = "On a short day, skip choice cards that cost power, or take the missing megawatts from a healthier system.";
+  } else if (shortBy > 0) {
+    decisionText = `Day ${day}: ${slider} got ${given} MW, ${shortBy} below its ${min} MW safe minimum.`;
+    fixText = `Keep ${slider} at ${min} MW or more${roughDay ? ` on days like “${eventName(worst.event)}”` : ""}, even if a healthier system has to give.`;
+  } else {
+    decisionText = `Day ${day}: “${eventName(worst.event)}” wore ${SUBSYSTEM_NAMES[subsystem].toLowerCase()} down even at ${given} MW.`;
+    fixText = `Give ${slider} extra power above its ${min} MW marker on calm days so it has health to spare on rough ones.`;
+  }
+
+  return { cause, headline, decisionDay: day, decisionText, fixText };
 }

@@ -93,6 +93,21 @@ export interface DifficultyConfig {
   // Cadet Assistance
   enableAutomatedHints: boolean;
   automatedHintVerbosity: "high" | "standard" | "none";
+
+  // Fairness guards — no single day can take a meter from healthy to lost.
+  /** Largest O₂ buffer drop (percentage points) one day can cause. */
+  maxOxygenLossPerDay: number;
+  /** Largest subsystem health drop (points) one day of under-powering can cause. */
+  maxHealthLossPerDay: number;
+  /** Subsystem health (%) on day 1. */
+  startingHealth: Record<SubsystemId, number>;
+  /** A subsystem below this health % ends the mission. */
+  criticalHealthFloor: number;
+  /** An O₂ buffer below this % ends the mission. */
+  criticalOxygenFloor: number;
+  /** Day-10 mission score needed for full success / for "partial success" (below that = lost). */
+  successScoreThreshold: number;
+  partialScoreThreshold: number;
 }
 
 export const DIFFICULTY_PRESETS: Record<DifficultyTier, DifficultyConfig> = {
@@ -111,14 +126,15 @@ export const DIFFICULTY_PRESETS: Record<DifficultyTier, DifficultyConfig> = {
     borderColor: "border-emerald-500/60",
 
     baselinePowerDemands: {
-      powerGrid: 20,          // Reduced from 25 MW
+      // Safe minimums sum to 72 MW so they fit every world's normal-day budget with room to spare.
+      powerGrid: 17,
       lifeSupport: 20,        // ECLSS O₂ and water loop
-      radiationShielding: 20, // Reduced from 25 MW
-      foodProduction: 18,     // Greenhouse Bay (reduced from 20 MW baseline)
+      radiationShielding: 18,
+      foodProduction: 17,     // Greenhouse Bay
     },
-    rtgReserveFraction: 0.15,
-    recoveryMultiplier: 1.5,
-    deficitPenaltyMultiplier: 0.55,
+    rtgReserveFraction: 0.5,  // Backup reactor guarantees ≥50 MW even on the worst storm day
+    recoveryMultiplier: 1.0,
+    deficitPenaltyMultiplier: 0.8,
     wearRateMultiplier: 0.45,
 
     oxygenLossRateMultiplier: 0.5,
@@ -137,6 +153,14 @@ export const DIFFICULTY_PRESETS: Record<DifficultyTier, DifficultyConfig> = {
 
     enableAutomatedHints: true,
     automatedHintVerbosity: "high",
+
+    startingHealth: { powerGrid: 92, lifeSupport: 95, radiationShielding: 90, foodProduction: 95 },
+    maxOxygenLossPerDay: 18,
+    maxHealthLossPerDay: 14,
+    criticalHealthFloor: 20,
+    criticalOxygenFloor: 5,
+    successScoreThreshold: 60,
+    partialScoreThreshold: 38,
   },
 
   commander: {
@@ -154,14 +178,15 @@ export const DIFFICULTY_PRESETS: Record<DifficultyTier, DifficultyConfig> = {
     borderColor: "border-cyan-500/60",
 
     baselinePowerDemands: {
-      powerGrid: 25,
-      lifeSupport: 25,
-      radiationShielding: 25,
-      foodProduction: 20, // 20 MW baseline (NASA BVAD agronomy requirement)
+      // Safe minimums sum to 78 MW: they fit a normal day, but storm and eclipse days force trade-offs.
+      powerGrid: 18,
+      lifeSupport: 22,
+      radiationShielding: 20,
+      foodProduction: 18,
     },
-    rtgReserveFraction: 0.10,
-    recoveryMultiplier: 1.0,
-    deficitPenaltyMultiplier: 1.0,
+    rtgReserveFraction: 0.4,
+    recoveryMultiplier: 0.6,
+    deficitPenaltyMultiplier: 1.1,
     wearRateMultiplier: 1.0,
 
     oxygenLossRateMultiplier: 1.0,
@@ -180,6 +205,14 @@ export const DIFFICULTY_PRESETS: Record<DifficultyTier, DifficultyConfig> = {
 
     enableAutomatedHints: false,
     automatedHintVerbosity: "standard",
+
+    startingHealth: { powerGrid: 85, lifeSupport: 90, radiationShielding: 80, foodProduction: 88 },
+    maxOxygenLossPerDay: 28,
+    maxHealthLossPerDay: 22,
+    criticalHealthFloor: 20,
+    criticalOxygenFloor: 10,
+    successScoreThreshold: 70,
+    partialScoreThreshold: 45,
   },
 
   flight_director: {
@@ -197,14 +230,15 @@ export const DIFFICULTY_PRESETS: Record<DifficultyTier, DifficultyConfig> = {
     borderColor: "border-amber-500/70",
 
     baselinePowerDemands: {
-      powerGrid: 25,
-      lifeSupport: 26,
-      radiationShielding: 26,
-      foodProduction: 22,
+      // Safe minimums sum to 86 MW: barely fits a good day, never a bad one.
+      powerGrid: 20,
+      lifeSupport: 24,
+      radiationShielding: 22,
+      foodProduction: 20,
     },
-    rtgReserveFraction: 0.08,
-    recoveryMultiplier: 0.85,
-    deficitPenaltyMultiplier: 1.35,
+    rtgReserveFraction: 0.3,
+    recoveryMultiplier: 0.6,
+    deficitPenaltyMultiplier: 1.1,
     wearRateMultiplier: 1.65,
 
     oxygenLossRateMultiplier: 1.35,
@@ -223,6 +257,14 @@ export const DIFFICULTY_PRESETS: Record<DifficultyTier, DifficultyConfig> = {
 
     enableAutomatedHints: false,
     automatedHintVerbosity: "none",
+
+    startingHealth: { powerGrid: 80, lifeSupport: 85, radiationShielding: 75, foodProduction: 80 },
+    maxOxygenLossPerDay: 15,
+    maxHealthLossPerDay: 14,
+    criticalHealthFloor: 30,
+    criticalOxygenFloor: 15,
+    successScoreThreshold: 75,
+    partialScoreThreshold: 50,
   },
 };
 
@@ -475,14 +517,19 @@ export function generateCadetAutomatedHints(
   sol: number
 ): AutomatedHint[] {
   const hints: AutomatedHint[] = [];
+  // Thresholds follow the Cadet safe minimums so hints and slider markers always agree.
+  const mins = DIFFICULTY_PRESETS.cadet.baselinePowerDemands;
+  const lsMin = mins.lifeSupport;
+  const foodMin = mins.foodProduction;
+  const shieldMin = mins.radiationShielding;
 
   // 1. Life support critical check (health or oxygen buffer or power)
   if (
     subsystems.lifeSupport.health < 70 ||
     crew.oxygenBufferPercent < 70 ||
-    allocation.lifeSupport < 26
+    allocation.lifeSupport < lsMin
   ) {
-    const deficit = Math.max(0, 28 - allocation.lifeSupport);
+    const deficit = Math.max(0, lsMin - allocation.lifeSupport);
     const isHardwareDamaged = subsystems.lifeSupport.health < 70;
     hints.push({
       id: "hint_cadet_ls_o2",
@@ -492,13 +539,13 @@ export function generateCadetAutomatedHints(
         0
       )}% (Life Support Health: ${subsystems.lifeSupport.health.toFixed(
         0
-      )}%). Life Support needs at least 28 MW to keep fresh oxygen flowing!`,
+      )}%). Life Support needs at least ${lsMin} MW to keep fresh oxygen flowing!`,
       kidFriendlyMessage: isHardwareDamaged
         ? "Your Life Support scrubbers are feeling a bit tired! Slide +5 MW more power into Life Support so your crew can breathe clean, fresh air."
         : "Hey Commander! Your astronauts are breathing through their backup air tanks. Slide a little more power (+5 MW) into Life Support so everyone breathes easy!",
       actionRecommendation: `Add ${Math.max(5, deficit)} MW to Life Support`,
       suggestedAllocation: {
-        lifeSupport: Math.min(effectiveBudgetMW, Math.max(28, allocation.lifeSupport + 5)),
+        lifeSupport: Math.min(effectiveBudgetMW, Math.max(lsMin, allocation.lifeSupport + 5)),
       },
       severity: crew.oxygenBufferPercent < 45 || subsystems.lifeSupport.health < 50 ? "urgent" : "warning",
     });
@@ -508,7 +555,7 @@ export function generateCadetAutomatedHints(
   if (
     subsystems.foodProduction?.health < 70 ||
     crew.foodReserveDays < 8 ||
-    allocation.foodProduction < 18
+    allocation.foodProduction < foodMin
   ) {
     const isThermalShockRisk = allocation.foodProduction < 10;
     hints.push({
@@ -517,30 +564,30 @@ export function generateCadetAutomatedHints(
       title: isThermalShockRisk ? "Greenhouse Freezing! ❄️🥗" : "Space Plants Need Light! 🥗",
       message: isThermalShockRisk
         ? "Food Production is below 10 MW! Crops will enter Thermal Shock and lose 25% growth progress per Sol."
-        : `Only ${crew.foodReserveDays.toFixed(1)} days of food remaining! Hydroponic greenhouse crops need sustained power (>= 20 MW) to mature.`,
+        : `Only ${crew.foodReserveDays.toFixed(1)} days of food remaining! Hydroponic greenhouse crops need sustained power (>= ${foodMin} MW) to mature.`,
       kidFriendlyMessage: isThermalShockRisk
-        ? "Brrr! The space greenhouse is freezing cold! Plants need at least 10 MW to stay warm, and 20 MW to grow yummy food. Slide more power to Food Production!"
-        : "The space plants in your greenhouse are getting hungry! Give Food Production some extra energy (at least 20 MW) to grow fresh space veggies.",
-      actionRecommendation: "Keep Food Production at 20 MW or higher to sustain harvest cycles",
+        ? `Brrr! The space greenhouse is freezing cold! Plants need at least 10 MW to stay warm, and ${foodMin} MW to grow yummy food. Slide more power to Food Production!`
+        : `The space plants in your greenhouse are getting hungry! Give Food Production some extra energy (at least ${foodMin} MW) to grow fresh space veggies.`,
+      actionRecommendation: `Keep Food Production at ${foodMin} MW or higher to sustain harvest cycles`,
       suggestedAllocation: {
-        foodProduction: Math.min(effectiveBudgetMW, Math.max(20, allocation.foodProduction + 5)),
+        foodProduction: Math.min(effectiveBudgetMW, Math.max(foodMin, allocation.foodProduction + 5)),
       },
       severity: isThermalShockRisk || crew.foodReserveDays < 3 ? "urgent" : "warning",
     });
   }
 
   // 3. Radiation shield check
-  if (allocation.radiationShielding < 20) {
+  if (allocation.radiationShielding < shieldMin) {
     hints.push({
       id: "hint_cadet_shield",
       category: "radiation",
       title: "Force Field Shield is Low! 🛡️",
-      message: "Radiation Shielding is below the 20 MW safe threshold. Invisible space rays are reaching the habitat.",
+      message: `Radiation Shielding is below the ${shieldMin} MW safe threshold. Invisible space rays are reaching the habitat.`,
       kidFriendlyMessage:
         "Your invisible superhero force field is getting thin! Slide more power to Radiation Shielding so the crew doesn't get space sunburn.",
-      actionRecommendation: "Increase Radiation Shielding to 20 MW or higher",
+      actionRecommendation: `Increase Radiation Shielding to ${shieldMin} MW or higher`,
       suggestedAllocation: {
-        radiationShielding: Math.min(effectiveBudgetMW, 20),
+        radiationShielding: Math.min(effectiveBudgetMW, shieldMin),
       },
       severity: "warning",
     });
