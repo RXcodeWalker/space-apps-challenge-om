@@ -65,6 +65,33 @@
     display: none !important;
   }
 
+  /* Educator Hub & NGSS Curriculum Print Optimization (Portrait, Ink-friendly white background) */
+  body.printing-educator-guide {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  body.printing-educator-guide .educator-guide-printable {
+    display: block !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    box-shadow: none !important;
+    border: 2px solid #000000 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+    padding: 1.5rem !important;
+  }
+
+  body.printing-educator-guide .certificate-printable-container,
+  body.printing-educator-guide .stem-worksheet-printable {
+    display: none !important;
+  }
+
   /* STEM Debrief Worksheet Print Optimization (Portrait, Ink-friendly white background) */
   body.printing-worksheet {
     background: #ffffff !important;
@@ -87,19 +114,20 @@
     padding: 1rem !important;
   }
 
-  body.printing-worksheet .certificate-printable-container {
+  body.printing-worksheet .certificate-printable-container,
+  body.printing-worksheet .educator-guide-printable {
     display: none !important;
   }
 
   /* Junior Astronaut Certificate Print Optimization (Landscape, Deep space theme) */
-  body:not(.printing-worksheet) {
+  body:not(.printing-worksheet):not(.printing-educator-guide) {
     background: #02050e !important;
     color: #ffffff !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
-  body:not(.printing-worksheet) .certificate-printable-container {
+  body:not(.printing-worksheet):not(.printing-educator-guide) .certificate-printable-container {
     box-shadow: none !important;
     width: 100vw !important;
     height: 100vh !important;
@@ -110,7 +138,8 @@
     margin: 0 auto !important;
   }
 
-  body:not(.printing-worksheet) .stem-worksheet-printable {
+  body:not(.printing-worksheet):not(.printing-educator-guide) .stem-worksheet-printable,
+  body:not(.printing-worksheet):not(.printing-educator-guide) .educator-guide-printable {
     display: none !important;
   }
 }

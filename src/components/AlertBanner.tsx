@@ -1,12 +1,14 @@
 // ============================================================
 // AlertBanner — displays mission alerts with trade-off context
 // and Interactive "Why Did This Happen?" Root Cause Drill-Down
+// Universal Classroom Accessibility & High-Contrast Support
 // ============================================================
+import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AlertTriangle, Info, XCircle, ChevronDown, ChevronUp, Search } from "lucide-react";
-import { useState } from "react";
 import type { MissionAlert } from "../engine/simulationEngine";
 import { soundEffects } from "../utils/soundEffects";
+import { useAccessibility } from "../utils/AccessibilityContext";
 
 interface AlertBannerProps {
   alerts: MissionAlert[];
@@ -41,31 +43,77 @@ function AlertItem({
   onInspectRootCause?: (alert: MissionAlert) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const { colorblindMode, shapes } = useAccessibility();
   const isEligibleForDrillDown = isBrownoutOrLifeSupportAlert(alert);
 
-  const styles = {
-    critical: {
-      border: "border-red-500/40",
-      bg: "bg-red-500/10",
-      icon: <XCircle size={16} className="text-red-400 shrink-0" />,
-      headingColor: "text-red-300",
-      pillBg: "bg-red-950/80 text-red-300 border-red-500/40",
-    },
-    warning: {
-      border: "border-yellow-500/40",
-      bg: "bg-yellow-500/10",
-      icon: <AlertTriangle size={16} className="text-yellow-400 shrink-0" />,
-      headingColor: "text-yellow-300",
-      pillBg: "bg-amber-950/80 text-amber-300 border-amber-500/40",
-    },
-    info: {
-      border: "border-blue-500/40",
-      bg: "bg-blue-500/10",
-      icon: <Info size={16} className="text-blue-400 shrink-0" />,
-      headingColor: "text-blue-300",
-      pillBg: "bg-blue-950/80 text-blue-300 border-blue-500/40",
-    },
-  }[alert.severity];
+  // Accessible styles based on severity and colorblindMode
+  const styles = colorblindMode
+    ? {
+        critical: {
+          border: "border-orange-500/60",
+          bg: "bg-orange-500/15",
+          icon: (
+            <span
+              className="w-5 h-5 rounded-md bg-orange-950 border border-orange-500/60 text-orange-400 font-mono font-bold text-xs flex items-center justify-center shrink-0"
+              title="Critical Deficit / Brownout"
+            >
+              {shapes.brownout}
+            </span>
+          ),
+          headingColor: "text-orange-200",
+          pillBg: "bg-orange-950/90 text-orange-200 border-orange-500/60",
+          marker: shapes.brownout,
+        },
+        warning: {
+          border: "border-yellow-500/50",
+          bg: "bg-yellow-500/15",
+          icon: <AlertTriangle size={16} className="text-yellow-400 shrink-0" />,
+          headingColor: "text-yellow-200",
+          pillBg: "bg-amber-950/80 text-amber-200 border-amber-500/50",
+          marker: shapes.warning,
+        },
+        info: {
+          border: "border-sky-500/50",
+          bg: "bg-sky-500/15",
+          icon: (
+            <span
+              className="w-5 h-5 rounded-md bg-sky-950 border border-sky-500/60 text-sky-400 font-mono font-bold text-xs flex items-center justify-center shrink-0"
+              title="Nominal / Info"
+            >
+              {shapes.nominal}
+            </span>
+          ),
+          headingColor: "text-sky-200",
+          pillBg: "bg-sky-950/80 text-sky-200 border-sky-500/50",
+          marker: shapes.nominal,
+        },
+      }[alert.severity]
+    : {
+        critical: {
+          border: "border-red-500/40",
+          bg: "bg-red-500/10",
+          icon: <XCircle size={16} className="text-red-400 shrink-0" />,
+          headingColor: "text-red-300",
+          pillBg: "bg-red-950/80 text-red-300 border-red-500/40",
+          marker: shapes.brownout,
+        },
+        warning: {
+          border: "border-yellow-500/40",
+          bg: "bg-yellow-500/10",
+          icon: <AlertTriangle size={16} className="text-yellow-400 shrink-0" />,
+          headingColor: "text-yellow-300",
+          pillBg: "bg-amber-950/80 text-amber-300 border-amber-500/40",
+          marker: shapes.warning,
+        },
+        info: {
+          border: "border-blue-500/40",
+          bg: "bg-blue-500/10",
+          icon: <Info size={16} className="text-blue-400 shrink-0" />,
+          headingColor: "text-blue-300",
+          pillBg: "bg-blue-950/80 text-blue-300 border-blue-500/40",
+          marker: shapes.nominal,
+        },
+      }[alert.severity];
 
   const handleInspect = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -75,24 +123,40 @@ function AlertItem({
     }
   };
 
+  const isPowerBrownout = alert.subsystem === "power" || alert.headline.toLowerCase().includes("brownout");
+
   return (
     <motion.div
       initial={{ opacity: 0, x: -10 }}
       animate={{ opacity: 1, x: 0 }}
+      role="alert"
+      aria-live="polite"
       className={`rounded-xl border p-3 ${styles.border} ${styles.bg} transition-all`}
     >
       <div className="w-full flex items-start justify-between gap-2">
         <button
           className="flex-1 flex items-start gap-2 text-left"
           onClick={() => setExpanded((p) => !p)}
+          aria-expanded={expanded}
         >
           {styles.icon}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <p className={`text-sm font-bold ${styles.headingColor}`}>{alert.headline}</p>
+              <p className={`text-sm font-bold ${styles.headingColor}`}>
+                <span className="font-mono mr-1" aria-hidden="true">{styles.marker}</span>
+                {alert.headline}
+              </p>
               {isEligibleForDrillDown && (
-                <span className="text-[9px] font-mono font-bold uppercase px-1.5 py-0.2 rounded bg-red-900/50 text-red-300 border border-red-600/30">
-                  {alert.subsystem === "power" ? "Brownout Risk" : "Anomaly"}
+                <span
+                  className={`text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded border ${
+                    colorblindMode
+                      ? "bg-orange-950/90 text-orange-200 border-orange-500/60"
+                      : "bg-red-900/50 text-red-300 border-red-600/30"
+                  }`}
+                >
+                  {isPowerBrownout
+                    ? `${shapes.brownout} Brownout Risk`
+                    : `${shapes.deficit} Anomaly`}
                 </span>
               )}
             </div>
@@ -108,7 +172,11 @@ function AlertItem({
             <button
               type="button"
               onClick={handleInspect}
-              className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-red-600 to-amber-600 hover:brightness-110 active:scale-95 text-white font-mono font-bold text-[11px] flex items-center gap-1 shadow-md shadow-red-950/50 border border-red-300/40 transition-all shrink-0"
+              className={`px-2.5 py-1 rounded-lg hover:brightness-110 active:scale-95 text-white font-mono font-bold text-[11px] flex items-center gap-1 shadow-md transition-all shrink-0 border ${
+                colorblindMode
+                  ? "bg-gradient-to-r from-orange-600 to-amber-600 border-orange-300/40 shadow-orange-950/50"
+                  : "bg-gradient-to-r from-red-600 to-amber-600 border-red-300/40 shadow-red-950/50"
+              }`}
               title="Inspect Root Cause & NASA Mission Logs"
             >
               <Search size={11} className="shrink-0" />
@@ -122,6 +190,7 @@ function AlertItem({
             onClick={() => setExpanded((p) => !p)}
             className="p-1 text-slate-400 hover:text-white rounded-lg transition-colors"
             title={expanded ? "Collapse details" : "Expand details"}
+            aria-label={expanded ? "Collapse alert details" : "Expand alert details"}
           >
             {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </button>
@@ -164,10 +233,16 @@ function AlertItem({
                 <button
                   type="button"
                   onClick={handleInspect}
-                  className="mt-1 w-full py-2 px-3 rounded-xl bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 hover:brightness-110 active:scale-98 text-white font-mono font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-red-950/50 border border-red-300/40 transition-all"
+                  className={`mt-1 w-full py-2 px-3 rounded-xl hover:brightness-110 active:scale-98 text-white font-mono font-bold text-xs flex items-center justify-center gap-2 shadow-lg transition-all border ${
+                    colorblindMode
+                      ? "bg-gradient-to-r from-orange-600 via-amber-600 to-amber-700 border-orange-300/40 shadow-orange-950/50"
+                      : "bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 border-red-300/40 shadow-red-950/50"
+                  }`}
                 >
                   <Search size={13} />
-                  <span>Inspect Root Cause (Why Did This Happen? · NASA Flight Logs)</span>
+                  <span>
+                    {shapes.brownout} Inspect Root Cause (Why Did This Happen? · NASA Flight Logs)
+                  </span>
                 </button>
               )}
             </div>

@@ -177,6 +177,7 @@ export interface GameState {
   difficulty: DifficultyTier;
   currentTurn: number;      // 1-indexed; 0 = not started
   history: TurnResult[];
+  telemetryHistory?: TurnResult[]; // Explicit alias for history ensuring debrief & telemetry chart compatibility
   subsystems: Record<SubsystemId, SubsystemState>;
   crew: CrewState;
   finalOutcome: MissionOutcome;

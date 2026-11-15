@@ -31,10 +31,13 @@ import {
   Sliders,
   Search,
   Radio,
+  Eye,
 } from "lucide-react";
 import AmbientAudioModal from "./AmbientAudioModal";
+import EducatorHubModal from "./EducatorHubModal";
 import CrewPanel from "./CrewPanel";
 import CrewCommsBubble from "./CrewCommsBubble";
+import { useAccessibility } from "../utils/AccessibilityContext";
 import {
   evaluatePowerAdjustmentDialogue,
   getSolAdvanceDialogue,
@@ -65,6 +68,7 @@ import type { HistoricScenario } from "../data/scenarioData";
 import { useTranslation } from "../i18n/LanguageContext";
 import LanguageSelector from "./LanguageSelector";
 import PwaNavButton from "./PwaNavButton";
+import { JudgeDemoNavPill } from "./JudgeDemoBar";
 
 export interface ControlDeckProps {
   environment: MissionEnvironment;
@@ -83,6 +87,8 @@ export interface ControlDeckProps {
   onOpenTutorial?: () => void;
   onOpenCrewRoster?: () => void;
   onInspectRootCause?: (type: "brownout" | "life_support" | "radiation_shield") => void;
+  onToggleDemoBar?: () => void;
+  isDemoBarOpen?: boolean;
   currentEvent?: TurnEvent;
   isProcessing?: boolean;
   children?: React.ReactNode; // Optional slot for OutpostVisualizer
@@ -105,14 +111,18 @@ export default function ControlDeck({
   onOpenTutorial,
   onOpenCrewRoster,
   onInspectRootCause,
+  onToggleDemoBar,
+  isDemoBarOpen,
   currentEvent,
   isProcessing = false,
   children,
 }: ControlDeckProps) {
   const { t } = useTranslation();
   const [isMuted, toggleMute] = useSoundMuted();
+  const { colorblindMode, toggleColorblindMode, tokens, shapes } = useAccessibility();
   const [isAudioModalOpen, setIsAudioModalOpen] = useState(false);
   const [isCrewModalOpen, setIsCrewModalOpen] = useState(false);
+  const [isEducatorHubOpen, setIsEducatorHubOpen] = useState(false);
 
   // Dynamic Crew Radio Dialogue State
   const [activeDialogue, setActiveDialogue] = useState<CommsDialogue | null>(null);
@@ -542,6 +552,11 @@ export default function ControlDeck({
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Subtle Judge Express Demo Bar Pill */}
+          {onToggleDemoBar && (
+            <JudgeDemoNavPill onClick={onToggleDemoBar} isOpen={isDemoBarOpen} />
+          )}
+
           {/* PWA Install / Classroom Offline Pill */}
           <PwaNavButton />
 
@@ -565,6 +580,35 @@ export default function ControlDeck({
               <Volume2 className="w-3.5 h-3.5 text-cyan-400" />
             )}
             <span className="hidden sm:inline">{isMuted ? t("common.muted") : t("common.sound")}</span>
+          </button>
+
+          {/* Vision / Accessibility High-Contrast & Colorblind-Safe Toggle */}
+          <button
+            type="button"
+            onClick={() => {
+              soundEffects.playButtonClick();
+              toggleColorblindMode();
+            }}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-bold transition-all ${
+              colorblindMode
+                ? "bg-sky-950/70 border-sky-400 text-sky-200 shadow-sm shadow-sky-950/50 ring-1 ring-sky-400/40"
+                : "bg-slate-900 hover:bg-slate-800 border-slate-700 hover:border-sky-500/40 text-slate-300 hover:text-sky-300"
+            }`}
+            title={
+              colorblindMode
+                ? "Vision / Accessibility: Colorblind-Safe Mode ACTIVE (Click to switch to Standard)"
+                : "Vision / Accessibility: Enable Colorblind-Safe & High-Contrast Mode"
+            }
+            aria-pressed={colorblindMode}
+            aria-label="Vision and Accessibility: Toggle Colorblind-Safe Mode"
+          >
+            <Eye className={`w-3.5 h-3.5 ${colorblindMode ? "text-sky-400" : "text-slate-400"}`} />
+            <span className="hidden sm:inline">Vision / Accessibility</span>
+            {colorblindMode && (
+              <span className="text-[10px] bg-sky-500/20 text-sky-300 px-1 py-0.2 rounded font-mono font-bold">
+                {shapes.nominal} SAFE
+              </span>
+            )}
           </button>
 
           {/* Procedural Space Audio Synthesizer Deck Modal Trigger */}
@@ -609,6 +653,23 @@ export default function ControlDeck({
             <span className="hidden sm:inline">Crew Radio</span>
           </button>
 
+          {/* Educator Hub & NGSS Curriculum Button */}
+          <motion.button
+            type="button"
+            whileHover={{ scale: 1.04 }}
+            whileTap={{ scale: 0.96 }}
+            onClick={() => {
+              soundEffects.playButtonClick();
+              setIsEducatorHubOpen(true);
+            }}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-amber-600/50 hover:border-amber-400 bg-amber-950/40 hover:bg-amber-900/50 text-amber-300 text-xs font-mono font-bold transition-all shadow-sm shadow-amber-950/40 cursor-pointer"
+            title="Educator Hub: 45-Min Lesson Plan, NGSS Alignment & Teacher Prompts"
+          >
+            <span className="text-sm">🍎</span>
+            <span className="hidden lg:inline">For Teachers / NGSS</span>
+            <span className="lg:hidden">NGSS</span>
+          </motion.button>
+
           {/* NASA Data Button */}
           <button
             type="button"
@@ -649,11 +710,27 @@ export default function ControlDeck({
               {effectiveBudgetMW} MW Available
             </span>
             <span className="text-xs text-slate-400 ml-2">
-              (Allocated: <strong className="text-white">{totalAllocated} MW</strong>)
+              (Allocated: <strong className="text-white">{totalAllocated} MW</strong>
+              {" · "}
+              <span
+                className={`font-mono font-bold ${
+                  isOverBudget
+                    ? tokens.dangerText
+                    : netPowerMW > 0
+                    ? tokens.surplusText
+                    : tokens.nominalText
+                }`}
+              >
+                {isOverBudget
+                  ? `${shapes.brownout} ${Math.abs(netPowerMW)} MW Deficit`
+                  : netPowerMW > 0
+                  ? `${shapes.surplus} +${netPowerMW} MW Surplus`
+                  : `${shapes.nominal} Balanced`}
+              </span>
+              )
             </span>
           </div>
 
-          {/* Quick preset chips */}
           {/* Quick preset chips */}
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-[11px] font-mono text-slate-500 mr-1 hidden sm:inline">
@@ -678,7 +755,11 @@ export default function ControlDeck({
             <button
               type="button"
               onClick={() => applyPreset("harvestPush")}
-              className="px-2.5 py-1 rounded-lg bg-emerald-950/60 border border-emerald-700/50 hover:bg-emerald-900/60 text-[11px] font-bold text-emerald-300 transition-colors"
+              className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold transition-colors ${
+                colorblindMode
+                  ? "bg-sky-950/60 border-sky-700/50 hover:bg-sky-900/60 text-sky-300"
+                  : "bg-emerald-950/60 border-emerald-700/50 hover:bg-emerald-900/60 text-emerald-300"
+              }`}
               title="Harvest Push: 15 Power / 25 ECLSS / 15 Shields / 45 Food"
             >
               🌾 Harvest Push
@@ -728,7 +809,9 @@ export default function ControlDeck({
           />
           {/* Food Production segment */}
           <div
-            className="h-full bg-emerald-500 transition-all duration-200"
+            className={`h-full transition-all duration-200 ${
+              colorblindMode ? "bg-[#0284c7]" : "bg-emerald-500"
+            }`}
             style={{
               width: `${Math.min(
                 100,
@@ -739,7 +822,12 @@ export default function ControlDeck({
           />
           {/* Over-budget indicator if over */}
           {isOverBudget && (
-            <div className="h-full bg-rose-500 animate-pulse flex-1" title="OVER BUDGET" />
+            <div
+              className={`h-full animate-pulse flex-1 ${
+                colorblindMode ? "bg-[#f97316]" : "bg-rose-500"
+              }`}
+              title="OVER BUDGET"
+            />
           )}
         </div>
 
@@ -748,19 +836,44 @@ export default function ControlDeck({
           <motion.div
             initial={{ opacity: 0, y: -6 }}
             animate={{ opacity: 1, y: 0 }}
-            className="p-3.5 rounded-xl bg-gradient-to-r from-red-950/90 via-rose-950/80 to-slate-900 border-2 border-red-500/70 text-red-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xl shadow-red-950/70"
+            role="alert"
+            className={`p-3.5 rounded-xl border-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xl ${
+              colorblindMode
+                ? "bg-gradient-to-r from-orange-950/90 via-amber-950/80 to-slate-900 border-orange-500/80 text-orange-200 shadow-orange-950/70"
+                : "bg-gradient-to-r from-red-950/90 via-rose-950/80 to-slate-900 border-red-500/70 text-red-200 shadow-red-950/70"
+            }`}
           >
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-red-500/25 text-red-400 flex items-center justify-center shrink-0 border border-red-500/50 shadow-md">
-                <Zap className="w-5 h-5 animate-bounce" />
+              <div
+                className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border shadow-md font-mono font-bold ${
+                  colorblindMode
+                    ? "bg-orange-500/25 text-orange-300 border-orange-500/50"
+                    : "bg-red-500/25 text-red-400 border-red-500/50"
+                }`}
+              >
+                {colorblindMode ? (
+                  <span className="text-base">{shapes.brownout}</span>
+                ) : (
+                  <Zap className="w-5 h-5 animate-bounce" />
+                )}
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-mono font-bold uppercase tracking-wider text-red-300">
-                    ⚡ BROWNOUT COLLAPSE HAZARD DETECTED
+                  <span
+                    className={`text-xs font-mono font-bold uppercase tracking-wider ${
+                      colorblindMode ? "text-orange-200" : "text-red-300"
+                    }`}
+                  >
+                    {shapes.brownout} ⚡ BROWNOUT COLLAPSE HAZARD DETECTED
                   </span>
-                  <span className="text-[10px] font-mono bg-red-900/70 px-1.5 py-0.5 rounded text-red-200">
-                    {netPowerMW} MW Deficit
+                  <span
+                    className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-bold ${
+                      colorblindMode
+                        ? "bg-orange-900/80 text-orange-100 border border-orange-500/50"
+                        : "bg-red-900/70 text-red-200"
+                    }`}
+                  >
+                    {shapes.deficit} {Math.abs(netPowerMW)} MW Deficit
                   </span>
                 </div>
                 <p className="text-xs text-slate-200 mt-0.5">
@@ -777,14 +890,44 @@ export default function ControlDeck({
                   soundEffects.playButtonClick();
                   onInspectRootCause("brownout");
                 }}
-                className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 hover:brightness-110 active:scale-95 text-white font-mono font-black text-xs flex items-center gap-2 shadow-lg shadow-red-950/70 border border-red-300/40 shrink-0 transition-all"
+                className={`px-3.5 py-2 rounded-xl hover:brightness-110 active:scale-95 text-white font-mono font-black text-xs flex items-center gap-2 shadow-lg shrink-0 transition-all border ${
+                  colorblindMode
+                    ? "bg-gradient-to-r from-orange-600 via-amber-600 to-amber-700 border-orange-300/40 shadow-orange-950/70"
+                    : "bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 border-red-300/40 shadow-red-950/70"
+                }`}
               >
                 <Search className="w-3.5 h-3.5" />
-                <span>Inspect Root Cause</span>
+                <span>{shapes.brownout} Inspect Root Cause</span>
               </button>
             )}
           </motion.div>
         )}
+      </div>
+
+      {/* Screen Reader ARIA Live Region for Power Slider Adjustments */}
+      <div
+        className="sr-only"
+        aria-live="polite"
+        aria-atomic="true"
+        id="control-deck-aria-live-status"
+      >
+        {lastAdjustedChannel
+          ? `${
+              lastAdjustedChannel === "powerGrid"
+                ? "Power Grid"
+                : lastAdjustedChannel === "lifeSupport"
+                ? "Life Support"
+                : lastAdjustedChannel === "radiationShielding"
+                ? "Radiation Shield"
+                : "Hydroponic Bay Food Production"
+            } adjusted to ${allocation[lastAdjustedChannel]} Megawatts. Total allocation is ${totalAllocated} of ${effectiveBudgetMW} MW. ${
+              isOverBudget
+                ? `Hazard: Brownout deficit of ${Math.abs(netPowerMW)} MW.`
+                : netPowerMW > 0
+                ? `Surplus reserve is ${netPowerMW} MW.`
+                : "Power allocation is fully balanced."
+            }`
+          : `Power allocation: ${totalAllocated} of ${effectiveBudgetMW} MW.`}
       </div>
 
       {/* 3. FOUR LARGE TACTILE POWER ALLOCATION CONTROLS */}
@@ -818,13 +961,19 @@ export default function ControlDeck({
             {/* Slider */}
             <div className="mb-4">
               <input
+                id="slider-deck-powerGrid"
                 type="range"
                 min="0"
                 max={effectiveBudgetMW}
                 step="1"
                 value={allocation.powerGrid}
                 onChange={(e) => handleUpdate("powerGrid", Number(e.target.value))}
-                className="w-full h-3 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[#1D4ED8] focus:outline-none"
+                aria-label="Power Grid and Battery Reserves allocation slider"
+                aria-valuenow={allocation.powerGrid}
+                aria-valuemin={0}
+                aria-valuemax={effectiveBudgetMW}
+                aria-valuetext={`Power Grid: ${allocation.powerGrid} MW. Baseline target: ${baselines.powerGrid} MW.`}
+                className="w-full h-3 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[#1D4ED8] focus:outline-none focus:ring-2 focus:ring-blue-400"
               />
               <div className="flex justify-between text-[10px] font-mono text-slate-500 mt-1">
                 <span>0 MW</span>
@@ -839,6 +988,7 @@ export default function ControlDeck({
             <button
               type="button"
               onClick={() => handleStep("powerGrid", -5)}
+              aria-label="Decrease Power Grid by 5 MW"
               className="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 font-bold text-xs flex items-center justify-center gap-1 transition-all"
             >
               <Minus className="w-3.5 h-3.5" /> -5 MW
@@ -846,6 +996,7 @@ export default function ControlDeck({
             <button
               type="button"
               onClick={() => handleStep("powerGrid", +5)}
+              aria-label="Increase Power Grid by 5 MW"
               className="flex-1 py-2 rounded-xl bg-[#1D4ED8] hover:bg-blue-600 active:scale-95 text-white font-bold text-xs flex items-center justify-center gap-1 transition-all shadow-md"
             >
               <Plus className="w-3.5 h-3.5" /> +5 MW
@@ -898,13 +1049,19 @@ export default function ControlDeck({
             {/* Slider */}
             <div className="mb-4">
               <input
+                id="slider-deck-lifeSupport"
                 type="range"
                 min="0"
                 max={effectiveBudgetMW}
                 step="1"
                 value={allocation.lifeSupport}
                 onChange={(e) => handleUpdate("lifeSupport", Number(e.target.value))}
-                className="w-full h-3 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[#06B6D4] focus:outline-none"
+                aria-label="Life Support ECLSS allocation slider"
+                aria-valuenow={allocation.lifeSupport}
+                aria-valuemin={0}
+                aria-valuemax={effectiveBudgetMW}
+                aria-valuetext={`Life Support: ${allocation.lifeSupport} MW. Baseline target: ${baselines.lifeSupport} MW.`}
+                className="w-full h-3 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[#06B6D4] focus:outline-none focus:ring-2 focus:ring-cyan-400"
               />
               <div className="flex justify-between text-[10px] font-mono text-slate-500 mt-1">
                 <span>0 MW</span>
@@ -919,6 +1076,7 @@ export default function ControlDeck({
             <button
               type="button"
               onClick={() => handleStep("lifeSupport", -5)}
+              aria-label="Decrease Life Support by 5 MW"
               className="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 font-bold text-xs flex items-center justify-center gap-1 transition-all"
             >
               <Minus className="w-3.5 h-3.5" /> -5 MW
@@ -926,6 +1084,7 @@ export default function ControlDeck({
             <button
               type="button"
               onClick={() => handleStep("lifeSupport", +5)}
+              aria-label="Increase Life Support by 5 MW"
               className="flex-1 py-2 rounded-xl bg-[#06B6D4] hover:bg-cyan-400 active:scale-95 text-slate-950 font-bold text-xs flex items-center justify-center gap-1 transition-all shadow-md"
             >
               <Plus className="w-3.5 h-3.5" /> +5 MW
@@ -940,11 +1099,15 @@ export default function ControlDeck({
                 soundEffects.playButtonClick();
                 onInspectRootCause("life_support");
               }}
-              className="mt-2.5 py-1.5 px-2.5 rounded-xl bg-red-950/70 hover:bg-red-900/70 border border-red-500/50 text-red-200 text-[11px] font-mono font-bold flex items-center justify-center gap-1.5 transition-all shadow-md"
+              className={`mt-2.5 py-1.5 px-2.5 rounded-xl border text-[11px] font-mono font-bold flex items-center justify-center gap-1.5 transition-all shadow-md ${
+                colorblindMode
+                  ? "bg-orange-950/80 hover:bg-orange-900/80 border-orange-500/60 text-orange-200"
+                  : "bg-red-950/70 hover:bg-red-900/70 border-red-500/50 text-red-200"
+              }`}
               title="Why is Life Support in danger? Inspect NASA ECLSS Root Cause"
             >
-              <Search className="w-3.5 h-3.5 text-red-400" />
-              <span>Inspect Life Support Root Cause</span>
+              <Search className={`w-3.5 h-3.5 ${colorblindMode ? "text-orange-400" : "text-red-400"}`} />
+              <span>{shapes.deficit} Inspect Life Support Root Cause</span>
             </button>
           )}
         </div>
@@ -978,6 +1141,7 @@ export default function ControlDeck({
             {/* Slider */}
             <div className="mb-4">
               <input
+                id="slider-deck-radiationShielding"
                 type="range"
                 min="0"
                 max={effectiveBudgetMW}
@@ -986,7 +1150,12 @@ export default function ControlDeck({
                 onChange={(e) =>
                   handleUpdate("radiationShielding", Number(e.target.value))
                 }
-                className="w-full h-3 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500 focus:outline-none"
+                aria-label="Radiation and Thermal Shield allocation slider"
+                aria-valuenow={allocation.radiationShielding}
+                aria-valuemin={0}
+                aria-valuemax={effectiveBudgetMW}
+                aria-valuetext={`Radiation Shield: ${allocation.radiationShielding} MW. Baseline target: ${baselines.radiationShielding} MW.`}
+                className="w-full h-3 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-400"
               />
               <div className="flex justify-between text-[10px] font-mono text-slate-500 mt-1">
                 <span>0 MW</span>
@@ -1001,6 +1170,7 @@ export default function ControlDeck({
             <button
               type="button"
               onClick={() => handleStep("radiationShielding", -5)}
+              aria-label="Decrease Radiation Shielding by 5 MW"
               className="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 font-bold text-xs flex items-center justify-center gap-1 transition-all"
             >
               <Minus className="w-3.5 h-3.5" /> -5 MW
@@ -1008,6 +1178,7 @@ export default function ControlDeck({
             <button
               type="button"
               onClick={() => handleStep("radiationShielding", +5)}
+              aria-label="Increase Radiation Shielding by 5 MW"
               className="flex-1 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-bold text-xs flex items-center justify-center gap-1 transition-all shadow-md"
             >
               <Plus className="w-3.5 h-3.5" /> +5 MW
@@ -1016,20 +1187,42 @@ export default function ControlDeck({
         </div>
 
         {/* CHANNEL 4: HYDROPONIC BAY / FOOD PRODUCTION */}
-        <div className="rounded-2xl bg-[#0B1120] border-2 border-emerald-900/50 hover:border-emerald-500/60 transition-all p-4 flex flex-col justify-between shadow-xl">
+        <div
+          className={`rounded-2xl bg-[#0B1120] border-2 transition-all p-4 flex flex-col justify-between shadow-xl ${
+            colorblindMode
+              ? "border-sky-900/50 hover:border-sky-500/60"
+              : "border-emerald-900/50 hover:border-emerald-500/60"
+          }`}
+        >
           <div>
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                <div
+                  className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+                    colorblindMode
+                      ? "bg-sky-500/20 text-sky-400"
+                      : "bg-emerald-500/20 text-emerald-400"
+                  }`}
+                >
                   <Leaf className="w-4 h-4" />
                 </div>
                 <div>
                   <h3 className="font-black text-sm text-white">Hydroponic Bay</h3>
-                  <p className="text-[11px] text-emerald-300">Food Production & Crops</p>
+                  <p
+                    className={`text-[11px] ${
+                      colorblindMode ? "text-sky-300" : "text-emerald-300"
+                    }`}
+                  >
+                    Food Production & Crops
+                  </p>
                 </div>
               </div>
               <div className="text-right">
-                <span className="text-xl sm:text-2xl font-black font-mono text-emerald-400">
+                <span
+                  className={`text-xl sm:text-2xl font-black font-mono ${
+                    colorblindMode ? "text-[#0284c7] sm:text-sky-400 text-sky-400" : "text-emerald-400"
+                  }`}
+                >
                   {allocation.foodProduction}
                 </span>
                 <span className="text-xs text-slate-400 font-mono ml-1">MW</span>
@@ -1044,17 +1237,33 @@ export default function ControlDeck({
             {/* Slider */}
             <div className="mb-4">
               <input
+                id="slider-deck-foodProduction"
                 type="range"
                 min="0"
                 max={effectiveBudgetMW}
                 step="1"
                 value={allocation.foodProduction}
                 onChange={(e) => handleUpdate("foodProduction", Number(e.target.value))}
-                className="w-full h-3 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500 focus:outline-none"
+                aria-label="Hydroponic Bay Food Production allocation slider"
+                aria-valuenow={allocation.foodProduction}
+                aria-valuemin={0}
+                aria-valuemax={effectiveBudgetMW}
+                aria-valuetext={`Food Production: ${allocation.foodProduction} MW. Baseline target: ${baselines.foodProduction} MW.`}
+                className={`w-full h-3 bg-slate-800 rounded-lg appearance-none cursor-pointer focus:outline-none focus:ring-2 ${
+                  colorblindMode
+                    ? "accent-[#0284c7] focus:ring-sky-400"
+                    : "accent-emerald-500 focus:ring-emerald-400"
+                }`}
               />
               <div className="flex justify-between text-[10px] font-mono text-slate-500 mt-1">
                 <span>0 MW</span>
-                <span className="text-emerald-400 font-bold">{baselines.foodProduction} MW Target</span>
+                <span
+                  className={`font-bold ${
+                    colorblindMode ? "text-sky-400" : "text-emerald-400"
+                  }`}
+                >
+                  {baselines.foodProduction} MW Target
+                </span>
                 <span>{effectiveBudgetMW} MW</span>
               </div>
             </div>
@@ -1065,6 +1274,7 @@ export default function ControlDeck({
             <button
               type="button"
               onClick={() => handleStep("foodProduction", -5)}
+              aria-label="Decrease Food Production by 5 MW"
               className="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 font-bold text-xs flex items-center justify-center gap-1 transition-all"
             >
               <Minus className="w-3.5 h-3.5" /> -5 MW
@@ -1072,7 +1282,12 @@ export default function ControlDeck({
             <button
               type="button"
               onClick={() => handleStep("foodProduction", +5)}
-              className="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold text-xs flex items-center justify-center gap-1 transition-all shadow-md"
+              aria-label="Increase Food Production by 5 MW"
+              className={`flex-1 py-2 rounded-xl active:scale-95 text-white font-bold text-xs flex items-center justify-center gap-1 transition-all shadow-md ${
+                colorblindMode
+                  ? "bg-[#0284c7] hover:bg-sky-500"
+                  : "bg-emerald-600 hover:bg-emerald-500"
+              }`}
             >
               <Plus className="w-3.5 h-3.5" /> +5 MW
             </button>
@@ -1080,8 +1295,14 @@ export default function ControlDeck({
 
           {/* Thermal Shock Alert Badge if < 10 MW */}
           {allocation.foodProduction < GREENHOUSE_THERMAL_SHOCK_THRESHOLD_MW && (
-            <div className="mt-2.5 py-1.5 px-2.5 rounded-xl bg-rose-950/70 border border-rose-500/60 text-rose-300 text-[10px] font-mono font-bold flex items-center gap-1.5 animate-pulse">
-              <span>❄️ THERMAL SHOCK RISK (&lt;10 MW)</span>
+            <div
+              className={`mt-2.5 py-1.5 px-2.5 rounded-xl border text-[10px] font-mono font-bold flex items-center gap-1.5 animate-pulse ${
+                colorblindMode
+                  ? "bg-orange-950/80 border-orange-500/60 text-orange-200"
+                  : "bg-rose-950/70 border-rose-500/60 text-rose-300"
+              }`}
+            >
+              <span>{shapes.deficit} ❄️ THERMAL SHOCK RISK (&lt;10 MW)</span>
             </div>
           )}
         </div>
@@ -1104,30 +1325,34 @@ export default function ControlDeck({
           </span>
         </div>
 
-        {/* Delta Badges with Up/Down arrows */}
+        {/* Delta Badges with Up/Down arrows and Shape Markers */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {/* Delta 1: O2 Buffer */}
           <div className="rounded-xl bg-slate-900/90 border border-slate-800 p-3 flex items-center justify-between">
             <div>
               <p className="text-[11px] font-semibold text-slate-400">O₂ Buffer (ECLSS)</p>
-              <p className="text-sm font-black text-white mt-0.5">
+              <p className="text-sm font-black text-white mt-0.5 font-mono">
                 {projections.o2Delta > 0
-                  ? `+${projections.o2Delta}% O₂ Surplus`
+                  ? `${shapes.surplus} +${projections.o2Delta}% O₂ Surplus`
                   : projections.o2Delta < 0
-                  ? `${projections.o2Delta}% O₂ Depletion`
-                  : "0% O₂ Stable"}
+                  ? `${shapes.deficit} ${projections.o2Delta}% O₂ Depletion`
+                  : `${shapes.nominal} 0% O₂ Stable`}
               </p>
-              <p className="text-[10px] text-slate-400">
+              <p className="text-[10px] text-slate-400 font-mono">
                 ECLSS: {projections.lsHealthDelta >= 0 ? "+" : ""}
                 {projections.lsHealthDelta}%
               </p>
             </div>
             <div
-              className={`p-2 rounded-xl flex items-center justify-center ${
+              className={`p-2 rounded-xl flex items-center justify-center font-bold ${
                 projections.o2Delta > 0
-                  ? "bg-cyan-500/20 text-cyan-400"
+                  ? colorblindMode
+                    ? "bg-sky-500/20 text-sky-400"
+                    : "bg-cyan-500/20 text-cyan-400"
                   : projections.o2Delta < 0
-                  ? "bg-rose-500/20 text-rose-400"
+                  ? colorblindMode
+                    ? "bg-orange-500/20 text-orange-400"
+                    : "bg-rose-500/20 text-rose-400"
                   : "bg-slate-800 text-slate-400"
               }`}
             >
@@ -1145,23 +1370,25 @@ export default function ControlDeck({
           <div className="rounded-xl bg-slate-900/90 border border-slate-800 p-3 flex items-center justify-between">
             <div>
               <p className="text-[11px] font-semibold text-slate-400">Shield Integrity</p>
-              <p className="text-sm font-black text-white mt-0.5">
+              <p className="text-sm font-black text-white mt-0.5 font-mono">
                 {projections.shieldHealthDelta > 0
-                  ? `+${projections.shieldHealthDelta}% Fortified`
+                  ? `${shapes.surplus} +${projections.shieldHealthDelta}% Fortified`
                   : projections.shieldHealthDelta < 0
-                  ? `${projections.shieldHealthDelta}% Wear / Breach`
-                  : "0% Stable"}
+                  ? `${shapes.deficit} ${projections.shieldHealthDelta}% Wear / Breach`
+                  : `${shapes.nominal} 0% Stable`}
               </p>
-              <p className="text-[10px] text-slate-400">
+              <p className="text-[10px] text-slate-400 font-mono">
                 Dose: ~{projections.projectedDoseMSv} mSv/sol
               </p>
             </div>
             <div
-              className={`p-2 rounded-xl flex items-center justify-center ${
+              className={`p-2 rounded-xl flex items-center justify-center font-bold ${
                 projections.shieldHealthDelta > 0
                   ? "bg-indigo-500/20 text-indigo-400"
                   : projections.shieldHealthDelta < 0
-                  ? "bg-rose-500/20 text-rose-400"
+                  ? colorblindMode
+                    ? "bg-orange-500/20 text-orange-400"
+                    : "bg-rose-500/20 text-rose-400"
                   : "bg-slate-800 text-slate-400"
               }`}
             >
@@ -1179,23 +1406,27 @@ export default function ControlDeck({
           <div className="rounded-xl bg-slate-900/90 border border-slate-800 p-3 flex items-center justify-between">
             <div>
               <p className="text-[11px] font-semibold text-slate-400">Battery & Grid</p>
-              <p className="text-sm font-black text-white mt-0.5">
+              <p className="text-sm font-black text-white mt-0.5 font-mono">
                 {netPowerMW > 0
-                  ? `+${netPowerMW} MW Charging`
+                  ? `${shapes.surplus} +${netPowerMW} MW Charging`
                   : netPowerMW < 0
-                  ? `${netPowerMW} MW Deficit`
-                  : "0 MW Balanced"}
+                  ? `${isOverBudget ? shapes.brownout : shapes.deficit} ${netPowerMW} MW Deficit`
+                  : `${shapes.nominal} 0 MW Balanced`}
               </p>
-              <p className="text-[10px] text-slate-400">
+              <p className="text-[10px] text-slate-400 font-mono">
                 Grid Health: {projections.gridHealthDelta >= 0 ? "+" : ""}
                 {projections.gridHealthDelta}%
               </p>
             </div>
             <div
-              className={`p-2 rounded-xl flex items-center justify-center ${
-                netPowerMW >= 0
+              className={`p-2 rounded-xl flex items-center justify-center font-bold ${
+                netPowerMW > 0
                   ? "bg-blue-500/20 text-blue-400"
-                  : "bg-rose-500/20 text-rose-400"
+                  : netPowerMW < 0
+                  ? colorblindMode
+                    ? "bg-orange-500/20 text-orange-400"
+                    : "bg-rose-500/20 text-rose-400"
+                  : "bg-slate-800 text-slate-400"
               }`}
             >
               {netPowerMW > 0 ? (
@@ -1212,24 +1443,31 @@ export default function ControlDeck({
           <div className="rounded-xl bg-slate-900/90 border border-slate-800 p-3 flex items-center justify-between">
             <div>
               <p className="text-[11px] font-semibold text-slate-400">Crop Harvest & Food</p>
-              <p className="text-sm font-black text-white mt-0.5">
+              <p className="text-sm font-black text-white mt-0.5 font-mono">
                 {projections.isThermalShock
-                  ? `${projections.growthDeltaPercent}% Thermal Shock ❄️`
-                  : `+${projections.growthDeltaPercent}% Growth/Sol`}
+                  ? `${shapes.deficit} ${projections.growthDeltaPercent}% Thermal Shock ❄️`
+                  : `${shapes.surplus} +${projections.growthDeltaPercent}% Growth/Sol`}
               </p>
               <p className="text-[10px] text-slate-400">
-                Harvest: <strong className="text-emerald-300">{projections.harvestStatusText}</strong>
+                Harvest:{" "}
+                <strong className={colorblindMode ? "text-sky-300 font-bold" : "text-emerald-300"}>
+                  {projections.harvestStatusText}
+                </strong>
               </p>
               <p className="text-[9px] text-slate-500 font-mono">
                 {projections.projectedFoodReserveDays} Sols (~{projections.projectedTotalKcal.toLocaleString()} kcal)
               </p>
             </div>
             <div
-              className={`p-2 rounded-xl flex items-center justify-center ${
+              className={`p-2 rounded-xl flex items-center justify-center font-bold ${
                 !projections.isThermalShock && projections.growthDeltaPercent >= 25
-                  ? "bg-emerald-500/20 text-emerald-400"
+                  ? colorblindMode
+                    ? "bg-sky-500/20 text-sky-400"
+                    : "bg-emerald-500/20 text-emerald-400"
                   : projections.isThermalShock
-                  ? "bg-rose-500/20 text-rose-400"
+                  ? colorblindMode
+                    ? "bg-orange-500/20 text-orange-400"
+                    : "bg-rose-500/20 text-rose-400"
                   : "bg-amber-500/20 text-amber-400"
               }`}
             >
@@ -1249,31 +1487,31 @@ export default function ControlDeck({
           <Sparkles className="w-4 h-4 text-[#F59E0B] flex-shrink-0 mt-0.5" />
           <p className="leading-relaxed">
             {isOverBudget ? (
-              <span className="text-rose-400 font-bold">
-                Warning: You allocated more than the {effectiveBudgetMW} MW available!
+              <span className={`font-bold ${colorblindMode ? "text-orange-400" : "text-rose-400"}`}>
+                {shapes.brownout} Warning: You allocated more than the {effectiveBudgetMW} MW available!
                 Reduce power on one system so your grid doesn't brown out.
               </span>
             ) : allocation.foodProduction < GREENHOUSE_THERMAL_SHOCK_THRESHOLD_MW ? (
-              <span className="text-rose-400 font-bold">
-                ❄️ Thermal Shock Hazard! Food Production is under {GREENHOUSE_THERMAL_SHOCK_THRESHOLD_MW} MW.
+              <span className={`font-bold ${colorblindMode ? "text-orange-400" : "text-rose-400"}`}>
+                {shapes.deficit} ❄️ Thermal Shock Hazard! Food Production is under {GREENHOUSE_THERMAL_SHOCK_THRESHOLD_MW} MW.
                 Aeroponic crops will freeze and lose 25% growth progress this Sol!
               </span>
             ) : allocation.lifeSupport < baselines.lifeSupport - 4 ? (
-              <span className="text-amber-300">
-                Life Support is under-budget (&lt;{baselines.lifeSupport} MW)! Crew will consume backup oxygen tanks.
+              <span className="text-amber-300 font-medium">
+                {shapes.deficit} Life Support is under-budget (&lt;{baselines.lifeSupport} MW)! Crew will consume backup oxygen tanks.
               </span>
             ) : allocation.radiationShielding < baselines.radiationShielding - 4 ? (
-              <span className="text-amber-300">
-                Shielding is thin (&lt;{baselines.radiationShielding} MW)! Space radiation will penetrate the habitat.
+              <span className="text-amber-300 font-medium">
+                {shapes.deficit} Shielding is thin (&lt;{baselines.radiationShielding} MW)! Space radiation will penetrate the habitat.
                 {difficulty === "flight_director" && " ⚠️ Low active thermal loop power accelerates structural thermal fatigue!"}
               </span>
             ) : allocation.foodProduction < baselines.foodProduction - 4 ? (
-              <span className="text-amber-300">
-                Food Production is below baseline (&lt;{baselines.foodProduction} MW)! Crop maturity cycle is running at reduced speed.
+              <span className="text-amber-300 font-medium">
+                {shapes.deficit} Food Production is below baseline (&lt;{baselines.foodProduction} MW)! Crop maturity cycle is running at reduced speed.
               </span>
             ) : (
-              <span className="text-emerald-300">
-                Power is well distributed across all 4 subsystems! Systems will hold steady through Sol {currentTurn}.
+              <span className={`font-medium ${colorblindMode ? "text-sky-300" : "text-emerald-300"}`}>
+                {shapes.nominal} Power is well distributed across all 4 subsystems! Systems will hold steady through Sol {currentTurn}.
                 {difficulty === "flight_director" && " Thermal loop active; fatigue minimized."}
               </span>
             )}
@@ -1314,6 +1552,12 @@ export default function ControlDeck({
         isOpen={isAudioModalOpen}
         onClose={() => setIsAudioModalOpen(false)}
         environmentName={environment.name}
+      />
+
+      {/* Dedicated Educator Hub & NGSS Curriculum Modal */}
+      <EducatorHubModal
+        isOpen={isEducatorHubOpen}
+        onClose={() => setIsEducatorHubOpen(false)}
       />
 
       {/* Astronaut Specialists & Crew Morale Modal */}

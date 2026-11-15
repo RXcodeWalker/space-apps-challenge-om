@@ -202,21 +202,25 @@ export function parseMissionParamsFromUrl(): {
   seed: string | null;
   env: string | null;
   difficulty: string | null;
+  demo: boolean;
 } {
   if (typeof window === "undefined") {
-    return { seed: null, env: null, difficulty: null };
+    return { seed: null, env: null, difficulty: null, demo: false };
   }
   try {
     const params = new URLSearchParams(window.location.search);
     const rawSeed = params.get("seed");
     const rawEnv = params.get("env");
     const rawDiff = params.get("difficulty");
+    const demoParam = params.get("demo");
+    const demo = demoParam === "true" || demoParam === "1" || params.has("demo");
     return {
       seed: rawSeed ? normalizeSeed(rawSeed) : null,
       env: rawEnv || null,
       difficulty: rawDiff || null,
+      demo,
     };
   } catch {
-    return { seed: null, env: null, difficulty: null };
+    return { seed: null, env: null, difficulty: null, demo: false };
   }
 }

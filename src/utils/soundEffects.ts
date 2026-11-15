@@ -343,6 +343,66 @@ class SoundEffectsManager {
   }
 
   /**
+   * 5b. Subtle aerospace radio transmission release (outro)
+   * Synthesizes a NASA Quindar-style unkey chirp (2017 Hz) and subtle static release
+   */
+  public playRadioOut(): void {
+    if (this.isMuted) return;
+
+    const ctx = this.getContext();
+    if (!ctx) return;
+
+    try {
+      const t = ctx.currentTime;
+
+      // 1. Apollo Quindar unkey tone (2017 Hz sine beep)
+      const osc = ctx.createOscillator();
+      const oscGain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(2017, t);
+      oscGain.gain.setValueAtTime(0.02 * this.sfxVolume, t);
+      oscGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.04);
+
+      osc.connect(oscGain);
+      oscGain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.045);
+
+      // 2. Brief radio static burst (squelch cut)
+      const sampleRate = ctx.sampleRate;
+      const duration = 0.045;
+      const bufferSize = Math.floor(sampleRate * duration);
+      const buffer = ctx.createBuffer(1, bufferSize, sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        const env = Math.exp(-i / (bufferSize * 0.4));
+        data[i] = (Math.random() * 2 - 1) * env;
+      }
+
+      const noise = ctx.createBufferSource();
+      noise.buffer = buffer;
+
+      const filter = ctx.createBiquadFilter();
+      filter.type = "bandpass";
+      filter.frequency.setValueAtTime(2100, t);
+      filter.Q.setValueAtTime(2.0, t);
+
+      const noiseGain = ctx.createGain();
+      noiseGain.gain.setValueAtTime(0.035 * this.sfxVolume, t);
+      noiseGain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+
+      noise.connect(filter);
+      filter.connect(noiseGain);
+      noiseGain.connect(ctx.destination);
+
+      noise.start(t);
+      noise.stop(t + duration);
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  /**
    * General button interaction beep
    */
   public playButtonClick(): void {

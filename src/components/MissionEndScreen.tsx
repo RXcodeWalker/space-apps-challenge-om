@@ -26,6 +26,7 @@ import { calculateOutcomeRank } from "../utils/flightRecorder";
 import { DIFFICULTY_PRESETS } from "../data/difficultyTiers";
 import { useTranslation } from "../i18n/LanguageContext";
 import LanguageSelector from "./LanguageSelector";
+import { JudgeDemoNavPill } from "./JudgeDemoBar";
 import {
   buildChallengeUrl,
   formatSeedDisplay,
@@ -38,6 +39,8 @@ interface MissionEndScreenProps {
   onNewMission: () => void;
   onShowNasaData: () => void;
   kidMode: boolean;
+  onToggleDemoBar?: () => void;
+  isDemoBarOpen?: boolean;
 }
 
 function ScoreRing({ score }: { score: number }) {
@@ -111,6 +114,8 @@ export default function MissionEndScreen({
   onNewMission,
   onShowNasaData,
   kidMode,
+  onToggleDemoBar,
+  isDemoBarOpen,
 }: MissionEndScreenProps) {
   const { t } = useTranslation();
   const [showDebrief, setShowDebrief] = useState(false);
@@ -204,9 +209,14 @@ export default function MissionEndScreen({
         animate={{ opacity: 1, y: 0 }}
       >
         <div className="flex justify-between items-center px-1 relative z-30">
-          <span className="text-xs font-mono font-bold tracking-wider text-cyan-400 uppercase">
-            {t("common.nasaSpaceApps")}
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-mono font-bold tracking-wider text-cyan-400 uppercase">
+              {t("common.nasaSpaceApps")}
+            </span>
+            {onToggleDemoBar && (
+              <JudgeDemoNavPill onClick={onToggleDemoBar} isOpen={isDemoBarOpen} />
+            )}
+          </div>
           <LanguageSelector compact />
         </div>
 

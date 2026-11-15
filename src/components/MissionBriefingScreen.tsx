@@ -40,7 +40,9 @@ import {
   BatteryWarning,
   Clock,
   Quote,
+  Eye,
 } from "lucide-react";
+import { useAccessibility } from "../utils/AccessibilityContext";
 import {
   generateMissionSeed,
   normalizeSeed,
@@ -61,6 +63,7 @@ import {
 import { soundEffects, useSoundMuted } from "../utils/soundEffects";
 import { ambientAudio } from "../utils/ambientAudio";
 import AmbientAudioModal from "./AmbientAudioModal";
+import EducatorHubModal from "./EducatorHubModal";
 import {
   DIFFICULTY_PRESETS,
   type DifficultyTier,
@@ -68,6 +71,7 @@ import {
 import { useTranslation } from "../i18n/LanguageContext";
 import LanguageSelector from "./LanguageSelector";
 import PwaNavButton from "./PwaNavButton";
+import { JudgeDemoNavPill } from "./JudgeDemoBar";
 
 interface MissionBriefingScreenProps {
   onStart: (
@@ -80,6 +84,8 @@ interface MissionBriefingScreenProps {
   initialSeed?: string;
   initialEnvironmentId?: string;
   initialScenarioId?: ScenarioId;
+  onToggleDemoBar?: () => void;
+  isDemoBarOpen?: boolean;
 }
 
 interface DestinationCardData {
@@ -227,6 +233,8 @@ export default function MissionBriefingScreen({
   initialSeed,
   initialEnvironmentId,
   initialScenarioId,
+  onToggleDemoBar,
+  isDemoBarOpen,
 }: MissionBriefingScreenProps) {
   const { t } = useTranslation();
 
@@ -255,7 +263,9 @@ export default function MissionBriefingScreen({
   });
   const [isCopied, setIsCopied] = useState<boolean>(false);
   const [isMuted, toggleMute] = useSoundMuted();
+  const { colorblindMode, toggleColorblindMode } = useAccessibility();
   const [isAudioModalOpen, setIsAudioModalOpen] = useState<boolean>(false);
+  const [isEducatorHubOpen, setIsEducatorHubOpen] = useState<boolean>(false);
 
   const selectedDestination =
     DESTINATIONS.find((d) => d.env.id === selectedId) ?? DESTINATIONS[0];
@@ -373,8 +383,28 @@ export default function MissionBriefingScreen({
           </div>
 
           <div className="flex items-center gap-2 sm:gap-4 text-xs font-mono">
+            {onToggleDemoBar && (
+              <JudgeDemoNavPill onClick={onToggleDemoBar} isOpen={isDemoBarOpen} />
+            )}
             <PwaNavButton />
             <LanguageSelector />
+
+            {/* Educator Hub & NGSS Curriculum Button */}
+            <motion.button
+              type="button"
+              whileHover={{ scale: 1.04 }}
+              whileTap={{ scale: 0.96 }}
+              onClick={() => {
+                soundEffects.playButtonClick();
+                setIsEducatorHubOpen(true);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-600/50 hover:border-amber-400 bg-amber-950/40 hover:bg-amber-900/50 text-amber-300 text-xs font-mono font-bold transition-all shadow-sm shadow-amber-950/40 cursor-pointer"
+              title="Educator Hub: 45-Min Lesson Plan, NGSS Alignment & Teacher Prompts"
+            >
+              <span className="text-sm">🍎</span>
+              <span className="hidden sm:inline">For Teachers / NGSS</span>
+              <span className="sm:hidden">NGSS</span>
+            </motion.button>
 
             <button
               type="button"
@@ -392,6 +422,35 @@ export default function MissionBriefingScreen({
                 <Volume2 className="w-3.5 h-3.5 text-cyan-400" />
               )}
               <span className="hidden sm:inline">{isMuted ? t("common.muted") : t("common.sound")}</span>
+            </button>
+
+            {/* Vision / Accessibility Toggle */}
+            <button
+              type="button"
+              onClick={() => {
+                soundEffects.playButtonClick();
+                toggleColorblindMode();
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${
+                colorblindMode
+                  ? "bg-sky-950/70 border-sky-400 text-sky-200 shadow-sm shadow-sky-950/50 ring-1 ring-sky-400/40"
+                  : "bg-slate-900/80 hover:bg-slate-800 border-slate-800 text-slate-300 hover:text-sky-300"
+              }`}
+              title={
+                colorblindMode
+                  ? "Vision / Accessibility: Colorblind-Safe Mode ACTIVE (Click to switch to Standard)"
+                  : "Vision / Accessibility: Enable Colorblind-Safe & High-Contrast Mode"
+              }
+              aria-pressed={colorblindMode}
+              aria-label="Vision and Accessibility: Toggle Colorblind-Safe Mode"
+            >
+              <Eye className={`w-3.5 h-3.5 ${colorblindMode ? "text-sky-400" : "text-slate-400"}`} />
+              <span className="hidden sm:inline">Vision / Accessibility</span>
+              {colorblindMode && (
+                <span className="text-[10px] bg-sky-500/20 text-sky-300 px-1 py-0.2 rounded font-mono font-bold">
+                  {shapes.nominal} SAFE
+                </span>
+              )}
             </button>
 
             <button
@@ -641,12 +700,25 @@ export default function MissionBriefingScreen({
 
             <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
               <div className="flex-1 flex flex-col gap-1.5">
-                <label htmlFor="mission-seed-input" className="text-xs font-mono text-slate-300 flex items-center gap-1.5">
-                  <span className="text-cyan-400 font-bold">Mission Code:</span>
-                  <span className="text-slate-400 text-[11px]">
-                    Share this code with your class so every run has identical events
-                  </span>
-                </label>
+                <div className="flex items-center justify-between">
+                  <label htmlFor="mission-seed-input" className="text-xs font-mono text-slate-300 flex items-center gap-1.5">
+                    <span className="text-cyan-400 font-bold">Mission Code:</span>
+                    <span className="text-slate-400 text-[11px] hidden sm:inline">
+                      Share this code with your class so every run has identical events
+                    </span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundEffects.playButtonClick();
+                      setIsEducatorHubOpen(true);
+                    }}
+                    className="text-[11px] font-mono font-bold text-amber-400 hover:text-amber-300 flex items-center gap-1 cursor-pointer transition-colors"
+                    title="Open 45-Min Lesson Plan & NGSS Curriculum"
+                  >
+                    <span>🍎 Lesson Plan (#ARTEMIS-26)</span>
+                  </button>
+                </div>
                 <div className="relative flex items-center">
                   <span className="absolute left-3.5 font-mono font-black text-cyan-400 text-base select-none">
                     #
@@ -1277,6 +1349,12 @@ export default function MissionBriefingScreen({
             ? selectedScenario.title
             : selectedDestination.env.name
         }
+      />
+
+      <EducatorHubModal
+        isOpen={isEducatorHubOpen}
+        onClose={() => setIsEducatorHubOpen(false)}
+        onSelectSeed={(seed) => setMissionSeed(seed)}
       />
     </div>
   );

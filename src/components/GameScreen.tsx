@@ -7,7 +7,7 @@
 // 4. End-of-Mission Engineering Debrief Modal (Rank, SVG Chart, Personalized Insights)
 // 5. NASA Data Modal accessible from the header at any time
 // ============================================================
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronRight,
@@ -26,7 +26,10 @@ import {
   Flame,
   ShieldAlert,
   Search,
+  Eye,
 } from "lucide-react";
+
+import { useAccessibility } from "../utils/AccessibilityContext";
 
 import OutpostVisualizer from "./OutpostVisualizer";
 import ControlDeck from "./ControlDeck";
@@ -51,6 +54,13 @@ import AmbientAudioModal from "./AmbientAudioModal";
 import { useTranslation } from "../i18n/LanguageContext";
 import { soundEffects, useSoundMuted } from "../utils/soundEffects";
 import { ambientAudio } from "../utils/ambientAudio";
+import {
+  announceSolStart,
+  announceHazard,
+  announceHarvest,
+  announceBrownout,
+  cancelCapComSpeech,
+} from "../utils/capComVoice";
 import type { SpecialistRepairOption } from "../data/crewData";
 import type { HistoricScenario } from "../data/scenarioData";
 
@@ -72,6 +82,10 @@ import {
   type IncidentCard,
   type IncidentChoice,
 } from "../data/incidentCards";
+import {
+  createSol9CrisisGameState,
+  getSpeIncidentForEnvironment,
+} from "../utils/judgeDemoData";
 
 interface GameScreenProps {
   environment: MissionEnvironment;
@@ -81,6 +95,10 @@ interface GameScreenProps {
   onMissionEnd: (finalState: GameState) => void;
   onShowNasaData: () => void;
   onSwitchPlanet?: () => void;
+  onToggleDemoBar?: () => void;
+  isDemoBarOpen?: boolean;
+  initialGameStateOverride?: GameState | null;
+  sol9CrisisTrigger?: number;
 }
 
 export default function GameScreen({
@@ -91,10 +109,14 @@ export default function GameScreen({
   onMissionEnd,
   onShowNasaData,
   onSwitchPlanet,
+  onToggleDemoBar,
+  isDemoBarOpen,
+  initialGameStateOverride,
+  sol9CrisisTrigger,
 }: GameScreenProps) {
   const { t } = useTranslation();
   const [gameState, setGameState] = useState<GameState>(() =>
-    createInitialGameState(environment, difficulty, missionSeed, scenario)
+    initialGameStateOverride || createInitialGameState(environment, difficulty, missionSeed, scenario)
   );
   const [phase, setPhase] = useState<"allocate" | "result">("allocate");
   const [lastResult, setLastResult] = useState<
@@ -102,7 +124,12 @@ export default function GameScreen({
   >(null);
 
   // Dynamic Incident State
-  const [activeIncident, setActiveIncident] = useState<IncidentCard | null>(null);
+  const [activeIncident, setActiveIncident] = useState<IncidentCard | null>(() => {
+    if (initialGameStateOverride && initialGameStateOverride.currentTurn === 8) {
+      return getSpeIncidentForEnvironment(environment);
+    }
+    return null;
+  });
   const [dismissedIncidents, setDismissedIncidents] = useState<Record<number, boolean>>({});
 
   // End-of-Mission Engineering Debrief State
@@ -110,9 +137,55 @@ export default function GameScreen({
 
   // Audio mute state and Tutorial state
   const [isMuted, toggleMute] = useSoundMuted();
+  const { colorblindMode, toggleColorblindMode, shapes } = useAccessibility();
   const [isAudioModalOpen, setIsAudioModalOpen] = useState<boolean>(false);
   const [isCrewModalOpen, setIsCrewModalOpen] = useState<boolean>(false);
   const [selectedRootCauseProfile, setSelectedRootCauseProfile] = useState<RootCauseProfile | null>(null);
+
+  // Rapid Jump to Sol 9 Crisis handler for Hackathon Judges
+  const handleJumpToSol9Crisis = useCallback(() => {
+    soundEffects.playIncidentAlert();
+    ambientAudio.triggerGeigerBurst(4.0, 95);
+
+    const crisisState = createSol9CrisisGameState(
+      environment,
+      gameState.difficulty,
+      gameState.missionSeed,
+      gameState.scenario
+    );
+
+    setGameState(crisisState);
+    setPhase("allocate");
+    setDismissedIncidents((prev) => {
+      const copy = { ...prev };
+      delete copy[9];
+      return copy;
+    });
+
+    const speIncident = getSpeIncidentForEnvironment(environment);
+    setActiveIncident(speIncident);
+
+    // Calculate budget for Sol 9 with brownout modifier
+    const modPower = (crisisState.activeModifiers || []).reduce(
+      (sum, m) => sum + (m.powerDeltaMW || 0),
+      0
+    );
+    const budget = getEffectivePowerBudget(
+      environment,
+      9,
+      modPower,
+      crisisState.difficulty,
+      crisisState.missionSeed,
+      crisisState.scenario
+    );
+    setAllocation(getDefaultAllocation(budget, crisisState.difficulty));
+  }, [environment, gameState.difficulty, gameState.missionSeed, gameState.scenario]);
+
+  useEffect(() => {
+    if (sol9CrisisTrigger && sol9CrisisTrigger > 0) {
+      handleJumpToSol9Crisis();
+    }
+  }, [sol9CrisisTrigger, handleJumpToSol9Crisis]);
   const [isTutorialOpen, setIsTutorialOpen] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     try {
@@ -121,6 +194,22 @@ export default function GameScreen({
       return false;
     }
   });
+
+  const lastAnnouncedSolRef = useRef<number>(0);
+
+  // Cleanup speech synthesis on component unmount
+  useEffect(() => {
+    return () => {
+      cancelCapComSpeech();
+    };
+  }, []);
+
+  // Cancel speech immediately when user mutes
+  useEffect(() => {
+    if (isMuted) {
+      cancelCapComSpeech();
+    }
+  }, [isMuted]);
 
   const currentTurn = gameState.currentTurn + 1;
 
@@ -162,6 +251,9 @@ export default function GameScreen({
         setActiveIncident(incident);
         soundEffects.playIncidentAlert();
 
+        // Announce hazardous anomaly over CapCom radio
+        announceHazard(incident.title);
+
         // Trigger procedural audio reactions based on incident nature
         const lowerId = incident.id.toLowerCase();
         const lowerTitle = incident.title.toLowerCase();
@@ -178,7 +270,44 @@ export default function GameScreen({
         }
       }
     }
-  }, [currentTurn, environment.id, phase, gameState.incidentHistory, dismissedIncidents]);
+  }, [currentTurn, environment.id, phase, gameState.incidentHistory, dismissedIncidents, gameState.missionSeed]);
+
+  // Announce Sol start once incident (if any) is cleared or if no incident occurs
+  useEffect(() => {
+    if (phase === "allocate" && currentTurn <= TOTAL_TURNS && !activeIncident) {
+      const incident = getIncidentForSol(
+        environment.id,
+        currentTurn,
+        gameState.missionSeed
+      );
+      const alreadyHandled = gameState.incidentHistory?.some(
+        (h) => h.sol === currentTurn && h.incidentId === incident?.id
+      );
+      const isIncidentPending =
+        incident && !alreadyHandled && !dismissedIncidents[currentTurn];
+
+      // If an incident is waiting to pop up, let the hazard announcement take priority
+      if (isIncidentPending) return;
+
+      if (lastAnnouncedSolRef.current !== currentTurn) {
+        lastAnnouncedSolRef.current = currentTurn;
+        const weatherDesc = currentEvent?.label
+          ? `${currentEvent.label}. Solar array operating at ${Math.round(effectiveBudget)} megawatts.`
+          : `Solar array operating at ${Math.round(effectiveBudget)} megawatts.`;
+        announceSolStart(currentTurn, weatherDesc);
+      }
+    }
+  }, [
+    phase,
+    currentTurn,
+    activeIncident,
+    environment.id,
+    gameState.missionSeed,
+    gameState.incidentHistory,
+    dismissedIncidents,
+    currentEvent?.label,
+    effectiveBudget,
+  ]);
 
   // Synchronize ambient procedural audio with real-time habitat telemetry
   useEffect(() => {
@@ -231,6 +360,7 @@ export default function GameScreen({
   const handleSelectIncidentChoice = useCallback(
     (choice: IncidentChoice, specialistRepair?: SpecialistRepairOption) => {
       if (!activeIncident) return;
+      cancelCapComSpeech();
       soundEffects.playButtonClick();
       ambientAudio.triggerAirlock(0.8);
       const updatedState = applyIncidentChoice(
@@ -263,6 +393,7 @@ export default function GameScreen({
 
   // Advance Sol Turn
   const handleConfirmTurn = useCallback(() => {
+    cancelCapComSpeech();
     soundEffects.playTurnChime();
     ambientAudio.triggerAirlock(0.7);
     const { nextState, result } = processTurn(gameState, allocation);
@@ -276,6 +407,34 @@ export default function GameScreen({
     setLastResult(result);
     setPhase("result");
 
+    // Check for critical brownout or hydroponics harvest alerts
+    const totalAlloc =
+      allocation.powerGrid +
+      allocation.lifeSupport +
+      allocation.radiationShielding +
+      allocation.foodProduction;
+    const isBrownout =
+      totalAlloc > result.powerBudgetMW ||
+      result.subsystems.powerGrid.health < 35 ||
+      result.alerts.some(
+        (a) =>
+          a.subsystem === "power" ||
+          a.headline.toLowerCase().includes("over-budget") ||
+          a.headline.toLowerCase().includes("brownout")
+      );
+
+    const isHarvest =
+      nextState.crew.harvestYieldKg > gameState.crew.harvestYieldKg ||
+      result.crew.recentMoraleEvents?.some(
+        (e) => e.sol === result.turn && e.id.startsWith("harvest-")
+      );
+
+    if (isBrownout) {
+      announceBrownout();
+    } else if (isHarvest) {
+      announceHarvest();
+    }
+
     // Check for mission completion or early critical threshold
     if (result.outcome !== "ongoing") {
       soundEffects.playVictoryChord();
@@ -286,6 +445,7 @@ export default function GameScreen({
   }, [gameState, allocation]);
 
   const handleNextTurn = useCallback(() => {
+    cancelCapComSpeech();
     soundEffects.playTurnChime();
     setPhase("allocate");
     setLastResult(null);
@@ -293,6 +453,8 @@ export default function GameScreen({
 
   // One-Click Play Again Handler
   const handlePlayAgain = useCallback(() => {
+    cancelCapComSpeech();
+    lastAnnouncedSolRef.current = 0;
     const freshState = createInitialGameState(
       environment,
       gameState.difficulty,
@@ -318,6 +480,7 @@ export default function GameScreen({
 
   // Switch Planet Handler
   const handleSwitchPlanetAction = useCallback(() => {
+    cancelCapComSpeech();
     setShowDebriefModal(false);
     if (onSwitchPlanet) {
       onSwitchPlanet();
@@ -733,6 +896,8 @@ export default function GameScreen({
                 onOpenTutorial={() => setIsTutorialOpen(true)}
                 onOpenCrewRoster={() => setIsCrewModalOpen(true)}
                 onInspectRootCause={handleInspectTypeRootCause}
+                onToggleDemoBar={onToggleDemoBar}
+                isDemoBarOpen={isDemoBarOpen}
                 currentEvent={currentEvent}
               >
                 {/* Live Responsive Habitat Cross-Section Visualizer */}
