@@ -10,6 +10,9 @@ interface PlanetDef { seed: number; base: RGB; dark: RGB; craters: number; rough
 
 export type PlanetId = 'moon' | 'mars' | 'europa' | 'titan';
 
+/** Mission environment id → the world the 3D scenes draw. */
+export const PLANET_OF: Record<string, PlanetId> = { lunar_south_pole: 'moon', mars_gale_crater: 'mars', europa_under_ice: 'europa', titan_hydrocarbon: 'titan' };
+
 const PLANETS: Record<PlanetId, PlanetDef> = {
   moon: { seed: 3, base: [0.62, 0.615, 0.59], dark: [0.34, 0.34, 0.33], craters: 34, rough: 0.05, tilt: -0.62, site: [-89.9, 0] },
   mars: { seed: 11, base: [0.72, 0.38, 0.2], dark: [0.42, 0.2, 0.12], craters: 14, rough: 0.035, tilt: 0.22, cap: true, site: [-4.6, 137.4] },

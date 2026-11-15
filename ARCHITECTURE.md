@@ -13,6 +13,9 @@ src/ui/                    ← the design system. New UI imports ONLY from here 
   components/              Panel, StatusShape/StatusTag/StatusText, Bar, Readout, Slider, Button, Toggle, Segmented, RankHud
   game/objectives.ts       RANKS ladder + OBJECTIVES registry (the only place objectives are defined)
   game/progress.ts         progress store: award(), settings, stats, saved mission, events
+  game/dayReport.ts        buildDayReport(): turn result → cause-first report lines (pure)
+  scene/planet.ts          3D globe for the landing screen; PLANET_OF maps environment id → world
+  scene/habitat.ts         3D habitat diorama for the game screen (sliders drive dome, lights, lamps)
   fx/sound.ts              sfx engine (Web Audio, no files)
   fx/celebrate.ts          burst, achievementToast, promoteBanner, scramble, installCelebrations()
   fx/CelebrationLayer.tsx  mounted once in main.tsx

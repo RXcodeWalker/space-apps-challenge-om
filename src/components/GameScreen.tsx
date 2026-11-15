@@ -1,57 +1,54 @@
 // ============================================================
-// GameScreen — Outpost Commander 10-Sol Mission Gameplay
-// Features:
-// 1. Dynamic NASA-Grounded Incident Triggering & IncidentModal
-// 2. OutpostVisualizer & Tactile ControlDeck
-// 3. Sol Debrief View with Active Telemetry & Alerts
-// 4. End-of-Mission Engineering Debrief Modal (Rank, SVG Chart, Personalized Insights)
-// 5. NASA Data Modal accessible from the header at any time
+// GameScreen — Outpost Commander 10-day mission (Flight Panel v3).
+// One screen: resources left · live habitat + crew centre · power
+// allocation right. Composed only from src/ui components and tokens.
+//
+// Engine, incidents, debrief, root-cause, tutorial and audio logic are
+// unchanged; this file replaces the legacy ControlDeck/Visualizer UI.
 // ============================================================
-import { useState, useCallback, useEffect, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useState, useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
+
 import {
-  ChevronRight,
-  Award,
-  History,
-  Database,
-  Radio,
-  Sparkles,
-  RotateCcw,
-  Volume2,
-  VolumeX,
-  Sliders,
-  HelpCircle,
-  CheckCircle2,
-  AlertTriangle,
-  Flame,
-  ShieldAlert,
-  Search,
-  Eye,
-} from "lucide-react";
+  Bar,
+  Button,
+  MissionLogDrawer,
+  Panel,
+  RankHud,
+  Readout,
+  Slider,
+  STATUS,
+  StatusShape,
+  StatusText,
+  award,
+  bumpStat,
+  motionMs,
+  sfx,
+  statusOf,
+  updateSettings,
+  useReducedMotion,
+  useSettings,
+  type Status,
+} from "../ui";
+import { createHabitat, type HabitatView } from "../ui/scene/habitat";
+import { PLANET_OF } from "../ui/scene/planet";
+import { buildDayReport, membersOf, type DayReport } from "../ui/game/dayReport";
 
-import { useAccessibility } from "../utils/AccessibilityContext";
-
-import OutpostVisualizer from "./OutpostVisualizer";
-import ControlDeck from "./ControlDeck";
-import AlertBanner from "./AlertBanner";
-import IncidentModal from "./IncidentModal";
 import CrewPanel from "./CrewPanel";
+import IncidentModal from "./IncidentModal";
 import MissionDebriefModal from "./MissionDebriefModal";
 import RootCauseModal from "./RootCauseModal";
+import EducatorHubModal from "./EducatorHubModal";
+import AmbientAudioModal from "./AmbientAudioModal";
+import QuickTutorialOverlay, { TUTORIAL_STORAGE_KEY } from "./QuickTutorialOverlay";
 import {
   type RootCauseProfile,
   type RootCauseFailureType,
   type RootCauseEvaluationContext,
-  resolveRootCauseForAlert,
   BROWNOUT_OVERBUDGET,
   LIFE_SUPPORT_FAILURE,
   RADIATION_SHIELD_FAILURE,
   BROWNOUT_BATTERY_DEPLETION,
 } from "../data/rootCauseData";
-import QuickTutorialOverlay, { TUTORIAL_STORAGE_KEY } from "./QuickTutorialOverlay";
-import LanguageSelector from "./LanguageSelector";
-import AmbientAudioModal from "./AmbientAudioModal";
-import LiveSpaceWeatherBadge from "./LiveSpaceWeatherBadge";
 import { useTranslation } from "../i18n/LanguageContext";
 import { soundEffects, useSoundMuted } from "../utils/soundEffects";
 import { ambientAudio } from "../utils/ambientAudio";
@@ -69,6 +66,7 @@ import type { MissionEnvironment } from "../data/nasaConstants";
 import { TOTAL_TURNS } from "../data/nasaConstants";
 import {
   createInitialGameState,
+  createInitialCrewMembers,
   processTurn,
   getDefaultAllocation,
   getEffectivePowerBudget,
@@ -76,17 +74,11 @@ import {
   type GameState,
   type PowerAllocation,
   type DifficultyTier,
+  type TurnResult,
 } from "../engine/simulationEngine";
 import { DIFFICULTY_PRESETS } from "../data/difficultyTiers";
-import {
-  getIncidentForSol,
-  type IncidentCard,
-  type IncidentChoice,
-} from "../data/incidentCards";
-import {
-  createSol9CrisisGameState,
-  getSpeIncidentForEnvironment,
-} from "../utils/judgeDemoData";
+import { getIncidentForSol, type IncidentCard, type IncidentChoice } from "../data/incidentCards";
+import { createSol9CrisisGameState, getSpeIncidentForEnvironment } from "../utils/judgeDemoData";
 
 interface GameScreenProps {
   environment: MissionEnvironment;
@@ -102,6 +94,29 @@ interface GameScreenProps {
   sol9CrisisTrigger?: number;
 }
 
+/** Slider order follows the design: air, shield, food, power. */
+const SUBS: ReadonlyArray<{ id: keyof PowerAllocation; code: string; name: string; does: string }> = [
+  { id: "lifeSupport", code: "ECLSS", name: "Life support", does: "makes oxygen" },
+  { id: "radiationShielding", code: "RAD", name: "Radiation shield", does: "blocks radiation" },
+  { id: "foodProduction", code: "AGRI", name: "Food production", does: "grows crops" },
+  { id: "powerGrid", code: "EPS", name: "Power grid", does: "keeps batteries charged" },
+];
+
+/** Scale of the food bar. The engine caps reserves at 30 days; 20 keeps the thresholds readable. */
+const FOOD_MAX = 20;
+const FLARE_AT = 1.6;
+
+const pad = (n: number) => String(n).padStart(2, "0");
+const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
+const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+const sum = (a: PowerAllocation) => a.powerGrid + a.lifeSupport + a.radiationShielding + a.foodProduction;
+
+function rootCauseType(r: TurnResult): RootCauseFailureType {
+  if (r.subsystems.powerGrid.health < 35 || sum(r.allocation) > r.powerBudgetMW) return "brownout";
+  if (r.crew.oxygenBufferPercent < 45 || r.subsystems.lifeSupport.health < 40) return "life_support";
+  return "radiation_shield";
+}
+
 export default function GameScreen({
   environment,
   difficulty = "commander",
@@ -115,16 +130,19 @@ export default function GameScreen({
   initialGameStateOverride,
   sol9CrisisTrigger,
 }: GameScreenProps) {
-  const { t } = useTranslation();
+  const reduce = useReducedMotion();
+  const settings = useSettings();
+  const { language, setLanguage, languages } = useTranslation();
   const [gameState, setGameState] = useState<GameState>(() =>
     initialGameStateOverride || createInitialGameState(environment, difficulty, missionSeed, scenario)
   );
-  const [phase, setPhase] = useState<"allocate" | "result">("allocate");
-  const [lastResult, setLastResult] = useState<
-    ReturnType<typeof processTurn>["result"] | null
-  >(null);
+  const [phase, setPhase] = useState<"allocate" | "running" | "result">("allocate");
+  const [lastResult, setLastResult] = useState<TurnResult | null>(null);
+  const [report, setReport] = useState<DayReport | null>(null);
+  const [sim, setSim] = useState<{ result: TurnResult } | null>(null);
+  const [p, setP] = useState(0);
 
-  // Dynamic Incident State
+  // Dynamic incident state
   const [activeIncident, setActiveIncident] = useState<IncidentCard | null>(() => {
     if (initialGameStateOverride && initialGameStateOverride.currentTurn === 8) {
       return getSpeIncidentForEnvironment(environment);
@@ -133,60 +151,15 @@ export default function GameScreen({
   });
   const [dismissedIncidents, setDismissedIncidents] = useState<Record<number, boolean>>({});
 
-  // End-of-Mission Engineering Debrief State
-  const [showDebriefModal, setShowDebriefModal] = useState<boolean>(false);
-
-  // Audio mute state and Tutorial state
+  // Overlays
+  const [showDebriefModal, setShowDebriefModal] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [logOpen, setLogOpen] = useState(false);
   const [isMuted, toggleMute] = useSoundMuted();
-  const { colorblindMode, toggleColorblindMode, shapes } = useAccessibility();
-  const [isAudioModalOpen, setIsAudioModalOpen] = useState<boolean>(false);
-  const [isCrewModalOpen, setIsCrewModalOpen] = useState<boolean>(false);
+  const [isAudioModalOpen, setIsAudioModalOpen] = useState(false);
+  const [isCrewModalOpen, setIsCrewModalOpen] = useState(false);
+  const [isEducatorOpen, setIsEducatorOpen] = useState(false);
   const [selectedRootCauseProfile, setSelectedRootCauseProfile] = useState<RootCauseProfile | null>(null);
-
-  // Rapid Jump to Sol 9 Crisis handler for Hackathon Judges
-  const handleJumpToSol9Crisis = useCallback(() => {
-    soundEffects.playIncidentAlert();
-    ambientAudio.triggerGeigerBurst(4.0, 95);
-
-    const crisisState = createSol9CrisisGameState(
-      environment,
-      gameState.difficulty,
-      gameState.missionSeed,
-      gameState.scenario
-    );
-
-    setGameState(crisisState);
-    setPhase("allocate");
-    setDismissedIncidents((prev) => {
-      const copy = { ...prev };
-      delete copy[9];
-      return copy;
-    });
-
-    const speIncident = getSpeIncidentForEnvironment(environment);
-    setActiveIncident(speIncident);
-
-    // Calculate budget for Sol 9 with brownout modifier
-    const modPower = (crisisState.activeModifiers || []).reduce(
-      (sum, m) => sum + (m.powerDeltaMW || 0),
-      0
-    );
-    const budget = getEffectivePowerBudget(
-      environment,
-      9,
-      modPower,
-      crisisState.difficulty,
-      crisisState.missionSeed,
-      crisisState.scenario
-    );
-    setAllocation(getDefaultAllocation(budget, crisisState.difficulty));
-  }, [environment, gameState.difficulty, gameState.missionSeed, gameState.scenario]);
-
-  useEffect(() => {
-    if (sol9CrisisTrigger && sol9CrisisTrigger > 0) {
-      handleJumpToSol9Crisis();
-    }
-  }, [sol9CrisisTrigger, handleJumpToSol9Crisis]);
   const [isTutorialOpen, setIsTutorialOpen] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     try {
@@ -196,29 +169,24 @@ export default function GameScreen({
     }
   });
 
-  const lastAnnouncedSolRef = useRef<number>(0);
+  const viewRef = useRef<HTMLDivElement>(null);
+  const habitatRef = useRef<HabitatView | null>(null);
+  const [glFailed, setGlFailed] = useState(false);
+  const rafRef = useRef(0);
+  const ctaRef = useRef<HTMLButtonElement>(null);
+  const lastAnnouncedSolRef = useRef(0);
+  const startedRef = useRef(false);
+  const closeLog = useCallback(() => setLogOpen(false), []);
+  const closeMenu = useCallback(() => setMenuOpen(false), []);
 
-  // Cleanup speech synthesis on component unmount
-  useEffect(() => {
-    return () => {
-      cancelCapComSpeech();
-    };
-  }, []);
+  const fallbackCrew = useMemo(() => createInitialCrewMembers(gameState.difficulty), [gameState.difficulty]);
 
-  // Cancel speech immediately when user mutes
-  useEffect(() => {
-    if (isMuted) {
-      cancelCapComSpeech();
-    }
-  }, [isMuted]);
+  // ---------- Day, budget, forecast ----------
+  const showingResult = phase === "result" && lastResult;
+  const day = Math.min(TOTAL_TURNS, showingResult ? lastResult.turn : gameState.currentTurn + 1);
+  const currentTurn = gameState.currentTurn + 1; // the day being planned (engine, 1-indexed)
 
-  const currentTurn = gameState.currentTurn + 1;
-
-  // Active power modifiers from incidents
-  const modifierPowerDelta = (gameState.activeModifiers || []).reduce(
-    (sum, m) => sum + (m.powerDeltaMW || 0),
-    0
-  );
+  const modifierPowerDelta = (gameState.activeModifiers || []).reduce((s, m) => s + (m.powerDeltaMW || 0), 0);
   const effectiveBudget = getEffectivePowerBudget(
     environment,
     currentTurn,
@@ -227,43 +195,95 @@ export default function GameScreen({
     gameState.missionSeed,
     gameState.scenario
   );
-  const currentEvent =
-    gameState.scenario?.turnEvents
-      ? gameState.scenario.turnEvents[currentTurn - 1]
-      : environment.turnEvents[currentTurn - 1];
+  const currentEvent = gameState.scenario?.turnEvents
+    ? gameState.scenario.turnEvents[currentTurn - 1]
+    : environment.turnEvents[currentTurn - 1];
 
   const [allocation, setAllocation] = useState<PowerAllocation>(() =>
     getDefaultAllocation(effectiveBudget, gameState.difficulty)
   );
 
-  // Check for dynamic incidents on Sol start (governed deterministically by missionSeed)
+  const budget = showingResult ? lastResult.powerBudgetMW : effectiveBudget;
+  const event = showingResult ? lastResult.event : currentEvent;
+  const used = sum(allocation);
+  const remaining = budget - used;
+  const over = remaining < 0;
+  const running = phase === "running";
+
+  // ---------- Habitat 3D scene ----------
+  useEffect(() => {
+    if (!viewRef.current) return;
+    try {
+      habitatRef.current = createHabitat(viewRef.current, { env: PLANET_OF[environment.id] ?? "moon", reduceMotion: reduce });
+    } catch {
+      setGlFailed(true);
+    }
+    return () => {
+      habitatRef.current?.dispose();
+      habitatRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    habitatRef.current?.setReduceMotion(reduce);
+  }, [reduce]);
+
+  // ---------- Mission counters ----------
+  useEffect(() => {
+    if (startedRef.current) return;
+    startedRef.current = true;
+    bumpStat("missionsStarted");
+  }, []);
+  useEffect(() => () => cancelAnimationFrame(rafRef.current), []);
+  useEffect(() => () => cancelCapComSpeech(), []);
+  useEffect(() => {
+    if (isMuted) cancelCapComSpeech();
+  }, [isMuted]);
+
+  // ---------- Judge demo: jump to the day-9 crisis ----------
+  const handleJumpToSol9Crisis = useCallback(() => {
+    soundEffects.playIncidentAlert();
+    ambientAudio.triggerGeigerBurst(4.0, 95);
+    cancelAnimationFrame(rafRef.current);
+
+    const crisisState = createSol9CrisisGameState(environment, gameState.difficulty, gameState.missionSeed, gameState.scenario);
+    setGameState(crisisState);
+    setPhase("allocate");
+    setSim(null);
+    setReport(null);
+    setLastResult(null);
+    setDismissedIncidents((prev) => {
+      const copy = { ...prev };
+      delete copy[9];
+      return copy;
+    });
+    setActiveIncident(getSpeIncidentForEnvironment(environment));
+
+    const modPower = (crisisState.activeModifiers || []).reduce((s, m) => s + (m.powerDeltaMW || 0), 0);
+    const b = getEffectivePowerBudget(environment, 9, modPower, crisisState.difficulty, crisisState.missionSeed, crisisState.scenario);
+    setAllocation(getDefaultAllocation(b, crisisState.difficulty));
+  }, [environment, gameState.difficulty, gameState.missionSeed, gameState.scenario]);
+
+  useEffect(() => {
+    if (sol9CrisisTrigger && sol9CrisisTrigger > 0) handleJumpToSol9Crisis();
+  }, [sol9CrisisTrigger, handleJumpToSol9Crisis]);
+
+  // ---------- Incidents (seeded, one per day at most) ----------
   useEffect(() => {
     if (phase === "allocate" && currentTurn <= TOTAL_TURNS) {
-      const incident = getIncidentForSol(
-        environment.id,
-        currentTurn,
-        gameState.missionSeed
-      );
-      const alreadyHandled = gameState.incidentHistory?.some(
-        (h) => h.sol === currentTurn && h.incidentId === incident?.id
-      );
+      const incident = getIncidentForSol(environment.id, currentTurn, gameState.missionSeed);
+      const alreadyHandled = gameState.incidentHistory?.some((h) => h.sol === currentTurn && h.incidentId === incident?.id);
 
       if (incident && !alreadyHandled && !dismissedIncidents[currentTurn]) {
         setActiveIncident(incident);
         soundEffects.playIncidentAlert();
-
-        // Announce hazardous anomaly over CapCom radio
         announceHazard(incident.title);
 
-        // Trigger procedural audio reactions based on incident nature
         const lowerId = incident.id.toLowerCase();
         const lowerTitle = incident.title.toLowerCase();
         if (
-          lowerId.includes("solar") ||
-          lowerId.includes("radiation") ||
-          lowerId.includes("flare") ||
-          lowerTitle.includes("solar") ||
-          lowerTitle.includes("radiation")
+          lowerId.includes("solar") || lowerId.includes("radiation") || lowerId.includes("flare") ||
+          lowerTitle.includes("solar") || lowerTitle.includes("radiation")
         ) {
           ambientAudio.triggerGeigerBurst(3.5, 95);
         } else {
@@ -273,22 +293,12 @@ export default function GameScreen({
     }
   }, [currentTurn, environment.id, phase, gameState.incidentHistory, dismissedIncidents, gameState.missionSeed]);
 
-  // Announce Sol start once incident (if any) is cleared or if no incident occurs
+  // CapCom reads out the day once any incident is cleared
   useEffect(() => {
     if (phase === "allocate" && currentTurn <= TOTAL_TURNS && !activeIncident) {
-      const incident = getIncidentForSol(
-        environment.id,
-        currentTurn,
-        gameState.missionSeed
-      );
-      const alreadyHandled = gameState.incidentHistory?.some(
-        (h) => h.sol === currentTurn && h.incidentId === incident?.id
-      );
-      const isIncidentPending =
-        incident && !alreadyHandled && !dismissedIncidents[currentTurn];
-
-      // If an incident is waiting to pop up, let the hazard announcement take priority
-      if (isIncidentPending) return;
+      const incident = getIncidentForSol(environment.id, currentTurn, gameState.missionSeed);
+      const alreadyHandled = gameState.incidentHistory?.some((h) => h.sol === currentTurn && h.incidentId === incident?.id);
+      if (incident && !alreadyHandled && !dismissedIncidents[currentTurn]) return;
 
       if (lastAnnouncedSolRef.current !== currentTurn) {
         lastAnnouncedSolRef.current = currentTurn;
@@ -298,1116 +308,531 @@ export default function GameScreen({
         announceSolStart(currentTurn, weatherDesc);
       }
     }
-  }, [
-    phase,
-    currentTurn,
-    activeIncident,
-    environment.id,
-    gameState.missionSeed,
-    gameState.incidentHistory,
-    dismissedIncidents,
-    currentEvent?.label,
-    effectiveBudget,
-  ]);
+  }, [phase, currentTurn, activeIncident, environment.id, gameState.missionSeed, gameState.incidentHistory, dismissedIncidents, currentEvent?.label, effectiveBudget]);
 
-  // Synchronize ambient procedural audio with real-time habitat telemetry
+  // Ambient audio follows habitat telemetry
   useEffect(() => {
     const radMultiplier = currentEvent?.radiationSpikeMultiplier ?? 1.0;
-    const baselineLS = gameState.difficulty === "cadet" ? 25 : 35;
-    const baselineRad = gameState.difficulty === "cadet" ? 20 : 30;
-
+    const baselines = DIFFICULTY_PRESETS[gameState.difficulty].baselinePowerDemands;
     ambientAudio.updateTelemetry({
       environmentId: environment.id,
       radiationMultiplier: radMultiplier,
       lifeSupportHealth: gameState.subsystems.lifeSupport.health,
-      lifeSupportPowerRatio: allocation.lifeSupport / baselineLS,
+      lifeSupportPowerRatio: allocation.lifeSupport / baselines.lifeSupport,
       shieldingHealth: gameState.subsystems.radiationShielding.health,
-      shieldingPowerRatio: allocation.radiationShielding / baselineRad,
+      shieldingPowerRatio: allocation.radiationShielding / baselines.radiationShielding,
     });
-  }, [
-    environment.id,
-    currentEvent?.radiationSpikeMultiplier,
-    gameState.subsystems.lifeSupport.health,
-    gameState.subsystems.radiationShielding.health,
-    allocation.lifeSupport,
-    allocation.radiationShielding,
-    gameState.difficulty,
-  ]);
+  }, [environment.id, currentEvent?.radiationSpikeMultiplier, gameState.subsystems.lifeSupport.health, gameState.subsystems.radiationShielding.health, allocation.lifeSupport, allocation.radiationShielding, gameState.difficulty]);
 
-  // Recalculate budget when turn or modifiers change
+  // New day, new budget: sliders reset to an even split
   useEffect(() => {
     if (phase === "allocate") {
-      const modPower = (gameState.activeModifiers || []).reduce(
-        (sum, m) => sum + (m.powerDeltaMW || 0),
-        0
-      );
-      const budget = getEffectivePowerBudget(
-        environment,
-        gameState.currentTurn + 1,
-        modPower,
-        gameState.difficulty,
-        gameState.missionSeed,
-        gameState.scenario
-      );
-      setAllocation(getDefaultAllocation(budget, gameState.difficulty));
+      const modPower = (gameState.activeModifiers || []).reduce((s, m) => s + (m.powerDeltaMW || 0), 0);
+      const b = getEffectivePowerBudget(environment, gameState.currentTurn + 1, modPower, gameState.difficulty, gameState.missionSeed, gameState.scenario);
+      setAllocation(getDefaultAllocation(b, gameState.difficulty));
     }
   }, [gameState.currentTurn, phase, environment, gameState.activeModifiers, gameState.difficulty, gameState.missionSeed, gameState.scenario]);
 
-  const handleAllocationChange = useCallback((next: PowerAllocation) => {
-    setAllocation(next);
-  }, []);
-
-  // Handle Incident Directive Choice & Optional Crew Specialist Deployment
   const handleSelectIncidentChoice = useCallback(
     (choice: IncidentChoice, specialistRepair?: SpecialistRepairOption) => {
       if (!activeIncident) return;
       cancelCapComSpeech();
       soundEffects.playButtonClick();
       ambientAudio.triggerAirlock(0.8);
-      const updatedState = applyIncidentChoice(
-        gameState,
-        activeIncident,
-        choice,
-        specialistRepair
-      );
+      const updatedState = applyIncidentChoice(gameState, activeIncident, choice, specialistRepair);
       setGameState(updatedState);
       setDismissedIncidents((prev) => ({ ...prev, [currentTurn]: true }));
       setActiveIncident(null);
 
-      // Re-evaluate budget immediately with new choice
-      const modPower = (updatedState.activeModifiers || []).reduce(
-        (sum, m) => sum + (m.powerDeltaMW || 0),
-        0
-      );
-      const newBudget = getEffectivePowerBudget(
-        environment,
-        currentTurn,
-        modPower,
-        updatedState.difficulty,
-        updatedState.missionSeed,
-        updatedState.scenario
-      );
-      setAllocation(getDefaultAllocation(newBudget, updatedState.difficulty));
+      const modPower = (updatedState.activeModifiers || []).reduce((s, m) => s + (m.powerDeltaMW || 0), 0);
+      const b = getEffectivePowerBudget(environment, currentTurn, modPower, updatedState.difficulty, updatedState.missionSeed, updatedState.scenario);
+      setAllocation(getDefaultAllocation(b, updatedState.difficulty));
     },
     [activeIncident, gameState, environment, currentTurn]
   );
 
-  // Advance Sol Turn
-  const handleConfirmTurn = useCallback(() => {
-    cancelCapComSpeech();
-    soundEffects.playTurnChime();
-    ambientAudio.triggerAirlock(0.7);
-    const { nextState, result } = processTurn(gameState, allocation);
+  // ---------- What is on the instruments right now ----------
+  // While a day runs, values glide from the old state to the result.
+  const members = membersOf(gameState.crew, fallbackCrew);
+  const k = running ? easeInOut(Math.max(0, Math.min(1, (p - 0.1) / 0.85))) : 1;
+  const to = running && sim ? sim.result : null;
+  const toMembers = to ? membersOf(to.crew, fallbackCrew) : members;
+  const mix = (a: number, b: number | undefined) => (to && b !== undefined ? lerp(a, b, k) : a);
+  const limit = gameState.crew.safeRadiationLimitMSv || 100;
+  const now = {
+    grid: mix(gameState.subsystems.powerGrid.health, to?.subsystems.powerGrid.health),
+    o2: mix(gameState.crew.oxygenBufferPercent, to?.crew.oxygenBufferPercent),
+    dose: mix(gameState.crew.radiationExposureMSv, to?.crew.radiationExposureMSv),
+    food: mix(gameState.crew.foodReserveDays, to?.crew.foodReserveDays),
+  };
+  const crewHp = members.map((m, i) => mix(m.health, toMembers[i]?.health));
 
-    // If radiation spike occurred, surge Geiger clicks
-    if (result.event.radiationSpikeMultiplier > 1.6) {
-      ambientAudio.triggerGeigerBurst(3.2, 85);
+  // Tomorrow, if the player runs the day with these sliders (the engine is deterministic).
+  const proj = useMemo(() => {
+    if (phase !== "allocate" || over || currentTurn > TOTAL_TURNS) return null;
+    try {
+      return processTurn(gameState, allocation).result;
+    } catch {
+      return null;
     }
+  }, [phase, over, currentTurn, gameState, allocation]);
 
+  const doseStatus = (mSv: number): Status => statusOf("dose", (mSv / limit) * 100);
+  const resources = [
+    { key: "grid", code: "EPS", name: "Power grid", unit: "%", value: now.grid, dec: 0, max: 100, ticks: [20, 40], good: 1 as const, status: statusOf("battery", now.grid), note: "Dark hours wear the grid down", next: proj?.subsystems.powerGrid.health, nextStatus: proj && statusOf("battery", proj.subsystems.powerGrid.health) },
+    { key: "o2", code: "O₂", name: "Oxygen", unit: "%", value: now.o2, dec: 0, max: 100, ticks: [35, 60], good: 1 as const, status: statusOf("oxygen", now.o2), note: "4 crew breathe 3.4 kg a day", next: proj?.crew.oxygenBufferPercent, nextStatus: proj && statusOf("oxygen", proj.crew.oxygenBufferPercent) },
+    { key: "dose", code: "RAD", name: "Radiation dose", unit: "mSv", value: now.dose, dec: 1, max: limit, ticks: [limit * 0.5, limit * 0.8], good: -1 as const, status: doseStatus(now.dose), note: `Mission limit: ${limit} mSv`, next: proj?.crew.radiationExposureMSv, nextStatus: proj && doseStatus(proj.crew.radiationExposureMSv) },
+    { key: "food", code: "FOOD", name: "Food left", unit: "days", value: now.food, dec: 1, max: FOOD_MAX, ticks: [2, 4], good: 1 as const, status: statusOf("food", now.food), note: "4 crew eat 10,000 kcal a day", next: proj?.crew.foodReserveDays, nextStatus: proj && statusOf("food", proj.crew.foodReserveDays) },
+  ];
+
+  // Habitat lamps, dome and greenhouse follow the sliders and the grid
+  useEffect(() => {
+    habitatRef.current?.set({ shield: allocation.radiationShielding, food: allocation.foodProduction, batt: allocation.powerGrid, battery: now.grid });
+  }, [allocation.radiationShielding, allocation.foodProduction, allocation.powerGrid, now.grid]);
+
+  // ---------- Run the day ----------
+  function finishDay(from: GameState, nextState: GameState, result: TurnResult, rep: DayReport, usedMW: number) {
     setGameState(nextState);
     setLastResult(result);
+    setReport(rep);
+    setSim(null);
     setPhase("result");
 
-    // Check for critical brownout or hydroponics harvest alerts
-    const totalAlloc =
-      allocation.powerGrid +
-      allocation.lifeSupport +
-      allocation.radiationShielding +
-      allocation.foodProduction;
-    const isBrownout =
-      totalAlloc > result.powerBudgetMW ||
-      result.subsystems.powerGrid.health < 35 ||
-      result.alerts.some(
-        (a) =>
-          a.subsystem === "power" ||
-          a.headline.toLowerCase().includes("over-budget") ||
-          a.headline.toLowerCase().includes("brownout")
-      );
+    // Sound: the worst thing in the report decides
+    sfx.play(rep.end && !rep.lost ? "victory" : rep.status === "crit" ? "alarm" : rep.status === "warn" ? "caution" : "chime");
 
-    const isHarvest =
-      nextState.crew.harvestYieldKg > gameState.crew.harvestYieldKg ||
-      result.crew.recentMoraleEvents?.some(
-        (e) => e.sol === result.turn && e.id.startsWith("harvest-")
-      );
+    // CapCom
+    const isBrownout = result.subsystems.powerGrid.health < 35 || usedMW > result.powerBudgetMW || result.alerts.some((a) => a.subsystem === "power" || a.headline.toLowerCase().includes("brownout"));
+    const isHarvest = nextState.crew.harvestYieldKg > from.crew.harvestYieldKg || result.crew.recentMoraleEvents?.some((e) => e.sol === result.turn && e.id.startsWith("harvest-"));
+    if (result.event.radiationSpikeMultiplier > 1.6) ambientAudio.triggerGeigerBurst(3.2, 85);
+    if (isBrownout) announceBrownout();
+    else if (isHarvest) announceHarvest();
 
-    if (isBrownout) {
-      announceBrownout();
-    } else if (isHarvest) {
-      announceHarvest();
+    // Progress
+    bumpStat("daysRun");
+    award("first-day");
+    if (usedMW === result.powerBudgetMW) award("full-budget");
+    if (rep.headline === "Smooth day") award("smooth-day", { at: "hud" });
+    if (rep.flareBlocked) award("flare-blocked");
+    const before = { grid: statusOf("battery", from.subsystems.powerGrid.health), o2: statusOf("oxygen", from.crew.oxygenBufferPercent), food: statusOf("food", from.crew.foodReserveDays), dose: doseStatus(from.crew.radiationExposureMSv) };
+    const after = { grid: statusOf("battery", result.subsystems.powerGrid.health), o2: statusOf("oxygen", result.crew.oxygenBufferPercent), food: statusOf("food", result.crew.foodReserveDays), dose: doseStatus(result.crew.radiationExposureMSv) };
+    if ((Object.keys(before) as Array<keyof typeof before>).some((m) => before[m] === "crit" && after[m] === "ok")) award("close-call");
+    if (rep.end && !rep.lost) {
+      award("mission-complete", { at: "hud" });
+      bumpStat("missionsCompleted");
+      if (membersOf(result.crew, fallbackCrew).every((m) => statusOf("crew", m.health) === "ok")) award("all-healthy");
+      if (environment.id === "lunar_south_pole" || environment.id === "mars_gale_crater") award("both-worlds", { key: environment.id });
+      if (from.difficulty === "flight_director") award("flight-director");
     }
+  }
 
-    // Check for mission completion or early critical threshold
-    if (result.outcome !== "ongoing") {
-      soundEffects.playVictoryChord();
-      setTimeout(() => {
-        setShowDebriefModal(true);
-      }, 1400);
-    }
-  }, [gameState, allocation]);
-
-  const handleNextTurn = useCallback(() => {
+  function runDay() {
+    if (phase !== "allocate" || over || currentTurn > TOTAL_TURNS) return;
     cancelCapComSpeech();
-    soundEffects.playTurnChime();
+    sfx.play("commit");
+    ambientAudio.triggerAirlock(0.7);
+
+    const from = gameState;
+    const usedMW = used;
+    const { nextState, result } = processTurn(from, allocation);
+    const rep = buildDayReport({ subsystems: from.subsystems, crew: from.crew, members: membersOf(from.crew, fallbackCrew) }, result, TOTAL_TURNS);
+    const dur = motionMs("sim", reduce);
+
+    setSim({ result });
+    setP(0);
+    setPhase("running");
+    habitatRef.current?.runDay(dur, { flare: result.event.radiationSpikeMultiplier >= FLARE_AT });
+
+    const t0 = performance.now();
+    const step = (t: number) => {
+      const q = Math.min(1, (t - t0) / dur);
+      if (q < 1) {
+        setP(q);
+        rafRef.current = requestAnimationFrame(step);
+      } else {
+        setP(1);
+        finishDay(from, nextState, result, rep, usedMW);
+      }
+    };
+    rafRef.current = requestAnimationFrame(step);
+  }
+
+  function continueDay() {
+    if (!report) return;
+    cancelCapComSpeech();
+    if (report.end) {
+      setShowDebriefModal(true);
+      return;
+    }
+    sfx.play("tick");
     setPhase("allocate");
     setLastResult(null);
-  }, []);
+    setReport(null);
+  }
 
-  // One-Click Play Again Handler
+  // The report card takes focus so Enter moves on
+  useEffect(() => {
+    if (phase === "result") ctaRef.current?.focus();
+  }, [phase]);
+
+  // ---------- Restart / leave ----------
   const handlePlayAgain = useCallback(() => {
     cancelCapComSpeech();
+    cancelAnimationFrame(rafRef.current);
     lastAnnouncedSolRef.current = 0;
-    const freshState = createInitialGameState(
-      environment,
-      gameState.difficulty,
-      gameState.missionSeed,
-      gameState.scenario
-    );
-    setGameState(freshState);
+    const fresh = createInitialGameState(environment, gameState.difficulty, gameState.missionSeed, gameState.scenario);
+    setGameState(fresh);
     setPhase("allocate");
     setLastResult(null);
+    setReport(null);
+    setSim(null);
+    setP(0);
     setActiveIncident(null);
     setDismissedIncidents({});
     setShowDebriefModal(false);
-    const initialBudget = getEffectivePowerBudget(
-      environment,
-      1,
-      0,
-      gameState.difficulty,
-      gameState.missionSeed,
-      gameState.scenario
-    );
-    setAllocation(getDefaultAllocation(initialBudget, gameState.difficulty));
+    setMenuOpen(false);
+    bumpStat("missionsStarted");
+    const b = getEffectivePowerBudget(environment, 1, 0, gameState.difficulty, gameState.missionSeed, gameState.scenario);
+    setAllocation(getDefaultAllocation(b, gameState.difficulty));
   }, [environment, gameState.difficulty, gameState.missionSeed, gameState.scenario]);
 
-  // Switch Planet Handler
   const handleSwitchPlanetAction = useCallback(() => {
     cancelCapComSpeech();
     setShowDebriefModal(false);
-    if (onSwitchPlanet) {
-      onSwitchPlanet();
-    } else {
-      onMissionEnd(gameState);
-    }
+    if (onSwitchPlanet) onSwitchPlanet();
+    else onMissionEnd(gameState);
   }, [onSwitchPlanet, onMissionEnd, gameState]);
 
-  // Root Cause Anomaly Drill-Down Handlers
-  const handleInspectAlertRootCause = useCallback(
-    (alert: Parameters<typeof resolveRootCauseForAlert>[0]) => {
-      soundEffects.playButtonClick();
-      const evalCtx: RootCauseEvaluationContext = {
-        environment,
-        currentTurn: lastResult ? lastResult.turn : currentTurn,
-        allocation: lastResult ? lastResult.allocation : allocation,
-        effectiveBudgetMW: lastResult ? lastResult.powerBudgetMW : effectiveBudget,
-        subsystems: lastResult ? lastResult.subsystems : gameState.subsystems,
-        crew: lastResult ? lastResult.crew : gameState.crew,
-        currentEvent: lastResult ? lastResult.event : currentEvent,
-        alerts: lastResult ? lastResult.alerts : [],
-      };
-      const profile = resolveRootCauseForAlert(alert, evalCtx);
-      setSelectedRootCauseProfile(profile);
-    },
-    [environment, lastResult, currentTurn, allocation, effectiveBudget, gameState, currentEvent]
-  );
+  // ---------- Root cause drill-down ----------
+  const rootCauseContext = (): RootCauseEvaluationContext => ({
+    environment,
+    currentTurn: lastResult ? lastResult.turn : currentTurn,
+    allocation: lastResult ? lastResult.allocation : allocation,
+    effectiveBudgetMW: lastResult ? lastResult.powerBudgetMW : effectiveBudget,
+    subsystems: lastResult ? lastResult.subsystems : gameState.subsystems,
+    crew: lastResult ? lastResult.crew : gameState.crew,
+    currentEvent: lastResult ? lastResult.event : currentEvent,
+    alerts: lastResult ? lastResult.alerts : [],
+  });
 
-  const handleInspectTypeRootCause = useCallback(
-    (type: RootCauseFailureType) => {
-      soundEffects.playButtonClick();
-      const evalCtx: RootCauseEvaluationContext = {
-        environment,
-        currentTurn: lastResult ? lastResult.turn : currentTurn,
-        allocation: lastResult ? lastResult.allocation : allocation,
-        effectiveBudgetMW: lastResult ? lastResult.powerBudgetMW : effectiveBudget,
-        subsystems: lastResult ? lastResult.subsystems : gameState.subsystems,
-        crew: lastResult ? lastResult.crew : gameState.crew,
-        currentEvent: lastResult ? lastResult.event : currentEvent,
-        alerts: lastResult ? lastResult.alerts : [],
-      };
-      let profile = BROWNOUT_OVERBUDGET;
-      if (type === "brownout") {
-        const total =
-          evalCtx.allocation.powerGrid +
-          evalCtx.allocation.lifeSupport +
-          evalCtx.allocation.radiationShielding;
-        profile =
-          total > evalCtx.effectiveBudgetMW
-            ? BROWNOUT_OVERBUDGET
-            : BROWNOUT_BATTERY_DEPLETION;
-      } else if (type === "life_support") {
-        profile = LIFE_SUPPORT_FAILURE;
-      } else {
-        profile = RADIATION_SHIELD_FAILURE;
-      }
-      setSelectedRootCauseProfile(profile);
-    },
-    [environment, lastResult, currentTurn, allocation, effectiveBudget, gameState, currentEvent]
-  );
+  const handleInspectTypeRootCause = (type: RootCauseFailureType) => {
+    soundEffects.playButtonClick();
+    const ctx = rootCauseContext();
+    let profile = BROWNOUT_OVERBUDGET;
+    if (type === "brownout") {
+      const total = ctx.allocation.powerGrid + ctx.allocation.lifeSupport + ctx.allocation.radiationShielding;
+      profile = total > ctx.effectiveBudgetMW ? BROWNOUT_OVERBUDGET : BROWNOUT_BATTERY_DEPLETION;
+    } else if (type === "life_support") {
+      profile = LIFE_SUPPORT_FAILURE;
+    } else {
+      profile = RADIATION_SHIELD_FAILURE;
+    }
+    setSelectedRootCauseProfile(profile);
+  };
 
-  const handleApplyCounterfactualAllocation = useCallback((newAlloc: PowerAllocation) => {
+  const handleApplyCounterfactualAllocation = useCallback((next: PowerAllocation) => {
     soundEffects.playVictoryChord();
-    setAllocation(newAlloc);
+    setAllocation(next);
     setSelectedRootCauseProfile(null);
   }, []);
 
-  // Last incident chosen this sol (if any)
-  const currentSolIncidentChoice = gameState.incidentHistory?.find(
-    (h) => h.sol === currentTurn
-  );
+  // ---------- Copy for the panels ----------
+  const baselines = DIFFICULTY_PRESETS[gameState.difficulty].baselinePowerDemands;
+  const solDirective = gameState.incidentHistory?.find((h) => h.sol === day);
+  const spike = event?.radiationSpikeMultiplier ?? 1;
+  const forecastStatus: Status = spike >= FLARE_AT || (event?.powerDeltaMW ?? 0) <= -8 ? "warn" : "ok";
+  const budgetMsg = over
+    ? `Over budget by ${-remaining} MW. Lower a slider.`
+    : remaining > 0
+      ? `${remaining} MW unassigned. Unused power is wasted.`
+      : "Every megawatt is assigned.";
+  const hrs = p * 24;
+  const clock = `${pad(Math.floor(hrs) % 25)}:${pad(Math.floor((hrs % 1) * 60))}`;
+  const siteLine = [scenario?.title ?? environment.name, environment.subtitle, DIFFICULTY_PRESETS[gameState.difficulty].title, `#${gameState.missionSeed}`].filter(Boolean).join(" · ");
+
+  const menuItems: Array<{ title: string; sub: string; value?: string; warn?: boolean; act: () => void }> = [
+    { title: "Mission data", sub: "The NASA sources behind every number", value: "NASA", act: () => { setMenuOpen(false); onShowNasaData(); } },
+    { title: "Teacher tools", sub: "Class seeds, lab worksheet, rubric", value: "NGSS", act: () => { setMenuOpen(false); setIsEducatorOpen(true); } },
+    { title: "How to play", sub: "Replay the 3-step tutorial", act: () => { setMenuOpen(false); setIsTutorialOpen(true); } },
+    { title: "Crew roster", sub: "Dossiers, skills and morale", value: "4", act: () => { setMenuOpen(false); setIsCrewModalOpen(true); } },
+    { title: "Reduce motion", sub: "Shorter day simulation, no blinking alarms", value: settings.reduceMotion === null ? "SYSTEM" : settings.reduceMotion ? "ON" : "OFF", act: () => updateSettings({ reduceMotion: settings.reduceMotion === null ? true : settings.reduceMotion ? false : null }) },
+    { title: "Language", sub: languages.map((l) => l.code.toUpperCase()).join(" · "), value: language.toUpperCase(), act: () => setLanguage(languages[(languages.findIndex((l) => l.code === language) + 1) % languages.length].code) },
+    { title: "Sound", sub: "Slider clicks, alarms, CAPCOM voice", value: isMuted ? "OFF" : "ON", warn: isMuted, act: () => toggleMute() },
+    { title: "Ambient audio", sub: "Procedural habitat sounds", act: () => { setMenuOpen(false); setIsAudioModalOpen(true); } },
+    ...(onToggleDemoBar ? [{ title: "Judge demo bar", sub: "Jump to key moments", value: isDemoBarOpen ? "ON" : "OFF", act: () => { setMenuOpen(false); onToggleDemoBar(); } }] : []),
+    { title: "Restart mission", sub: "Back to day 1 with the same seed", act: handlePlayAgain },
+    { title: "Change destination", sub: "Pick another world", act: () => { setMenuOpen(false); handleSwitchPlanetAction(); } },
+  ];
+
+  const btn = running
+    ? { variant: "secondary" as const, label: `Simulating day ${day}`, right: clock, disabled: true, progress: p }
+    : phase === "result"
+      ? { variant: "secondary" as const, label: "Day report", right: "REVIEW ABOVE", disabled: true, progress: undefined }
+      : over
+        ? { variant: "danger" as const, label: "Over budget", right: `CUT ${-remaining} MW`, disabled: true, progress: undefined }
+        : { variant: "primary" as const, label: `Run day ${day}`, right: `${used} / ${budget} MW`, disabled: false, progress: undefined };
 
   return (
-    <div
-      className={`min-h-screen bg-gradient-to-br ${environment.backgroundGradient} text-slate-100 flex flex-col justify-between`}
-    >
-      {/* Dynamic Mid-Mission Incident Modal */}
+    <div className="oc-shell flex min-h-screen flex-col gap-2 bg-oc-void p-2 font-oc-ui text-oc-text-1">
+      {/* ---------- Legacy flow modals (mid-mission incidents, crew, debrief, root cause) ---------- */}
       {activeIncident && (
-        <IncidentModal
-          incident={activeIncident}
-          isOpen={activeIncident !== null}
-          crewMembers={gameState.crew.members}
-          onSelectChoice={handleSelectIncidentChoice}
-        />
+        <IncidentModal incident={activeIncident} isOpen={activeIncident !== null} crewMembers={members} onSelectChoice={handleSelectIncidentChoice} />
       )}
 
-      {/* Crew Dossier & Morale Center Modal */}
       {isCrewModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto bg-black/85 backdrop-blur-md">
-          <div className="relative w-full max-w-4xl my-auto">
-            <div className="flex justify-end mb-2">
-              <button
-                type="button"
-                onClick={() => setIsCrewModalOpen(false)}
-                className="px-3 py-1.5 rounded-xl bg-slate-800 text-slate-300 hover:text-white font-mono text-xs font-bold border border-slate-700 transition-colors"
-              >
-                ✕ Close Crew Dossier
-              </button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/85 p-3 sm:p-5">
+          <div className="relative my-auto w-full max-w-4xl">
+            <div className="mb-2 flex justify-end">
+              <Button size="sm" onClick={() => setIsCrewModalOpen(false)}>Close crew roster</Button>
             </div>
-            <CrewPanel
-              crew={phase === "result" && lastResult ? lastResult.crew : gameState.crew}
-            />
+            <CrewPanel crew={gameState.crew} />
           </div>
         </div>
       )}
 
-      {/* 3-Step Spotlight Quick Tutorial */}
-      <QuickTutorialOverlay
-        isOpen={isTutorialOpen}
-        onClose={() => setIsTutorialOpen(false)}
-      />
+      <QuickTutorialOverlay isOpen={isTutorialOpen} onClose={() => setIsTutorialOpen(false)} />
 
-      {/* End-of-Mission Engineering Debrief Modal */}
       {showDebriefModal && (
-        <MissionDebriefModal
-          isOpen={showDebriefModal}
-          gameState={gameState}
-          environment={environment}
-          onPlayAgain={handlePlayAgain}
-          onSwitchPlanet={handleSwitchPlanetAction}
-          onShowNasaData={onShowNasaData}
-        />
+        <MissionDebriefModal isOpen={showDebriefModal} gameState={gameState} environment={environment} onPlayAgain={handlePlayAgain} onSwitchPlanet={handleSwitchPlanetAction} onShowNasaData={onShowNasaData} />
       )}
 
-      {/* Procedural Space Audio & Telemetry Deck Modal */}
-      <AmbientAudioModal
-        isOpen={isAudioModalOpen}
-        onClose={() => setIsAudioModalOpen(false)}
-        environmentName={environment.name}
-      />
+      <AmbientAudioModal isOpen={isAudioModalOpen} onClose={() => setIsAudioModalOpen(false)} environmentName={environment.name} />
+      <EducatorHubModal isOpen={isEducatorOpen} onClose={() => setIsEducatorOpen(false)} />
 
-      {/* Interactive "Why Did This Happen?" Root Cause Drill-down Modal */}
       {selectedRootCauseProfile && (
         <RootCauseModal
           isOpen={selectedRootCauseProfile !== null}
           onClose={() => setSelectedRootCauseProfile(null)}
           profile={selectedRootCauseProfile}
-          context={{
-            environment,
-            currentTurn: lastResult ? lastResult.turn : currentTurn,
-            allocation: lastResult ? lastResult.allocation : allocation,
-            effectiveBudgetMW: lastResult ? lastResult.powerBudgetMW : effectiveBudget,
-            subsystems: lastResult ? lastResult.subsystems : gameState.subsystems,
-            crew: lastResult ? lastResult.crew : gameState.crew,
-            currentEvent: lastResult ? lastResult.event : currentEvent,
-            alerts: lastResult ? lastResult.alerts : [],
-          }}
+          context={rootCauseContext()}
           onApplyAllocation={handleApplyCounterfactualAllocation}
           canApplyAllocation={phase === "allocate"}
         />
       )}
 
-      <main className="flex-1 max-w-7xl mx-auto w-full px-3 sm:px-6 py-4 sm:py-6 flex flex-col gap-5">
-        <AnimatePresence mode="wait">
-          {/* ========================================================= */}
-          {/* 1. ALLOCATION PHASE: CONTROL DECK & VISUALIZER */}
-          {/* ========================================================= */}
-          {phase === "allocate" && (
-            <motion.div
-              key={`allocate-${currentTurn}`}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.3 }}
-              className="flex flex-col gap-4"
-            >
-              {/* Active Incident Notification Banner if resolved this Sol */}
-              {currentSolIncidentChoice && (
-                <div className="flex items-center justify-between p-3 rounded-2xl bg-cyan-950/60 border border-cyan-500/40 text-xs font-mono">
-                  <div className="flex items-center gap-2">
-                    <Radio className="w-4 h-4 text-cyan-400 animate-pulse" />
-                    <span className="text-cyan-300 font-bold">
-                      ACTIVE DIRECTIVE (SOL {currentTurn}):
-                    </span>
-                    <span className="text-white font-medium">
-                      {currentSolIncidentChoice.choiceLabel}
-                    </span>
-                  </div>
-                  <span className="text-[11px] text-slate-400 hidden sm:inline">
-                    {currentSolIncidentChoice.tradeOffSummary}
-                  </span>
-                </div>
-              )}
+      <MissionLogDrawer open={logOpen} onClose={closeLog} />
+      <MenuDrawer open={menuOpen} onClose={closeMenu} items={menuItems} footer={`CLASS SEED · ${gameState.missionSeed}`} />
 
-              {/* CADET ASSISTANT BANNER: Gentle Automated Hints when Life Support drops */}
-              {gameState.difficulty === "cadet" && (
-                <motion.div
-                  initial={{ opacity: 0, y: -6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className={`p-3.5 sm:p-4 rounded-2xl border-2 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-xl ${allocation.lifeSupport < 28 ||
-                    gameState.crew.oxygenBufferPercent < 70 ||
-                    gameState.subsystems.lifeSupport.health < 70
-                    ? "bg-emerald-950/80 border-emerald-400/70 text-emerald-100 shadow-emerald-950/50 ring-2 ring-emerald-500/30"
-                    : "bg-slate-900/80 border-slate-800 text-slate-300"
-                    }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-400/40 flex items-center justify-center text-xl shrink-0">
-                      🌟
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-mono font-bold uppercase tracking-wider text-emerald-400">
-                          CAPCOM Cadet Flight Assistant
-                        </span>
-                        <span className="text-[10px] bg-emerald-900/60 border border-emerald-600/40 px-2 py-0.5 rounded-full text-emerald-300 font-semibold">
-                          Automated Coaching Active
-                        </span>
-                      </div>
-                      <p className="text-xs sm:text-sm font-medium mt-0.5">
-                        {allocation.lifeSupport < 28 ? (
-                          <span>
-                            Hey Cadet Commander! Life Support is currently set to{" "}
-                            <strong>{allocation.lifeSupport} MW</strong>. Your astronauts need at
-                            least <strong>28 MW</strong> to stay healthy and keep fresh O₂ pumping!
-                          </span>
-                        ) : gameState.crew.oxygenBufferPercent < 70 ? (
-                          <span>
-                            The crew's oxygen buffer is at{" "}
-                            <strong>{gameState.crew.oxygenBufferPercent}%</strong>. Slide a little
-                            extra power into Life Support so they have plenty of fresh air!
-                          </span>
-                        ) : (
-                          <span>
-                            Super job, Cadet! All life support systems are running nominal. Clean
-                            air and fresh hydroponic crops are in great shape.
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                  </div>
+      {/* ---------- Header ---------- */}
+      <header>
+        <Panel size="flush" className="!h-14 !flex-row !items-center !gap-4 !pl-4 !pr-2">
+          <div className="flex min-w-0 flex-1 items-baseline gap-4">
+            <span className="flex-none whitespace-nowrap font-oc-label text-[20px] font-semibold uppercase leading-6 tracking-[0.08em] max-sm:hidden">Outpost Commander</span>
+            <span className="oc-type-code hidden min-w-0 truncate text-oc-text-3 md:block">{siteLine}</span>
+          </div>
+          <div className="flex flex-none items-center gap-4">
+            <div className="flex items-baseline gap-2">
+              <span className="oc-type-label text-oc-text-2">Day</span>
+              <span className="oc-type-data-l">{pad(day)}</span>
+              <span className="oc-type-data-s text-oc-text-3">/ {TOTAL_TURNS}</span>
+            </div>
+            <div className="hidden gap-1 sm:flex" aria-hidden="true">
+              {Array.from({ length: TOTAL_TURNS }, (_, i) => {
+                const d = i + 1;
+                const tone = d < day || (d === day && phase === "result") ? "border-oc-text-2 bg-oc-text-2" : d === day ? "border-oc-accent bg-oc-accent" : "border-oc-line-strong bg-transparent";
+                return <span key={d} className={`block h-2 w-4 rounded-[1px] border transition-colors duration-[240ms] ${tone}`} />;
+              })}
+            </div>
+          </div>
+          <div className="flex flex-1 items-center justify-end gap-2">
+            <RankHud onClick={() => setLogOpen(true)} />
+            <Button onClick={() => setMenuOpen(true)} aria-label="Open menu">
+              <span className="flex flex-col gap-[3px]" aria-hidden="true">
+                <span className="block h-0.5 w-3.5 bg-current" />
+                <span className="block h-0.5 w-3.5 bg-current" />
+                <span className="block h-0.5 w-3.5 bg-current" />
+              </span>
+              Menu
+            </Button>
+          </div>
+        </Panel>
+      </header>
 
-                  {allocation.lifeSupport < 28 && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        soundEffects.playTurnChime();
-                        const neededLs = 28;
-                        const rem = Math.max(0, effectiveBudget - neededLs);
-                        const fp = Math.min(allocation.foodProduction || 20, Math.round(rem * 0.28));
-                        const sh = Math.min(allocation.radiationShielding || 25, Math.round((rem - fp) * 0.5));
-                        const pg = Math.max(0, rem - fp - sh);
-                        setAllocation({
-                          lifeSupport: neededLs,
-                          radiationShielding: sh,
-                          powerGrid: pg,
-                          foodProduction: fp,
-                        });
-                      }}
-                      className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:brightness-110 active:scale-95 text-white font-black text-xs flex items-center gap-2 shrink-0 shadow-lg shadow-emerald-900/50 transition-all border border-emerald-300/40"
-                    >
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>Auto-Fix Life Support (28 MW)</span>
-                    </button>
-                  )}
-                </motion.div>
-              )}
+      <main className="flex min-h-0 flex-1 flex-wrap gap-2">
+        {/* ---------- Left: resources ---------- */}
+        <section aria-label="Outpost resources" className="flex min-w-0 flex-[1_1_264px] flex-col gap-2">
+          {resources.map((r) => (
+            <Readout
+              key={r.key}
+              className="min-h-[144px] flex-1 justify-between"
+              code={r.code}
+              name={r.name}
+              unit={r.unit}
+              value={r.value}
+              decimals={r.dec}
+              status={r.status}
+              max={r.max}
+              ticks={r.ticks}
+              good={r.good}
+              live={running}
+              note={r.note}
+              delta={r.next !== undefined ? r.next - r.value : undefined}
+              deltaStatus={r.nextStatus ?? undefined}
+            />
+          ))}
+        </section>
 
-              {/* FLIGHT DIRECTOR: Hardcore Telemetry HUD */}
-              {gameState.difficulty === "flight_director" && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {/* 1. MMOD Risk / Strikes */}
-                  <div className="p-3.5 rounded-2xl bg-[#090E1A] border border-amber-600/50 flex items-center gap-3 shadow-lg">
-                    <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/40">
-                      <AlertTriangle className="w-4 h-4" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-mono font-bold uppercase text-amber-400">
-                          MMOD Puncture Risk
-                        </span>
-                        <span className="text-[10px] font-mono text-slate-400">
-                          {gameState.micrometeoroidHistory.length} Strikes
-                        </span>
-                      </div>
-                      <p className="text-xs font-semibold text-white truncate mt-0.5">
-                        {gameState.micrometeoroidHistory.length > 0
-                          ? `Last: ${gameState.micrometeoroidHistory[
-                            gameState.micrometeoroidHistory.length - 1
-                          ].telemetryHeadline
-                          }`
-                          : "Hypervelocity Bumper: Active (32% Sol Hazard)"}
-                      </p>
-                    </div>
-                  </div>
+        {/* ---------- Centre: habitat + crew ---------- */}
+        <section className="flex min-w-0 flex-[999_1_400px] flex-col gap-2">
+          <div className="relative min-h-[300px] flex-1 overflow-hidden rounded-oc-2 border border-oc-line bg-[var(--oc-bg-scene)]">
+            <div ref={viewRef} className="absolute inset-0" role="img" aria-label={`3D model of the ${environment.name} outpost. The shield dome, greenhouse lights and battery lamps follow the power sliders.`} />
+            {glFailed && <div className="oc-type-code absolute inset-0 grid place-items-center text-oc-text-3">3D VIEW UNAVAILABLE</div>}
 
-                  {/* 2. Thermal Fatigue Curve Monitor */}
-                  <div className="p-3.5 rounded-2xl bg-[#090E1A] border border-cyan-600/50 flex items-center gap-3 shadow-lg">
-                    <div className="w-9 h-9 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center shrink-0 border border-cyan-500/40">
-                      <Flame className="w-4 h-4" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-mono font-bold uppercase text-cyan-400">
-                          Thermal Fatigue (ΔT{" "}
-                          {environment.id === "lunar_south_pole"
-                            ? "227°C"
-                            : environment.id === "europa_under_ice"
-                              ? "160°C"
-                              : environment.id === "titan_hydrocarbon"
-                                ? "200°C"
-                                : "100°C"})
-                        </span>
-                        <span className="text-[10px] font-mono text-slate-400">
-                          +{((gameState.cumulativeThermalFatigueWear || 0) * 100).toFixed(1)}% Wear
-                        </span>
-                      </div>
-                      <p className="text-xs font-semibold text-white truncate mt-0.5">
-                        Coffin-Manson Curve: Active cooling required
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* 3. Strict 500 mSv NASA Career Limit */}
-                  <div className="p-3.5 rounded-2xl bg-[#090E1A] border border-rose-600/50 flex items-center gap-3 shadow-lg">
-                    <div className="w-9 h-9 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center shrink-0 border border-rose-500/40">
-                      <ShieldAlert className="w-4 h-4" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-mono font-bold uppercase text-rose-400">
-                          NASA Career Limit (500 mSv)
-                        </span>
-                        <span className="text-[10px] font-mono font-bold text-white">
-                          {gameState.crew.careerRadiationExposureMSv.toFixed(1)} / 500
-                        </span>
-                      </div>
-                      <p className="text-xs font-semibold text-slate-200 truncate mt-0.5">
-                        {gameState.crew.careerRadiationExposureMSv > 500
-                          ? "CRITICAL: Grounding Limit Exceeded"
-                          : gameState.crew.careerRadiationExposureMSv > 400
-                            ? "Warning: Approaching 3% REID Cap"
-                            : "Status: NCRP Compliant (<500 mSv)"}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Historic Scenario Alert & Telemetry Banner */}
-              {gameState.scenario && (
-                <div
-                  className="rounded-2xl p-4 sm:p-4.5 border-2 shadow-xl backdrop-blur-md relative overflow-hidden"
-                  style={{
-                    backgroundColor: "rgba(11, 17, 32, 0.95)",
-                    borderColor: `${gameState.scenario.accentColor}70`,
-                    boxShadow: `0 0 25px ${gameState.scenario.glowColor}`,
-                  }}
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="flex items-start gap-3">
-                      <span className="text-3xl shrink-0 drop-shadow">
-                        {gameState.scenario.emoji}
-                      </span>
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span
-                            className="text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
-                            style={{
-                              backgroundColor: `${gameState.scenario.accentColor}25`,
-                              color: gameState.scenario.accentColor,
-                              border: `1px solid ${gameState.scenario.accentColor}50`,
-                            }}
-                          >
-                            {gameState.scenario.badge}
-                          </span>
-                          <span className="text-[10px] font-mono font-bold text-amber-300 px-2 py-0.5 rounded bg-amber-950/60 border border-amber-500/40">
-                            {gameState.scenario.difficultyBadge}
-                          </span>
-                          <span className="text-xs font-mono text-slate-400">
-                            {gameState.scenario.location} · {gameState.scenario.yearOrEra}
-                          </span>
-                        </div>
-                        <h2 className="text-base sm:text-lg font-black text-white mt-1">
-                          {gameState.scenario.title}
-                        </h2>
-                        <p className="text-xs text-slate-300 font-medium mt-0.5 leading-relaxed">
-                          <strong className="text-cyan-300">Survival Challenge:</strong>{" "}
-                          {gameState.scenario.survivalChallenge}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="shrink-0 flex items-center sm:self-center">
-                      <span
-                        className="text-[11px] font-mono font-bold px-3 py-1.5 rounded-xl border text-center shadow-inner"
-                        style={{
-                          backgroundColor: `${gameState.scenario.accentColor}15`,
-                          color: gameState.scenario.accentColor,
-                          borderColor: `${gameState.scenario.accentColor}40`,
-                        }}
-                      >
-                        {gameState.scenario.initialConditions.statusBadge}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <ControlDeck
-                environment={environment}
-                difficulty={gameState.difficulty}
-                missionSeed={gameState.missionSeed}
-                scenario={gameState.scenario}
-                currentTurn={currentTurn}
-                totalTurns={TOTAL_TURNS}
-                effectiveBudgetMW={effectiveBudget}
-                subsystems={gameState.subsystems}
-                crew={gameState.crew}
-                allocation={allocation}
-                onAllocationChange={handleAllocationChange}
-                onCommitTurn={handleConfirmTurn}
-                onShowNasaData={onShowNasaData}
-                onOpenTutorial={() => setIsTutorialOpen(true)}
-                onOpenCrewRoster={() => setIsCrewModalOpen(true)}
-                onInspectRootCause={handleInspectTypeRootCause}
-                onToggleDemoBar={onToggleDemoBar}
-                isDemoBarOpen={isDemoBarOpen}
-                currentEvent={currentEvent}
-              >
-                {/* Live Responsive Habitat Cross-Section Visualizer */}
-                <OutpostVisualizer
-                  environment={environment}
-                  subsystems={gameState.subsystems}
-                  allocation={allocation}
-                  effectiveBudgetMW={effectiveBudget}
-                  currentEvent={currentEvent}
-                  crew={gameState.crew}
-                  onInspectRootCause={handleInspectTypeRootCause}
-                />
-              </ControlDeck>
-            </motion.div>
-          )}
-
-          {/* ========================================================= */}
-          {/* 2. RESULT PHASE: SOL DEBRIEF & TELEMETRY */}
-          {/* ========================================================= */}
-          {phase === "result" && lastResult && (
-            <motion.div
-              key={`result-${lastResult.turn}`}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.3 }}
-              className="flex flex-col gap-4"
-            >
-              {/* Header Telemetry Bar (accessible NASA Data anytime) */}
-              <div className="flex items-center justify-between p-3 rounded-2xl bg-[#090E1A] border border-cyan-900/40 shadow-lg relative z-30">
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-mono font-bold tracking-wider text-[#06B6D4] uppercase">
-                    {t("game.solIndicator", { current: lastResult.turn, total: TOTAL_TURNS })}
-                  </span>
-                  <span
-                    className="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider font-mono flex items-center gap-1"
-                    style={{
-                      backgroundColor: `${DIFFICULTY_PRESETS[gameState.difficulty].accentColor}25`,
-                      color: DIFFICULTY_PRESETS[gameState.difficulty].accentColor,
-                      border: `1px solid ${DIFFICULTY_PRESETS[gameState.difficulty].accentColor}50`,
-                    }}
-                  >
-                    <span>{DIFFICULTY_PRESETS[gameState.difficulty].emoji}</span>
-                    <span>{t(`difficulties.${gameState.difficulty}.title`)}</span>
-                  </span>
-                  <span className="text-xs text-slate-400 hidden sm:inline">
-                    {environment.id === "lunar_south_pole"
-                      ? t("destinations.moon.name")
-                      : environment.id === "mars_gale_crater"
-                        ? t("destinations.mars.name")
-                        : environment.name}
-                  </span>
-                  {gameState.missionSeed && (
-                    <span
-                      className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-950/80 text-cyan-300 border border-cyan-700/50 font-mono font-bold"
-                      title="Classroom Mission Seed"
-                    >
-                      #{gameState.missionSeed}
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {/* Live Space Weather Telemetry Pill */}
-                  <LiveSpaceWeatherBadge />
-
-                  {/* Multi-Language Selector */}
-                  <LanguageSelector compact />
-
-                  {/* Mute/Unmute Toggle */}
-                  <button
-                    type="button"
-                    onClick={toggleMute}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold font-mono transition-colors ${isMuted
-                      ? "bg-rose-950/40 border-rose-600/40 text-rose-300 hover:bg-rose-900/40"
-                      : "bg-slate-900 hover:bg-slate-800 border-slate-700 text-slate-300 hover:text-cyan-300"
-                      }`}
-                    title={isMuted ? "Audio Muted (Click to Unmute)" : "Audio Active (Click to Mute)"}
-                  >
-                    {isMuted ? (
-                      <VolumeX className="w-3.5 h-3.5 text-rose-400" />
-                    ) : (
-                      <Volume2 className="w-3.5 h-3.5 text-cyan-400" />
-                    )}
-                    <span className="hidden sm:inline">{isMuted ? t("common.muted") : t("common.sound")}</span>
-                  </button>
-
-                  {/* Vision / Accessibility Toggle */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      soundEffects.playButtonClick();
-                      toggleColorblindMode();
-                    }}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold font-mono transition-colors ${
-                      colorblindMode
-                        ? "bg-sky-950/70 border-sky-400 text-sky-200 shadow-sm shadow-sky-950/50 ring-1 ring-sky-400/40"
-                        : "bg-slate-900 hover:bg-slate-800 border-slate-700 text-slate-300 hover:text-sky-300"
-                    }`}
-                    title={
-                      colorblindMode
-                        ? "Vision / Accessibility: Colorblind-Safe Mode ACTIVE (Click to switch to Standard)"
-                        : "Vision / Accessibility: Enable Colorblind-Safe & High-Contrast Mode"
-                    }
-                    aria-pressed={colorblindMode}
-                    aria-label="Vision and Accessibility: Toggle Colorblind-Safe Mode"
-                  >
-                    <Eye className={`w-3.5 h-3.5 ${colorblindMode ? "text-sky-400" : "text-slate-400"}`} />
-                    <span className="hidden sm:inline">Vision / Accessibility</span>
-                    {colorblindMode && (
-                      <span className="text-[10px] bg-sky-500/20 text-sky-300 px-1 py-0.2 rounded font-mono font-bold">
-                        {shapes.nominal} SAFE
-                      </span>
-                    )}
-                  </button>
-
-                  {/* Procedural Space Audio Synthesizer Deck Modal Trigger */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      soundEffects.playButtonClick();
-                      setIsAudioModalOpen(true);
-                    }}
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-cyan-700/50 hover:border-cyan-400 bg-slate-900/90 hover:bg-slate-800 text-cyan-300 text-xs font-mono font-bold transition-all shadow-sm shadow-cyan-950/50"
-                    title="Acoustic Telemetry & Procedural Audio Deck"
-                  >
-                    <Sliders className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
-                    <span className="hidden md:inline">{t("common.ambientAudio") || "Ambient Audio"}</span>
-                  </button>
-
-                  {/* Tutorial Help Button */}
-                  <button
-                    type="button"
-                    onClick={() => setIsTutorialOpen(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-cyan-300 text-xs font-bold font-mono transition-colors"
-                    title="Review 3-Step Mission Tutorial"
-                  >
-                    <HelpCircle className="w-3.5 h-3.5 text-[#06B6D4]" />
-                    <span className="hidden sm:inline">{t("common.howToPlay")}</span>
-                  </button>
-
-                  {/* Real NASA DONKI / NOAA Space Weather Telemetry Pill */}
-                  <LiveSpaceWeatherBadge />
-
-                  {/* NASA Data Header Button */}
-                  <button
-                    type="button"
-                    onClick={onShowNasaData}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-cyan-300 text-xs font-bold font-mono transition-colors"
-                  >
-                    <Database className="w-3.5 h-3.5 text-[#06B6D4]" />
-                    <span>{t("common.nasaData")}</span>
-                  </button>
-
-                  {/* Astronaut Specialists & Crew Morale Button */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      soundEffects.playButtonClick();
-                      setIsCrewModalOpen(true);
-                    }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-emerald-300 text-xs font-bold font-mono transition-colors"
-                    title="Inspect 4 Astronaut Specialists, Roles & Morale Vitals"
-                  >
-                    <span>👨‍🚀</span>
-                    <span className="hidden sm:inline">Crew Roster (4)</span>
-                  </button>
-
-                  {/* View Full Debrief if mission finished */}
-                  {lastResult.outcome !== "ongoing" && (
-                    <button
-                      type="button"
-                      onClick={() => setShowDebriefModal(true)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 text-white text-xs font-bold font-mono shadow-md"
-                    >
-                      <Sparkles className="w-3.5 h-3.5" />
-                      <span>{t("debrief.title")}</span>
-                    </button>
-                  )}
-                </div>
+            <Panel className="absolute left-4 top-4 max-w-[280px]" data-tutorial="incident-alerts">
+              <span className="oc-type-code text-oc-text-3">Day {pad(day)} forecast</span>
+              <div className="flex items-baseline justify-between gap-6">
+                <span className="oc-type-body text-oc-text-2">Power available</span>
+                <span className="oc-type-data-l">{budget}<span className="oc-type-data-s ml-1 text-oc-text-3">MW</span></span>
               </div>
+              {spike > 1 && (
+                <div className="flex items-baseline justify-between gap-6">
+                  <span className="oc-type-body text-oc-text-2">Radiation</span>
+                  <span className="oc-type-data-l">×{spike.toFixed(1)}</span>
+                </div>
+              )}
+              <StatusText status={forecastStatus} className="!text-base !leading-5 font-medium">{event?.label ?? "Mission complete"}</StatusText>
+              {solDirective && <StatusText status="ok" className="!text-sm">Directive: {solDirective.choiceLabel}</StatusText>}
+            </Panel>
 
-              {/* Habitat Cross-Section after Sol Events */}
-              <OutpostVisualizer
-                environment={environment}
-                subsystems={lastResult.subsystems}
-                allocation={lastResult.allocation}
-                effectiveBudgetMW={lastResult.powerBudgetMW}
-                currentEvent={lastResult.event}
-                crew={lastResult.crew}
-                onInspectRootCause={handleInspectTypeRootCause}
+            {phase === "allocate" && day === 1 && !isTutorialOpen && (
+              <div className="pointer-events-none absolute inset-x-4 bottom-4 flex justify-start">
+                <Panel className="!px-4 !py-2 text-sm leading-5 text-oc-text-2">The shield dome, greenhouse lights and battery lamps follow your sliders.</Panel>
+              </div>
+            )}
+
+            {running && (
+              <Panel className="absolute inset-x-4 bottom-4 !flex-row !items-center !gap-4 animate-[oc-in_240ms_var(--oc-ease-out)_both]">
+                <span className="oc-type-label flex-none">Simulating day {pad(day)}</span>
+                <div className="flex-1"><Bar value={p * 100} max={100} fill="var(--oc-accent)" ticks={[25, 50, 75]} live label="Day simulation progress" /></div>
+                <span className="oc-type-data-l flex-none">{clock}</span>
+              </Panel>
+            )}
+
+            {phase === "result" && report && (
+              <div className="absolute inset-0 grid place-items-center bg-[var(--oc-scrim)] p-4 animate-[oc-fade_240ms_both]">
+                <Panel size="lg" role="dialog" aria-label="Day report" className="w-full max-w-[440px] animate-[oc-in_240ms_var(--oc-ease-out)_both]" style={{ borderColor: "var(--oc-line-strong)" }}>
+                  <div className="flex flex-col gap-1">
+                    <span className="oc-type-code text-oc-text-3">{report.caption}</span>
+                    <h2 className="oc-type-display m-0" style={{ color: report.status === "ok" ? "var(--oc-text-1)" : STATUS[report.status].fg }}>{report.headline}</h2>
+                  </div>
+                  <div className="flex flex-col border-t border-oc-line">
+                    {report.lines.map((l, i) => (
+                      <div key={i} className="flex items-start gap-4 border-b border-oc-line py-2 animate-[oc-in_240ms_var(--oc-ease-out)_both]" style={{ animationDelay: `${i * 80}ms` }}>
+                        <StatusShape status={l.status} className="!mt-[5px]" blink={l.status === "crit"} />
+                        <span className="oc-type-body flex-1 !leading-5 text-pretty">{l.text}</span>
+                        <span className="oc-type-data-s flex-none" style={{ color: STATUS[l.status].fg }}>{l.delta}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <Button ref={ctaRef} variant="primary" size="lg" block onClick={continueDay}>{report.cta}</Button>
+                  {lastResult && report.status !== "ok" && (
+                    <Button variant="ghost" size="sm" block onClick={() => handleInspectTypeRootCause(rootCauseType(lastResult))}>Why did this happen?</Button>
+                  )}
+                </Panel>
+              </div>
+            )}
+          </div>
+
+          <div aria-label="Crew" className="grid flex-none grid-cols-2 gap-2 sm:grid-cols-4">
+            {members.map((m, i) => {
+              const hp = crewHp[i], st = statusOf("crew", hp);
+              return (
+                <Panel key={m.id} status={st}>
+                  <div className="flex min-w-0 flex-col">
+                    <span className="truncate font-semibold leading-5">{m.name}</span>
+                    <span className="oc-type-code truncate text-oc-text-3">{m.roleTitle}</span>
+                  </div>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <StatusText status={st} blink className="!text-sm font-medium">{STATUS[st].word}</StatusText>
+                    <span className="oc-type-data-l" style={{ color: STATUS[st].value }}>{Math.round(hp)}<span className="oc-type-data-s ml-1 text-oc-text-3">hp</span></span>
+                  </div>
+                  <Bar value={hp} max={100} status={st} size="thin" live={running} label={`${m.name} health`} />
+                </Panel>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* ---------- Right: power allocation ---------- */}
+        <Panel as="section" aria-label="Power allocation" title="Power allocation" meta={`Microgrid ${budget} MW`} className="min-w-0 flex-[1_1_360px] !gap-4">
+          <div className="flex flex-col gap-2" data-tutorial="power-budget">
+            <div className="flex items-end justify-between gap-2">
+              <span className="oc-type-body text-oc-text-2">Power left to assign</span>
+              <div className="flex items-baseline gap-1">
+                <span className="oc-type-data-xl" style={{ color: over ? "var(--oc-critical)" : undefined }}>{over ? "−" : ""}{pad(Math.abs(remaining))}</span>
+                <span className="oc-readout__unit">MW</span>
+              </div>
+            </div>
+            <Bar value={used} max={Math.max(budget, used)} size="thick" status={over ? "crit" : "ok"} fill={over ? undefined : "var(--oc-accent)"} ticks={over ? [budget] : undefined} live label="Power assigned" />
+            <StatusText status={over ? "crit" : "ok"}>{budgetMsg}</StatusText>
+          </div>
+
+          <div className="flex flex-1 flex-col justify-between gap-2" data-tutorial="tradeoff-arrows">
+            {SUBS.map((s) => (
+              <Slider
+                key={s.id}
+                code={s.code}
+                name={s.name}
+                value={allocation[s.id]}
+                max={50}
+                safeMin={baselines[s.id]}
+                does={s.does}
+                disabled={phase !== "allocate"}
+                onChange={(v) => setAllocation((a) => ({ ...a, [s.id]: v }))}
               />
+            ))}
+          </div>
 
-              {/* Turn Outcome & Mission Alerts */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-                {/* Sol Summary & Score */}
-                <div className="lg:col-span-2 rounded-2xl bg-[#0B1120] border-2 border-cyan-800/40 p-5 shadow-2xl flex flex-col justify-between gap-4">
-                  <div>
-                    <div className="flex items-center justify-between gap-2 mb-2">
-                      <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#06B6D4]">
-                        SOL {lastResult.turn} DEBRIEF
-                      </span>
-                      <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-950/60 border border-blue-600/40 text-blue-300 text-xs font-mono font-bold">
-                        <Award className="w-3.5 h-3.5 text-yellow-400" />
-                        Score: {lastResult.missionScorePercent}/100
-                      </span>
-                    </div>
-
-                    {/* Interactive Anomaly Root Cause Investigation Card */}
-                    {(() => {
-                      const totalAlloc =
-                        lastResult.allocation.powerGrid +
-                        lastResult.allocation.lifeSupport +
-                        lastResult.allocation.radiationShielding +
-                        lastResult.allocation.foodProduction;
-                      const hasBrownout =
-                        totalAlloc > lastResult.powerBudgetMW ||
-                        lastResult.subsystems.powerGrid.health < 35 ||
-                        lastResult.alerts.some(
-                          (a) =>
-                            a.subsystem === "power" ||
-                            a.headline.toLowerCase().includes("over-budget") ||
-                            a.headline.toLowerCase().includes("brownout")
-                        );
-                      const hasLifeSupportFailure =
-                        lastResult.subsystems.lifeSupport.health < 40 ||
-                        lastResult.crew.oxygenBufferPercent < 45 ||
-                        lastResult.alerts.some(
-                          (a) =>
-                            a.subsystem === "lifeSupport" ||
-                            a.subsystem === "crew" ||
-                            a.headline.toLowerCase().includes("life support") ||
-                            a.headline.toLowerCase().includes("oxygen") ||
-                            a.headline.toLowerCase().includes("o₂")
-                        );
-
-                      if (!hasBrownout && !hasLifeSupportFailure) return null;
-
-                      return (
-                        <motion.div
-                          initial={{ opacity: 0, y: -6 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          className="mb-4 p-4 rounded-2xl bg-gradient-to-r from-red-950/90 via-rose-950/70 to-slate-900 border-2 border-red-500/80 shadow-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-red-500/20 text-red-400 border border-red-500/40 flex items-center justify-center shrink-0 shadow-lg shadow-red-950/50">
-                              <AlertTriangle className="w-5 h-5 animate-pulse" />
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs font-mono font-black text-red-300 uppercase tracking-wider">
-                                  CRITICAL MISSION ANOMALY DETECTED
-                                </span>
-                                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-red-900/60 text-red-200 border border-red-500/40 font-bold uppercase">
-                                  {hasBrownout ? "Bus Undervoltage Brownout" : "Life Support Failure"}
-                                </span>
-                              </div>
-                              <p className="text-xs text-slate-200 mt-0.5">
-                                {hasBrownout
-                                  ? "Main distribution bus overloaded! Protective relays tripped across habitat modules."
-                                  : "Life support systems experienced severe starvation. Crew oxygen buffer depleted."}
-                              </p>
-                            </div>
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() =>
-                              handleInspectTypeRootCause(hasBrownout ? "brownout" : "life_support")
-                            }
-                            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 hover:brightness-110 active:scale-95 text-white font-mono font-black text-xs flex items-center gap-2 shrink-0 shadow-lg shadow-red-950/80 border border-red-300/40 transition-all"
-                          >
-                            <Search className="w-4 h-4" />
-                            <span>Inspect Root Cause</span>
-                          </button>
-                        </motion.div>
-                      );
-                    })()}
-
-                    <h2 className="text-xl sm:text-2xl font-black text-white">
-                      {lastResult.event.label}
-                    </h2>
-                    <p className="text-sm text-slate-200 mt-2 leading-relaxed bg-white/5 p-3 rounded-xl border border-white/5">
-                      {lastResult.kidNarrativeSummary}
-                    </p>
-                  </div>
-
-                  {/* Sol Outcome Subsystem Metrics */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2">
-                    <div className="bg-slate-900/80 p-3 rounded-xl border border-slate-800">
-                      <p className="text-[10px] font-mono text-slate-400 uppercase">
-                        Power Grid
-                      </p>
-                      <p className="text-base sm:text-lg font-black text-blue-400 font-mono">
-                        {lastResult.subsystems.powerGrid.health.toFixed(0)}%
-                      </p>
-                    </div>
-                    <div className="bg-slate-900/80 p-3 rounded-xl border border-slate-800">
-                      <p className="text-[10px] font-mono text-slate-400 uppercase">
-                        Life Support (ECLSS)
-                      </p>
-                      <p className="text-base sm:text-lg font-black text-cyan-400 font-mono">
-                        {lastResult.subsystems.lifeSupport.health.toFixed(0)}%
-                      </p>
-                    </div>
-                    <div className="bg-slate-900/80 p-3 rounded-xl border border-slate-800">
-                      <p className="text-[10px] font-mono text-slate-400 uppercase">
-                        Shield Integrity
-                      </p>
-                      <p className="text-base sm:text-lg font-black text-indigo-400 font-mono">
-                        {lastResult.subsystems.radiationShielding.health.toFixed(0)}%
-                      </p>
-                    </div>
-                    <div className="bg-slate-900/80 p-3 rounded-xl border border-slate-800">
-                      <p className="text-[10px] font-mono text-slate-400 uppercase">
-                        Hydroponic Bay
-                      </p>
-                      <p className="text-base sm:text-lg font-black text-emerald-400 font-mono">
-                        {lastResult.subsystems.foodProduction.health.toFixed(0)}%
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Micro-Meteoroid Puncture Telemetry Report (Flight Director) */}
-                  {lastResult.micrometeoroidStrike && (
-                    <div className="p-4 rounded-xl bg-amber-950/70 border-2 border-amber-500/60 flex flex-col gap-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-mono font-bold text-amber-300 uppercase flex items-center gap-2">
-                          <AlertTriangle className="w-4 h-4 text-amber-400 animate-pulse" />
-                          MMOD Hypervelocity Strike Recorded
-                        </span>
-                        <span className="text-[10px] font-mono bg-amber-900/80 px-2 py-0.5 rounded text-amber-200">
-                          Velocity: {lastResult.micrometeoroidStrike.impactVelocityKmh.toLocaleString()} km/h
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-200">
-                        {lastResult.micrometeoroidStrike.technicalDetails}
-                      </p>
-                      <div className="text-[11px] font-mono text-amber-300/90 pt-1 border-t border-amber-800/60">
-                        <strong>Flight Directive:</strong> {lastResult.micrometeoroidStrike.mitigationProtocol}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Thermal Fatigue Curve Analysis (Flight Director) */}
-                  {lastResult.thermalFatigue && (
-                    <div className="p-4 rounded-xl bg-slate-900/90 border border-cyan-800/60 flex flex-col gap-2 text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="font-mono font-bold text-cyan-400 flex items-center gap-1.5 uppercase">
-                          <Flame className="w-3.5 h-3.5 text-cyan-400" />
-                          Thermal Fatigue Report (Coffin-Manson)
-                        </span>
-                        <span className="font-mono text-slate-400 text-[11px]">
-                          Loop Efficiency: {Math.round(lastResult.thermalFatigue.thermalProtectionEfficiency * 100)}%
-                        </span>
-                      </div>
-                      <p className="text-slate-300">
-                        {lastResult.thermalFatigue.technicalDiagnosis}
-                      </p>
-                      <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 pt-1 border-t border-slate-800">
-                        <span>Sol ΔT: {lastResult.thermalFatigue.solDeltaT}°C</span>
-                        <span className="text-cyan-300">
-                          Fatigue Added: +{(lastResult.thermalFatigue.fatigueWearAdded * 100).toFixed(1)}%
-                        </span>
-                        <span className="text-amber-300">
-                          Total Fatigue: +{(lastResult.thermalFatigue.totalCumulativeFatigueWear * 100).toFixed(1)}%
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Cadet Gentle Automated Hints (Cadet Mode) */}
-                  {lastResult.cadetHints && lastResult.cadetHints.length > 0 && (
-                    <div className="p-4 rounded-xl bg-emerald-950/60 border border-emerald-500/50 flex flex-col gap-2">
-                      <div className="flex items-center gap-2 text-emerald-300 font-mono font-bold text-xs">
-                        <span className="text-base">🌟</span>
-                        <span>CAPCOM Cadet Assistant debrief</span>
-                      </div>
-                      {lastResult.cadetHints.map((hint) => (
-                        <p key={hint.id} className="text-xs text-slate-200 leading-relaxed">
-                          {hint.kidFriendlyMessage}
-                        </p>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Specialist Emergency Repair Debrief Card (if crew member was deployed this Sol) */}
-                  {gameState.incidentHistory?.find((h) => h.sol === lastResult.turn)?.specialistAction && (
-                    <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-950/70 via-teal-950/50 to-slate-900 border-2 border-emerald-500/50 flex flex-col gap-2 shadow-lg">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-mono font-bold text-emerald-300 uppercase flex items-center gap-1.5">
-                          <Sparkles className="w-4 h-4 text-emerald-400" />
-                          <span>Specialist Emergency Repair Debrief</span>
-                        </span>
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-900/80 text-emerald-200 border border-emerald-500/40 font-bold uppercase">
-                          {gameState.incidentHistory.find((h) => h.sol === lastResult.turn)?.specialistRole}
-                        </span>
-                      </div>
-                      <h4 className="text-sm font-black text-white">
-                        {gameState.incidentHistory.find((h) => h.sol === lastResult.turn)?.specialistName}:{" "}
-                        {gameState.incidentHistory.find((h) => h.sol === lastResult.turn)?.specialistAction}
-                      </h4>
-                      <p className="text-xs text-slate-200 font-mono">
-                        {gameState.incidentHistory.find((h) => h.sol === lastResult.turn)?.specialistRiskRewardSummary}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* 4 Astronaut Specialists Vitals & Morale Center */}
-                  <div className="pt-2">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-mono font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-                        <span>👨‍🚀</span>
-                        <span>4 Astronaut Specialists & Morale Telemetry</span>
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setIsCrewModalOpen(true)}
-                        className="text-[11px] text-cyan-400 hover:text-cyan-300 font-mono font-bold"
-                      >
-                        View Full Dossiers →
-                      </button>
-                    </div>
-                    <CrewPanel crew={lastResult.crew} />
-                  </div>
-
-                  {/* Proceed Button or Debrief Trigger */}
-                  {lastResult.outcome === "ongoing" ? (
-                    <div className="pt-2">
-                      <motion.button
-                        whileHover={{ scale: 1.015 }}
-                        whileTap={{ scale: 0.985 }}
-                        onClick={handleNextTurn}
-                        className="w-full py-4 rounded-xl bg-gradient-to-r from-[#1D4ED8] to-[#06B6D4] text-white font-black text-base flex items-center justify-center gap-2 shadow-lg shadow-blue-900/50"
-                      >
-                        <span>{t("game.proceedNextSol", { nextSol: lastResult.turn + 1 })}</span>
-                        <ChevronRight className="w-5 h-5" />
-                      </motion.button>
-                    </div>
-                  ) : (
-                    <div className="pt-2 flex flex-col sm:flex-row gap-3">
-                      <motion.button
-                        whileHover={{ scale: 1.015 }}
-                        whileTap={{ scale: 0.985 }}
-                        onClick={() => setShowDebriefModal(true)}
-                        className="flex-1 py-4 rounded-xl bg-gradient-to-r from-blue-600 via-cyan-500 to-emerald-500 text-white font-black text-base flex items-center justify-center gap-2 shadow-lg shadow-cyan-900/50"
-                      >
-                        <Sparkles className="w-5 h-5" />
-                        <span>{t("game.finishMission")}</span>
-                      </motion.button>
-
-                      <button
-                        type="button"
-                        onClick={handlePlayAgain}
-                        className="px-5 py-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm flex items-center justify-center gap-2 border border-slate-700"
-                      >
-                        <RotateCcw className="w-4 h-4" />
-                        <span>{t("common.playAgain")}</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {/* Alerts Column */}
-                <div className="rounded-2xl bg-[#0B1120] border-2 border-slate-800 p-5 shadow-2xl flex flex-col gap-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-mono font-bold uppercase tracking-wider text-slate-400">
-                      Active Telemetry Alerts
-                    </span>
-                  </div>
-                  <AlertBanner
-                    alerts={lastResult.alerts}
-                    kidMode={true}
-                    onInspectRootCause={handleInspectAlertRootCause}
-                  />
-
-                  {/* Mini History */}
-                  {gameState.history.length > 1 && (
-                    <div className="mt-3 pt-3 border-t border-slate-800">
-                      <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-2">
-                        <History className="w-3.5 h-3.5" />
-                        <span>Previous Sols</span>
-                      </div>
-                      <div className="flex flex-col gap-1 max-h-36 overflow-y-auto pr-1">
-                        {[...gameState.history].reverse().slice(1).map((h) => (
-                          <div
-                            key={h.turn}
-                            className="flex items-center justify-between text-xs py-1 px-2 rounded bg-slate-900/60"
-                          >
-                            <span className="font-mono text-cyan-400 font-bold">
-                              Sol {h.turn}
-                            </span>
-                            <span className="text-slate-300 truncate max-w-[120px]">
-                              {h.event.label}
-                            </span>
-                            <span className="font-mono text-emerald-400 font-bold">
-                              {h.missionScorePercent}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+          <Button variant={btn.variant} size="lg" block disabled={btn.disabled} progress={btn.progress} right={btn.right} onClick={runDay} clickSound={false}>
+            {btn.label}
+          </Button>
+        </Panel>
       </main>
     </div>
+  );
+}
+
+// ------------------------------------------------------------
+// Menu drawer — built from the v3 drawer classes, like the mission log.
+// ------------------------------------------------------------
+function MenuDrawer({ open, onClose, items, footer }: { open: boolean; onClose: () => void; items: Array<{ title: string; sub: string; value?: string; warn?: boolean; act: () => void }>; footer: ReactNode }) {
+  const closeRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const opener = document.activeElement as HTMLElement | null;
+    closeRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => { window.removeEventListener("keydown", onKey); opener?.focus?.(); };
+  }, [open, onClose]);
+
+  return (
+    <>
+      <div className={"oc-scrim" + (open ? " oc-scrim--open" : "")} onClick={onClose} aria-hidden="true" />
+      <aside className={"oc-drawer" + (open ? " oc-drawer--open" : "")} role="dialog" aria-modal="true" aria-label="Menu" aria-hidden={!open}>
+        <div className="oc-drawer__head">
+          <span className="oc-type-label">Menu</span>
+          <Button ref={closeRef} size="sm" onClick={onClose}>Close</Button>
+        </div>
+        <ul className="oc-drawer__list">
+          {items.map((m) => (
+            <li key={m.title}>
+              <button
+                type="button"
+                onClick={() => { sfx.play("tick"); m.act(); }}
+                className="flex min-h-[72px] w-full items-center justify-between gap-4 border-b border-oc-line bg-transparent px-4 py-4 text-left text-oc-text-1 transition-colors duration-[160ms] hover:bg-oc-raised focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-oc-accent"
+              >
+                <span className="flex flex-col gap-1">
+                  <span className="font-semibold leading-5">{m.title}</span>
+                  <span className="text-sm leading-4 text-oc-text-2">{m.sub}</span>
+                </span>
+                {m.value && <span className="oc-type-code flex-none" style={{ color: m.warn ? "var(--oc-caution)" : "var(--oc-text-3)" }}>{m.value}</span>}
+              </button>
+            </li>
+          ))}
+        </ul>
+        <div className="oc-drawer__foot"><span>{footer}</span></div>
+      </aside>
+    </>
   );
 }

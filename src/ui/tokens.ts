@@ -33,6 +33,9 @@ export const color = {
   sceneMoon: '#7F7E79',
   sceneMars: '#A0532F',
   sceneMarsSky: '#2E1C15',
+  sceneEuropa: '#B8C4C8',
+  sceneTitan: '#9A6A2E',
+  sceneTitanSky: '#2B1B0C',
 } as const;
 
 export const criticalHatch = `repeating-linear-gradient(-45deg, ${color.critical} 0 4px, ${color.criticalDark} 4px 8px)`;

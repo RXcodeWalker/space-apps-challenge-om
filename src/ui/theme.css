@@ -44,6 +44,9 @@
   --oc-scene-moon: #7F7E79;
   --oc-scene-mars: #A0532F;
   --oc-scene-mars-sky: #2E1C15;
+  --oc-scene-europa: #B8C4C8;
+  --oc-scene-titan: #9A6A2E;
+  --oc-scene-titan-sky: #2B1B0C;
 
   /* Type */
   --oc-font-ui: 'Barlow', system-ui, sans-serif;

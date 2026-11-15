@@ -4,14 +4,14 @@
 // ============================================================
 import { useEffect, useRef, useState } from 'react';
 import { Button, Panel, Segmented, StatusShape, motionMs, useReducedMotion } from '../ui';
-import { createPlanet, type PlanetId, type PlanetView } from '../ui/scene/planet';
+import { createPlanet, PLANET_OF, type PlanetView } from '../ui/scene/planet';
 import { LUNAR_SOUTH_POLE, MARS_GALE_CRATER, EUROPA_UNDER_ICE, TITAN_HYDROCARBON, type MissionEnvironment } from '../data/nasaConstants';
 import { HISTORIC_SCENARIOS, type HistoricScenario } from '../data/scenarioData';
 import { DIFFICULTY_PRESETS, type DifficultyTier } from '../data/difficultyTiers';
 import { generateMissionSeed, normalizeSeed } from '../utils/seededRandom';
 
 const ENVS: MissionEnvironment[] = [LUNAR_SOUTH_POLE, MARS_GALE_CRATER, EUROPA_UNDER_ICE, TITAN_HYDROCARBON];
-const PLANET: Record<string, PlanetId> = { lunar_south_pole: 'moon', mars_gale_crater: 'mars', europa_under_ice: 'europa', titan_hydrocarbon: 'titan' };
+const PLANET = PLANET_OF;
 const TIERS: DifficultyTier[] = ['cadet', 'commander', 'flight_director'];
 
 export interface LandingPageProps {
