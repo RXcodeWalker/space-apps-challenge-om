@@ -93,7 +93,7 @@ export default function JuniorAstronautCertificate({
       : environment.id === "europa_under_ice"
       ? "EUR"
       : "TTN";
-  const certificateId = `NASA-JAC-2026-${envCode}-${Math.max(
+  const certificateId = `OC-JAC-2026-${envCode}-${Math.max(
     10,
     cumulativeScore
   )}-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -330,7 +330,7 @@ export default function JuniorAstronautCertificate({
 
     ctx.font = "bold 10px 'Courier New', monospace";
     ctx.fillStyle = "#FDE68A";
-    ctx.fillText("NASA ARTEMIS", 0, -28);
+    ctx.fillText("OUTPOST CMDR", 0, -28);
     ctx.fillText("CERTIFIED", 0, 36);
 
     ctx.restore();
@@ -360,7 +360,7 @@ export default function JuniorAstronautCertificate({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/90 backdrop-blur-md no-print"
+          className="fixed inset-0 bg-[var(--oc-scrim)] no-print"
           onClick={onClose}
         />
 
@@ -370,19 +370,19 @@ export default function JuniorAstronautCertificate({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 15 }}
           transition={{ type: "spring", damping: 25, stiffness: 280 }}
-          className="relative w-full max-w-5xl rounded-3xl bg-[#030712] border-2 border-amber-500/40 shadow-2xl shadow-amber-950/40 overflow-hidden flex flex-col max-h-[96vh] my-auto z-10"
+          className="relative w-full max-w-5xl rounded-oc-2 bg-oc-panel border border-oc-line-strong flex flex-col max-h-[calc(100dvh-24px)] my-auto z-10"
         >
           {/* Top Control Bar (hidden during print) */}
-          <div className="w-full py-3 px-5 bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 border-b border-amber-500/30 flex flex-wrap items-center justify-between gap-3 no-print">
-            <div className="flex items-center gap-2 text-amber-300">
-              <Award className="w-5 h-5 text-amber-400" />
-              <span className="font-mono font-bold text-xs uppercase tracking-wider">
+          <div className="w-full py-3 px-4 sm:px-5 bg-oc-inset border-b border-oc-line rounded-t-[3px] flex flex-wrap items-center justify-between gap-3 no-print">
+            <div className="flex items-center gap-2 text-oc-text-1 min-w-0">
+              <Award className="w-5 h-5 text-oc-accent shrink-0" />
+              <span className="oc-type-label">
                 Official Junior Astronaut Mission Certificate
               </span>
             </div>
 
             {/* Editable Commander Name Field in Control Bar */}
-            <div className="flex items-center gap-2 bg-black/50 px-3 py-1.5 rounded-xl border border-white/10 text-xs">
+            <div className="flex items-center gap-2 bg-oc-panel px-3 py-1.5 rounded-oc-1 border border-oc-line text-xs">
               <span className="text-slate-400 font-mono">Astronaut:</span>
               {isEditingName ? (
                 <input
@@ -393,13 +393,13 @@ export default function JuniorAstronautCertificate({
                   onKeyDown={(e) => e.key === "Enter" && setIsEditingName(false)}
                   autoFocus
                   maxLength={28}
-                  className="bg-slate-800 text-cyan-300 font-bold px-2 py-0.5 rounded border border-cyan-400 focus:outline-none w-44"
+                  className="bg-oc-raised text-oc-text-1 font-bold px-2 py-0.5 rounded-oc-1 border border-oc-accent focus:outline-none w-36 sm:w-44"
                 />
               ) : (
                 <button
                   type="button"
                   onClick={() => setIsEditingName(true)}
-                  className="flex items-center gap-1.5 text-cyan-300 font-bold hover:underline"
+                  className="flex items-center gap-1.5 text-oc-text-1 font-bold hover:underline min-h-8"
                   title="Click to edit commander name"
                 >
                   <span>{commanderName}</span>
@@ -409,29 +409,29 @@ export default function JuniorAstronautCertificate({
             </div>
 
             {/* Action Buttons: Print & Download */}
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <LanguageSelector compact />
 
               <button
                 type="button"
                 onClick={handlePrint}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-mono text-xs font-bold border border-slate-600 transition-colors"
+                className="oc-btn oc-btn--sm"
                 title="Print or Save as PDF"
               >
-                <Printer className="w-4 h-4 text-cyan-400" />
+                <Printer className="w-4 h-4" />
                 <span>{t("certificate.printPdf")}</span>
               </button>
 
               <button
                 type="button"
                 onClick={handleDownloadPNG}
-                className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-mono text-xs font-black shadow-md shadow-amber-900/40 transition-all"
+                className="oc-btn oc-btn--sm oc-btn--primary"
                 title="Download High-Resolution PNG Image"
               >
                 {downloadSuccess ? (
-                  <CheckCircle className="w-4 h-4 text-black" />
+                  <CheckCircle className="w-4 h-4" />
                 ) : (
-                  <Download className="w-4 h-4 text-black" />
+                  <Download className="w-4 h-4" />
                 )}
                 <span>{downloadSuccess ? "DOWNLOADED!" : t("certificate.downloadPng")}</span>
               </button>
@@ -439,10 +439,12 @@ export default function JuniorAstronautCertificate({
               <button
                 type="button"
                 onClick={onClose}
-                className="p-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white"
+                className="oc-modal__close"
+                style={{ margin: 0, width: 32, height: 32 }}
+                aria-label="Close"
                 title="Close"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
           </div>
@@ -452,7 +454,7 @@ export default function JuniorAstronautCertificate({
             <div
               ref={certificateContainerRef}
               id="printable-astronaut-certificate"
-              className="certificate-printable-container relative w-full max-w-[940px] aspect-[16/10] bg-gradient-to-b from-[#081128] via-[#040916] to-[#02040A] rounded-2xl border-[8px] border-[#D4AF37] p-6 sm:p-10 shadow-2xl flex flex-col justify-between text-center overflow-hidden"
+              className="certificate-printable-container relative w-full max-w-[940px] sm:aspect-[16/10] bg-gradient-to-b from-[#081128] via-[#040916] to-[#02040A] rounded-2xl border-[8px] border-[#D4AF37] p-6 sm:p-10 shadow-2xl flex flex-col justify-between text-center overflow-hidden"
               style={{
                 boxShadow: "0 0 60px rgba(212, 175, 55, 0.2), inset 0 0 40px rgba(0, 0, 0, 0.8)",
               }}
@@ -506,7 +508,7 @@ export default function JuniorAstronautCertificate({
               </div>
 
               {/* Rank, Score & Badge Plaque */}
-              <div className="relative z-10 mx-auto w-full max-w-2xl bg-black/60 border border-cyan-500/40 rounded-2xl p-3 sm:p-4 shadow-lg flex items-center justify-between gap-4">
+              <div className="relative z-10 mx-auto w-full max-w-2xl bg-black/60 border border-cyan-500/40 rounded-2xl p-3 sm:p-4 shadow-lg flex flex-wrap items-center justify-between gap-3 sm:gap-4">
                 {/* Left: Vector Mission Badge */}
                 <div className="flex items-center gap-3">
                   <button
@@ -570,7 +572,7 @@ export default function JuniorAstronautCertificate({
                     <div className="w-full h-full rounded-full bg-[#0C4A6E] flex flex-col items-center justify-center text-amber-300">
                       <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-amber-300" />
                       <span className="text-[6px] sm:text-[7px] font-mono font-black uppercase tracking-tighter">
-                        NASA ARTEMIS
+                        OUTPOST CMDR
                       </span>
                     </div>
                   </div>
@@ -597,7 +599,7 @@ export default function JuniorAstronautCertificate({
           </div>
 
           {/* Bottom Bar Info */}
-          <div className="p-3 bg-slate-950 border-t border-slate-800 text-center text-xs text-slate-400 font-mono no-print">
+          <div className="p-3 bg-oc-inset border-t border-oc-line rounded-b-[3px] text-center text-xs text-oc-text-2 font-mono no-print">
             Click <strong>Download Image</strong> for a 2400×1500 high-res PNG or <strong>Print / PDF</strong> to save directly to paper or PDF document.
           </div>
         </motion.div>

@@ -6,7 +6,6 @@
 // ============================================================
 
 import { useState, useId } from "react";
-import { motion } from "framer-motion";
 import { Droplet, Flame, Sparkles, AlertTriangle, CheckCircle2, Beaker } from "lucide-react";
 import type { FlightDirectorInterventionResult } from "../../types/intervention";
 import { soundEffects } from "../../utils/soundEffects";
@@ -114,154 +113,105 @@ export default function PerchlorateWashMinigame({
     }
   };
 
+  const statusTone: "accent" | "caution" | "critical" = isSweetSpot ? "accent" : isBoiling ? "critical" : "caution";
+  const fluidColor = isSweetSpot
+    ? "var(--oc-accent)"
+    : isBoiling
+    ? "var(--oc-critical)"
+    : isTooCold
+    ? "var(--oc-text-2)"
+    : "var(--oc-accent-2)";
+
   return (
-    <div className="flex flex-col gap-3.5 p-4 rounded-2xl bg-gradient-to-b from-purple-950/30 via-slate-900/60 to-black/80 border-2 border-purple-500/30 shadow-inner">
-      {/* Minigame Header */}
-      <div className="flex items-center justify-between border-b border-purple-500/20 pb-2">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-purple-500/20 border border-purple-400/40 flex items-center justify-center text-purple-300">
-            <Beaker className="w-4 h-4 animate-pulse" />
-          </div>
-          <div>
-            <h3 className="text-xs sm:text-sm font-black text-white tracking-wide uppercase flex items-center gap-1.5">
-              <span>Perchlorate Soil Wash Calibration</span>
-              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-purple-900/60 text-purple-300 border border-purple-500/30">
-                CHEMISTRY SWEET SPOT
-              </span>
-            </h3>
-            <p className="text-[11px] text-slate-300">
-              Balance wash water and catalytic heat to cleanse toxic Martian soil without boiling the water buffer.
-            </p>
-          </div>
+    <div className="oc-section" style={{ gap: 16 }}>
+      {/* Minigame header */}
+      <div className="oc-section__head" style={{ alignItems: "flex-start" }}>
+        <div className="oc-section" style={{ gap: 4, flex: "1 1 220px" }}>
+          <h3 className="oc-label" style={{ color: "var(--oc-text-1)", margin: 0, flexWrap: "wrap" }}>
+            <Beaker size={16} aria-hidden="true" />
+            <span>Perchlorate soil wash calibration</span>
+            <span className="oc-chip oc-chip--plain">Chemistry sweet spot</span>
+          </h3>
+          <p className="oc-modal__text">
+            Balance wash water and catalytic heat to cleanse toxic Martian soil without boiling the water buffer.
+          </p>
         </div>
 
-        {/* Live Status Badge */}
-        <div
-          className={`px-2.5 py-1 rounded-full text-[10px] font-mono font-bold tracking-wider flex items-center gap-1.5 uppercase transition-all ${
-            isSweetSpot
-              ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/60 shadow-lg shadow-emerald-500/20 animate-pulse"
-              : isBoiling
-              ? "bg-red-500/20 text-red-300 border border-red-500/60 animate-pulse"
-              : "bg-purple-500/20 text-purple-300 border border-purple-500/50"
-          }`}
-        >
+        {/* Live status badge */}
+        <span className={`oc-chip oc-chip--solid ${isBoiling ? "oc-blink" : ""}`} data-tone={statusTone} role="status">
           {isSweetSpot ? (
             <>
-              <Sparkles className="w-3.5 h-3.5 text-emerald-300" />
-              <span>SWEET SPOT LOCKED</span>
+              <Sparkles size={12} aria-hidden="true" />
+              <span>Sweet spot locked</span>
             </>
           ) : isBoiling ? (
             <>
-              <AlertTriangle className="w-3.5 h-3.5 text-red-300" />
-              <span>FLASH BOILING!</span>
+              <AlertTriangle size={12} aria-hidden="true" />
+              <span>Flash boiling!</span>
             </>
           ) : (
             <>
-              <AlertTriangle className="w-3.5 h-3.5 text-amber-300" />
-              <span>CALIBRATING</span>
+              <AlertTriangle size={12} aria-hidden="true" />
+              <span>Calibrating</span>
             </>
           )}
-        </div>
+        </span>
       </div>
 
-      {/* Chemical Reactor Core Graphic & Physics Gauges */}
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5 items-center">
-        {/* Reactor Core Vessel SVG */}
-        <div className="md:col-span-4 flex flex-col items-center justify-center p-3 rounded-xl bg-black/60 border border-white/10">
-          <svg viewBox="0 0 100 120" className="w-24 h-28 overflow-visible select-none">
-            {/* Reaction Chamber Outer Tube */}
-            <rect
-              x="20"
-              y="15"
-              width="60"
-              height="85"
-              rx="12"
-              fill="#0f172a"
-              stroke="#64748b"
-              strokeWidth="3"
-            />
-            {/* Top Cap */}
-            <rect x="30" y="8" width="40" height="8" rx="3" fill="#475569" />
+      {/* Reactor core graphic and physics gauges */}
+      <div className="oc-split oc-split--tight">
+        {/* Reactor core vessel SVG */}
+        <div className="oc-card" style={{ alignItems: "center", justifyContent: "center" }}>
+          <svg viewBox="0 0 100 120" role="img" aria-label={`Reactor vessel: ${washWaterLiters} litres at ${catalyticHeatC} degrees Celsius`} style={{ width: 96, height: 112, overflow: "visible", userSelect: "none" }}>
+            {/* Reaction chamber outer tube */}
+            <rect x="20" y="15" width="60" height="85" rx="2" fill="var(--oc-bg-void)" stroke="var(--oc-text-3)" strokeWidth="3" />
+            {/* Top cap */}
+            <rect x="30" y="8" width="40" height="8" rx="1" fill="var(--oc-line-strong)" />
 
-            {/* Chamber Fluid (Height scales with Water, Color with Heat/Cleanliness) */}
+            {/* Chamber fluid (height scales with water, colour with state) */}
             <rect
               x="24"
               y={95 - (washWaterLiters / 100) * 70}
               width="52"
               height={(washWaterLiters / 100) * 70}
-              rx="8"
-              fill={
-                isSweetSpot
-                  ? "#10b981"
-                  : isBoiling
-                  ? "#ef4444"
-                  : isTooCold
-                  ? "#8b5cf6"
-                  : "#06b6d4"
-              }
-              fillOpacity="0.75"
-              className="transition-all duration-300"
+              rx="1"
+              fill={fluidColor}
+              fillOpacity="0.8"
+              style={{ transition: "all var(--oc-dur-base) var(--oc-ease-out)" }}
             />
 
-            {/* Rising Bubbles / Steam */}
-            <circle
-              cx="40"
-              cy="70"
-              r={isBoiling ? "4" : "2"}
-              fill="#ffffff"
-              opacity="0.6"
-              className="animate-bounce"
-            />
-            <circle
-              cx="60"
-              cy="55"
-              r={isBoiling ? "5" : "2.5"}
-              fill="#ffffff"
-              opacity="0.8"
-              className="animate-ping"
-            />
+            {/* Bubbles / steam */}
+            <circle cx="40" cy="70" r={isBoiling ? "4" : "2"} fill="var(--oc-text-1)" opacity="0.6" />
+            <circle cx="60" cy="55" r={isBoiling ? "5" : "2.5"} fill="var(--oc-text-1)" opacity="0.8" />
 
             {/* Heating coils indicator at bottom */}
             <path
               d="M 28 105 L 36 101 L 44 105 L 52 101 L 60 105 L 68 101"
               fill="none"
-              stroke={catalyticHeatC > 150 ? "#f97316" : "#475569"}
+              stroke={catalyticHeatC > 150 ? "var(--oc-caution)" : "var(--oc-line-strong)"}
               strokeWidth="2.5"
               strokeLinecap="round"
             />
           </svg>
 
-          <div className="text-[10px] font-mono text-center mt-1">
-            <span className="text-slate-400">Soil Purity: </span>
-            <span
-              className={`font-black ${
-                soilPurity > 90 ? "text-emerald-400" : "text-amber-400"
-              }`}
-            >
-              {soilPurity}%
-            </span>
+          <div className="oc-kv" style={{ justifyContent: "center" }}>
+            <span>Soil purity</span>
+            <span style={{ color: soilPurity > 90 ? "var(--oc-accent)" : "var(--oc-caution)" }}>{soilPurity}%</span>
           </div>
         </div>
 
-        {/* Dual Sliders & Sweet Spot Guides */}
-        <div className="md:col-span-8 flex flex-col gap-3">
-          {/* Slider 1: Wash Water */}
-          <div className="bg-black/50 p-2.5 rounded-xl border border-white/5 flex flex-col gap-1.5">
-            <div className="flex items-center justify-between text-xs font-mono">
-              <label htmlFor={waterSliderId} className="text-slate-300 flex items-center gap-1.5 font-bold">
-                <Droplet className="w-3.5 h-3.5 text-cyan-400" />
-                <span>Wash Water Buffer (Liters):</span>
+        {/* Dual sliders and sweet-spot guides */}
+        <div className="oc-section" style={{ gap: 12 }}>
+          {/* Slider 1: wash water */}
+          <div className="oc-section" style={{ gap: 4 }}>
+            <div className="oc-section__head">
+              <label htmlFor={waterSliderId} className="oc-label">
+                <Droplet size={14} aria-hidden="true" />
+                <span>Wash water buffer (liters)</span>
               </label>
-              <div className="flex items-center gap-1.5">
-                <span
-                  className={`font-black text-sm ${
-                    isWaterOptimal ? "text-emerald-400" : "text-cyan-300"
-                  }`}
-                >
-                  {washWaterLiters} L
-                </span>
-                <span className="text-[10px] text-slate-500 font-mono">[Target: 40–60L]</span>
-              </div>
+              <span className="oc-type-data-s" style={{ color: isWaterOptimal ? "var(--oc-accent)" : "var(--oc-text-1)" }}>
+                {washWaterLiters} L <span style={{ color: "var(--oc-text-3)" }}>[target 40{"–"}60 L]</span>
+              </span>
             </div>
 
             <input
@@ -274,39 +224,29 @@ export default function PerchlorateWashMinigame({
               disabled={disabled}
               onChange={(e) => handleWaterChange(Number(e.target.value))}
               aria-label="Wash Water Volume in Liters"
-              className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-400"
+              className="oc-range"
             />
 
-            <div className="flex justify-between items-center text-[10px] font-mono text-slate-400">
-              <span className={isTooDry ? "text-amber-400 font-bold" : ""}>0L (Dry Brine)</span>
-              <span className={isWaterOptimal ? "text-emerald-400 font-bold" : "text-slate-500"}>
-                ▲ Sweet Spot: 40–60L
-              </span>
-              <span className={isTooFlooded ? "text-amber-400 font-bold" : ""}>100L (Buffer Drain)</span>
+            <div className="oc-section__head oc-readout__code" style={{ flexWrap: "wrap", gap: "2px 8px" }}>
+              <span style={isTooDry ? { color: "var(--oc-caution)" } : undefined}>0 L (dry brine)</span>
+              <span style={{ color: isWaterOptimal ? "var(--oc-accent)" : undefined }}>{"▲"} Sweet spot: 40{"–"}60 L</span>
+              <span style={isTooFlooded ? { color: "var(--oc-caution)" } : undefined}>100 L (buffer drain)</span>
             </div>
           </div>
 
-          {/* Slider 2: Catalytic Heat */}
-          <div className="bg-black/50 p-2.5 rounded-xl border border-white/5 flex flex-col gap-1.5">
-            <div className="flex items-center justify-between text-xs font-mono">
-              <label htmlFor={heatSliderId} className="text-slate-300 flex items-center gap-1.5 font-bold">
-                <Flame className="w-3.5 h-3.5 text-orange-400" />
-                <span>Catalytic Bed Heat (°C):</span>
+          {/* Slider 2: catalytic heat */}
+          <div className="oc-section" style={{ gap: 4 }}>
+            <div className="oc-section__head">
+              <label htmlFor={heatSliderId} className="oc-label">
+                <Flame size={14} aria-hidden="true" />
+                <span>Catalytic bed heat ({"°"}C)</span>
               </label>
-              <div className="flex items-center gap-1.5">
-                <span
-                  className={`font-black text-sm ${
-                    isHeatOptimal
-                      ? "text-emerald-400"
-                      : isBoiling
-                      ? "text-red-400 animate-pulse"
-                      : "text-orange-300"
-                  }`}
-                >
-                  {catalyticHeatC}°C
-                </span>
-                <span className="text-[10px] text-slate-500 font-mono">[Target: 170–210°C]</span>
-              </div>
+              <span
+                className="oc-type-data-s"
+                style={{ color: isHeatOptimal ? "var(--oc-accent)" : isBoiling ? "var(--oc-critical)" : "var(--oc-text-1)" }}
+              >
+                {catalyticHeatC}{"°"}C <span style={{ color: "var(--oc-text-3)" }}>[target 170{"–"}210{"°"}C]</span>
+              </span>
             </div>
 
             <input
@@ -319,83 +259,74 @@ export default function PerchlorateWashMinigame({
               disabled={disabled}
               onChange={(e) => handleHeatChange(Number(e.target.value))}
               aria-label="Catalytic Bed Heat in Celsius"
-              className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-400"
+              className="oc-range"
             />
 
-            <div className="flex justify-between items-center text-[10px] font-mono text-slate-400">
-              <span className={isTooCold ? "text-purple-400 font-bold" : ""}>20°C (Cold)</span>
-              <span className={isHeatOptimal ? "text-emerald-400 font-bold" : "text-slate-500"}>
-                ▲ Catalysis Window: 170–210°C
+            <div className="oc-section__head oc-readout__code" style={{ flexWrap: "wrap", gap: "2px 8px" }}>
+              <span style={isTooCold ? { color: "var(--oc-caution)" } : undefined}>20{"°"}C (cold)</span>
+              <span style={{ color: isHeatOptimal ? "var(--oc-accent)" : undefined }}>
+                {"▲"} Catalysis window: 170{"–"}210{"°"}C
               </span>
-              <span className={isBoiling ? "text-red-400 font-bold animate-pulse" : ""}>
-                &gt;215°C (Flash Boil)
-              </span>
+              <span style={isBoiling ? { color: "var(--oc-critical)" } : undefined}>&gt;215{"°"}C (flash boil)</span>
             </div>
           </div>
 
-          {/* Real-Time Chemistry Feedback Notice */}
-          <div className="text-[11px] font-mono p-2 rounded-lg bg-black/40 border border-white/5">
-            {isSweetSpot ? (
-              <span className="text-emerald-300 font-bold flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Sweet Spot: 99.8% Perchlorates neutralized. Zero water buffer vaporized.</span>
-              </span>
-            ) : isBoiling ? (
-              <span className="text-red-400 font-bold flex items-center gap-1.5">
-                <AlertTriangle className="w-3.5 h-3.5 text-red-400" />
-                <span>Critical: Water flash-boiling at {catalyticHeatC}°C! Buffer venting to steam!</span>
-              </span>
-            ) : isTooCold ? (
-              <span className="text-purple-300 flex items-center gap-1.5">
-                <AlertTriangle className="w-3.5 h-3.5 text-purple-400" />
-                <span>Catalyst inactive below 160°C. Increase heat to trigger salt reduction.</span>
-              </span>
-            ) : isTooDry ? (
-              <span className="text-amber-300 flex items-center gap-1.5">
-                <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-                <span>Insufficient wash water (&lt;35L). Soil brine saturated.</span>
-              </span>
-            ) : (
-              <span className="text-slate-300">
-                Adjust sliders into the sweet spot window to complete wash cycle.
-              </span>
-            )}
-          </div>
+          {/* Real-time chemistry feedback notice */}
+          {isSweetSpot ? (
+            <div className="oc-note" data-tone="accent" role="status">
+              <Sparkles size={16} aria-hidden="true" />
+              <span>Sweet spot: 99.8% perchlorates neutralized. Zero water buffer vaporized.</span>
+            </div>
+          ) : isBoiling ? (
+            <div className="oc-note" data-tone="critical" role="status">
+              <AlertTriangle size={16} aria-hidden="true" />
+              <span>Critical: water flash-boiling at {catalyticHeatC}{"°"}C! Buffer venting to steam!</span>
+            </div>
+          ) : isTooCold ? (
+            <div className="oc-note" data-tone="caution" role="status">
+              <AlertTriangle size={16} aria-hidden="true" />
+              <span>Catalyst inactive below 160{"°"}C. Increase heat to trigger salt reduction.</span>
+            </div>
+          ) : isTooDry ? (
+            <div className="oc-note" data-tone="caution" role="status">
+              <AlertTriangle size={16} aria-hidden="true" />
+              <span>Insufficient wash water (&lt;35 L). Soil brine saturated.</span>
+            </div>
+          ) : (
+            <div className="oc-note oc-note--quiet" role="status">
+              <span>Adjust sliders into the sweet spot window to complete wash cycle.</span>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Action Commitment Button */}
-      <motion.button
+      {/* Action commitment button */}
+      <button
         type="button"
-        whileHover={{ scale: disabled ? 1 : 1.015 }}
-        whileTap={{ scale: disabled ? 1 : 0.985 }}
         disabled={disabled}
         onClick={handleCommit}
-        className={`w-full py-2.5 px-4 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg transition-all ${
-          isSweetSpot
-            ? "bg-gradient-to-r from-emerald-600 via-teal-500 to-cyan-500 text-white shadow-emerald-900/50 hover:brightness-110"
-            : isBoiling
-            ? "bg-red-800 text-red-200 border border-red-500/50"
-            : "bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10"
-        }`}
+        className={`oc-btn oc-btn--block ${isSweetSpot ? "oc-btn--primary" : isBoiling ? "oc-btn--danger" : ""}`}
+        style={{ height: "auto", minHeight: 44, paddingTop: 8, paddingBottom: 8, whiteSpace: "normal" }}
       >
         {isSweetSpot ? (
           <>
-            <CheckCircle2 className="w-4 h-4 text-emerald-200" />
-            <span>ENGAGE CATALYTIC WASH CYCLE ({washWaterLiters}L @ {catalyticHeatC}°C)</span>
+            <CheckCircle2 size={16} aria-hidden="true" />
+            <span>
+              Engage catalytic wash cycle ({washWaterLiters} L @ {catalyticHeatC}{"°"}C)
+            </span>
           </>
         ) : isBoiling ? (
           <>
-            <AlertTriangle className="w-4 h-4 text-red-300" />
-            <span>OVERHEATED: REDUCE HEAT BELOW 215°C</span>
+            <AlertTriangle size={16} aria-hidden="true" />
+            <span>Overheated: reduce heat below 215{"°"}C</span>
           </>
         ) : (
           <>
-            <Beaker className="w-4 h-4 text-purple-400" />
-            <span>CONFIRM SOIL WASH CALIBRATION</span>
+            <Beaker size={16} aria-hidden="true" />
+            <span>Confirm soil wash calibration</span>
           </>
         )}
-      </motion.button>
+      </button>
     </div>
   );
 }

@@ -709,8 +709,8 @@ export default function GameScreen({
             )}
 
             {phase === "result" && report && (
-              <div className="absolute inset-0 grid place-items-center bg-[var(--oc-scrim)] p-4 animate-[oc-fade_240ms_both]">
-                <Panel size="lg" role="dialog" aria-label="Day report" className="w-full max-w-[440px] animate-[oc-in_240ms_var(--oc-ease-out)_both]" style={{ borderColor: "var(--oc-line-strong)" }}>
+              <div className="absolute inset-0 grid place-items-center bg-[var(--oc-scrim)] p-4 animate-[oc-fade_240ms_both] max-sm:fixed max-sm:z-[45] max-sm:overflow-y-auto max-sm:[place-items:start_center]">
+                <Panel size="lg" role="dialog" aria-label="Day report" className="w-full max-w-[440px] animate-[oc-in_240ms_var(--oc-ease-out)_both] max-sm:my-auto" style={{ borderColor: "var(--oc-line-strong)" }}>
                   <div className="flex flex-col gap-1">
                     <span className="oc-type-code text-oc-text-3">{report.caption}</span>
                     <h2 className="oc-type-display m-0" style={{ color: report.status === "ok" ? "var(--oc-text-1)" : STATUS[report.status].fg }}>{report.headline}</h2>
@@ -783,9 +783,12 @@ export default function GameScreen({
             ))}
           </div>
 
-          <Button variant={btn.variant} size="lg" block disabled={btn.disabled} progress={btn.progress} right={btn.right} onClick={runDay} clickSound={false}>
-            {btn.label}
-          </Button>
+          {/* Phones: pinned to the bottom edge while the sliders are on screen (see .oc-runbar). */}
+          <div className="oc-runbar">
+            <Button variant={btn.variant} size="lg" block disabled={btn.disabled} progress={btn.progress} right={btn.right} onClick={runDay} clickSound={false}>
+              {btn.label}
+            </Button>
+          </div>
         </Panel>
       </main>
     </div>

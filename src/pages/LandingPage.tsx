@@ -165,7 +165,7 @@ export default function LandingPage({ onStart, seed, onSeedChange, initialEnviro
           {facts.map(([k, v, u]) => (
             <Panel key={k} className="!gap-1">
               <span className="oc-type-code text-oc-text-3">{k}</span>
-              <span className="oc-type-data-l whitespace-nowrap">{v}{u && <span className="oc-type-data-s ml-1 text-oc-text-3">{u}</span>}</span>
+              <span className={`oc-type-data-l [overflow-wrap:anywhere] ${String(v).length > 7 ? '!text-[18px] !leading-6' : ''}`}>{v}{u && <span className="oc-type-data-s ml-1 text-oc-text-3">{u}</span>}</span>
             </Panel>
           ))}
         </div>

@@ -7,7 +7,6 @@
 // 3. NASA Incident Alerts & Telemetry
 // ============================================================
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { motion } from "framer-motion";
 import {
   Zap,
   Activity,
@@ -33,8 +32,7 @@ interface StepConfig {
   icon: React.ReactNode;
   description: string;
   tip: string;
-  accentColor: string;
-  borderColor: string;
+  tone: "accent" | "caution";
 }
 
 export const TUTORIAL_STORAGE_KEY = "outpost_commander_tutorial_seen";
@@ -53,31 +51,28 @@ export default function QuickTutorialOverlay({
         targetSelector: '[data-tutorial="power-budget"]',
         badge: "STEP 1 OF 3",
         title: t("tutorial.step1Title"),
-        icon: <Zap className="w-5 h-5 text-amber-400" />,
+        icon: <Zap size={20} aria-hidden="true" />,
         description: t("tutorial.step1Body"),
         tip: "Keep Net Power at 0 MW (balanced) or positive to keep batteries charged!",
-        accentColor: "from-amber-500/20 to-blue-500/20",
-        borderColor: "border-amber-400/60",
+        tone: "accent",
       },
       {
         targetSelector: '[data-tutorial="tradeoff-arrows"]',
         badge: "STEP 2 OF 3",
         title: t("tutorial.step2Title"),
-        icon: <Activity className="w-5 h-5 text-cyan-400" />,
+        icon: <Activity size={20} aria-hidden="true" />,
         description: t("tutorial.step2Body"),
-        tip: "Check projected deltas before clicking 'Commit Turn'!",
-        accentColor: "from-cyan-500/20 to-emerald-500/20",
-        borderColor: "border-cyan-400/60",
+        tip: "Check the projected changes under each gauge before you press Run Day!",
+        tone: "accent",
       },
       {
         targetSelector: '[data-tutorial="incident-alerts"]',
         badge: "STEP 3 OF 3",
         title: t("tutorial.step3Title"),
-        icon: <AlertTriangle className="w-5 h-5 text-rose-400" />,
+        icon: <AlertTriangle size={20} aria-hidden="true" />,
         description: t("tutorial.step3Body"),
-        tip: "Click 'NASA Data' anytime to inspect genuine LRO and Curiosity sensor records.",
-        accentColor: "from-rose-500/20 to-blue-500/20",
-        borderColor: "border-rose-400/60",
+        tip: "Open Data from the menu anytime to inspect genuine LRO and Curiosity sensor records.",
+        tone: "caution",
       },
     ],
     [t]
@@ -157,160 +152,121 @@ export default function QuickTutorialOverlay({
     onClose();
   };
 
-  // Determine ideal position for the tooltip popover
+  // Determine ideal position for the tooltip popover. On phones the card is docked to the
+  // edge of the screen opposite the target so it never hides what it is pointing at.
   const hasTarget = targetRect !== null && targetRect.width > 0;
-  const isTargetNearBottom = hasTarget && targetRect.top > window.innerHeight * 0.55;
+  const isTargetNearBottom = hasTarget && targetRect.top + targetRect.height / 2 > window.innerHeight * 0.45;
+  const dockClass = isTargetNearBottom ? "oc-tut--top" : "oc-tut--bottom";
 
   return (
     <div className="fixed inset-0 z-50 pointer-events-auto">
-      {/* Dark backdrop with smooth fade */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm"
-        onClick={handleSkip}
-      />
+      {/* Scrim */}
+      <div className="oc-modal-scrim" onClick={handleSkip} />
 
-      {/* Spotlight cutout highlight around target */}
+      {/* Spotlight ring around target */}
       {hasTarget && (
-        <motion.div
+        <div
           key={`spotlight-${currentStepIndex}`}
-          initial={{ opacity: 0, scale: 0.98 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.25 }}
-          className="fixed pointer-events-none rounded-2xl border-2 border-cyan-400 shadow-[0_0_35px_rgba(6,182,212,0.45)] z-50"
+          className="oc-spot"
           style={{
             top: Math.max(8, targetRect.top - 8),
             left: Math.max(8, targetRect.left - 8),
-            width: targetRect.width + 16,
+            width: Math.min(window.innerWidth - 16, targetRect.width + 16),
             height: targetRect.height + 16,
           }}
         >
-          {/* Subtle pulsating beacon at top-left of target */}
-          <span className="absolute -top-3 -right-3 flex h-6 w-6">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-6 w-6 bg-cyan-500 text-[11px] font-black font-mono text-slate-950 items-center justify-center">
-              {currentStepIndex + 1}
-            </span>
-          </span>
-        </motion.div>
+          <span className="oc-spot__n">{currentStepIndex + 1}</span>
+        </div>
       )}
 
-      {/* Centered or Floating Tooltip Box */}
-      <div className="fixed inset-0 pointer-events-none flex items-center justify-center p-4 z-50">
-        <motion.div
+      {/* Floating tooltip card */}
+      <div className={`oc-tut ${dockClass}`}>
+        <div
           key={`tooltip-${currentStepIndex}`}
-          initial={{ opacity: 0, y: isTargetNearBottom ? -15 : 15, scale: 0.96 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.96 }}
-          transition={{ duration: 0.22 }}
-          className={`pointer-events-auto w-full max-w-lg rounded-2xl bg-[#090E1A] border-2 ${step.borderColor} p-5 sm:p-6 shadow-2xl flex flex-col gap-4 text-slate-100 relative`}
-          style={{
-            boxShadow: "0 20px 50px rgba(0,0,0,0.8), 0 0 30px rgba(6,182,212,0.25)",
-          }}
+          className="oc-modal oc-modal--sm"
+          data-tone={step.tone}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="tutorial-title"
+          style={{ margin: 0, pointerEvents: "auto" }}
         >
-          {/* Header Row */}
-          <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-xl bg-slate-800/90 border border-slate-700">
-                {step.icon}
-              </div>
-              <div>
-                <span className="text-[10px] font-mono font-bold tracking-widest text-[#06B6D4] uppercase">
+          <div className="oc-modal__head">
+            <div className="oc-modal__headrow">
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
+                <span className="oc-modal__eyebrow" style={{ color: "var(--tone)" }}>
                   {step.badge}
                 </span>
-                <h3 className="text-base sm:text-lg font-black text-white leading-tight">
-                  {step.title}
+                <h3 id="tutorial-title" className="oc-modal__title" style={{ fontSize: 24, lineHeight: "28px" }}>
+                  <span style={{ display: "inline-flex", flex: "none", color: "var(--tone)" }}>{step.icon}</span>
+                  <span>{step.title}</span>
                 </h3>
               </div>
+              <button type="button" onClick={handleSkip} className="oc-modal__close" title="Skip Tutorial" aria-label="Skip Tutorial">
+                <X size={20} aria-hidden="true" />
+              </button>
             </div>
-
-            <button
-              type="button"
-              onClick={handleSkip}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/80 transition-colors"
-              title="Skip Tutorial"
-            >
-              <X className="w-5 h-5" />
-            </button>
           </div>
 
-          {/* Description */}
-          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-            {step.description}
-          </p>
-
-          {/* Pro Tip Box */}
-          <div className="bg-cyan-950/40 border border-cyan-500/30 rounded-xl p-3 flex items-start gap-2.5 text-xs text-cyan-200">
-            <Sparkles className="w-4 h-4 text-cyan-400 flex-shrink-0 mt-0.5" />
-            <p className="leading-snug">
-              <strong className="text-cyan-300">Commander's Tip:</strong> {step.tip}
+          <div className="oc-modal__body" style={{ gap: 16 }}>
+            <p className="oc-modal__text" style={{ fontSize: 16, lineHeight: "24px" }}>
+              {step.description}
             </p>
+
+            <div className="oc-note" data-tone="accent">
+              <Sparkles size={16} aria-hidden="true" />
+              <p style={{ margin: 0 }}>
+                <strong>Commander's Tip:</strong> {step.tip}
+              </p>
+            </div>
           </div>
 
-          {/* Footer Controls */}
-          <div className="flex items-center justify-between pt-2 border-t border-slate-800/80">
-            {/* Step Dots */}
-            <div className="flex items-center gap-1.5">
+          <div className="oc-modal__foot">
+            <div className="oc-dots" role="group" aria-label="Tutorial steps">
               {steps.map((_: StepConfig, idx: number) => (
                 <button
                   key={idx}
                   type="button"
+                  aria-current={idx === currentStepIndex ? "step" : undefined}
                   onClick={() => {
                     soundEffects.playButtonClick();
                     setCurrentStepIndex(idx);
                   }}
-                  className={`h-2 rounded-full transition-all ${
-                    idx === currentStepIndex
-                      ? "w-6 bg-[#06B6D4]"
-                      : "w-2 bg-slate-700 hover:bg-slate-600"
-                  }`}
                   title={`Jump to Step ${idx + 1}`}
-                />
+                  aria-label={`Jump to Step ${idx + 1}`}
+                >
+                  <i />
+                </button>
               ))}
             </div>
 
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleSkip}
-                className="px-3 py-1.5 rounded-xl text-slate-400 hover:text-slate-200 text-xs font-mono font-semibold transition-colors"
-              >
+            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
+              <button type="button" onClick={handleSkip} className="oc-linkbtn">
                 {t("tutorial.skip")}
               </button>
 
               {currentStepIndex > 0 && (
-                <button
-                  type="button"
-                  onClick={handleBack}
-                  className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold flex items-center gap-1 border border-slate-700 transition-colors"
-                >
-                  <ChevronLeft className="w-3.5 h-3.5" />
+                <button type="button" onClick={handleBack} className="oc-btn">
+                  <ChevronLeft size={16} aria-hidden="true" />
                   <span>{t("tutorial.prev")}</span>
                 </button>
               )}
 
-              <button
-                type="button"
-                onClick={handleNext}
-                className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#1D4ED8] to-[#06B6D4] hover:brightness-110 active:scale-95 text-white text-xs font-black flex items-center gap-1.5 shadow-lg shadow-cyan-900/40 transition-all"
-              >
+              <button type="button" onClick={handleNext} className="oc-btn oc-btn--primary">
                 {currentStepIndex < steps.length - 1 ? (
                   <>
                     <span>{t("tutorial.next")}</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
+                    <ChevronRight size={16} aria-hidden="true" />
                   </>
                 ) : (
                   <>
-                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <CheckCircle2 size={16} aria-hidden="true" />
                     <span>{t("tutorial.start")}</span>
                   </>
                 )}
               </button>
             </div>
           </div>
-        </motion.div>
+        </div>
       </div>
     </div>
   );

@@ -1,0 +1,135 @@
+/* ============================================================
+   Modal shell (Flight Panel v3) — shared by every dialog:
+   tutorial, incident, debrief, mini-games. Flat panel surface,
+   2/4px radii, hairline borders, signal colours only.
+   Tone is set with data-tone on the modal or any child:
+   accent | caution | critical | neutral.
+   ============================================================ */
+.oc-modal-root { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: var(--oc-space-2); overflow-y: auto; animation: oc-fade var(--oc-dur-base) var(--oc-ease-out); }
+.oc-modal-scrim { position: fixed; inset: 0; background: var(--oc-scrim); }
+.oc-modal {
+  --tone: var(--oc-text-2); --tone-bg: var(--oc-bg-raised);
+  position: relative; display: flex; flex-direction: column; width: 100%; max-width: 720px; max-height: calc(100dvh - 2 * var(--oc-space-2));
+  margin: auto; background: var(--oc-bg-panel); color: var(--oc-text-1);
+  border: 1px solid var(--oc-line-strong); border-radius: var(--oc-radius-2);
+  font-family: var(--oc-font-ui); font-size: 14px; line-height: 20px;
+  animation: oc-in var(--oc-dur-base) var(--oc-ease-out);
+}
+.oc-modal--sm { max-width: 520px; }
+.oc-modal--lg { max-width: 880px; }
+.oc-modal[data-tone="critical"] { border-color: var(--oc-critical); }
+.oc-modal[data-tone="caution"] { border-color: var(--oc-caution); }
+.oc-modal[data-tone="accent"] { border-color: var(--oc-accent); }
+/* Tone scope (global): defaults first, then data-tone overrides. */
+.oc-chip, .oc-note, .oc-card, .oc-stat { --tone: var(--oc-text-2); --tone-bg: var(--oc-bg-raised); }
+[data-tone="neutral"] { --tone: var(--oc-text-2); --tone-bg: var(--oc-bg-raised); }
+[data-tone="accent"] { --tone: var(--oc-accent); --tone-bg: var(--oc-accent-track); }
+[data-tone="caution"] { --tone: var(--oc-caution); --tone-bg: var(--oc-caution-bg); }
+[data-tone="critical"] { --tone: var(--oc-critical); --tone-bg: var(--oc-critical-bg); }
+
+.oc-modal__bar { border-radius: 3px 3px 0 0; flex: none; display: flex; align-items: center; justify-content: space-between; gap: var(--oc-space-1); min-height: 32px; padding: 6px var(--oc-space-2); background: var(--oc-bg-inset); border-bottom: 1px solid var(--oc-line); font: var(--oc-type-code); letter-spacing: 0.08em; text-transform: uppercase; color: var(--oc-text-3); }
+.oc-modal__bar > span:first-child { display: inline-flex; align-items: center; gap: var(--oc-space-1); min-width: 0; color: var(--tone); }
+.oc-modal__bar > span:last-child { min-width: 0; text-align: right; }
+.oc-modal__head { flex: none; display: flex; flex-direction: column; gap: var(--oc-space-1); padding: var(--oc-space-2) var(--oc-space-3); border-bottom: 1px solid var(--oc-line); }
+.oc-modal__headrow { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--oc-space-2); }
+.oc-modal__eyebrow { display: flex; flex-wrap: wrap; align-items: center; gap: var(--oc-space-1); font: var(--oc-type-code); letter-spacing: 0.08em; text-transform: uppercase; color: var(--oc-text-3); }
+.oc-modal__title { margin: 0; display: flex; align-items: center; gap: 12px; min-width: 0; font-family: var(--oc-font-label); font-weight: 600; font-size: 28px; line-height: 32px; letter-spacing: 0.02em; color: var(--oc-text-1); overflow-wrap: anywhere; }
+.oc-modal__title > svg { flex: none; color: var(--tone); }
+.oc-modal__lede { margin: 0; color: var(--oc-text-1); font-weight: 500; }
+.oc-modal__text { margin: 0; color: var(--oc-text-2); font-size: 14px; line-height: 20px; overflow-wrap: anywhere; }
+.oc-modal__body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: var(--oc-space-3); padding: var(--oc-space-3); }
+.oc-modal__body > * { flex: none; }
+.oc-modal__foot { border-radius: 0 0 3px 3px; flex: none; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--oc-space-2); padding: var(--oc-space-2) var(--oc-space-3); background: var(--oc-bg-inset); border-top: 1px solid var(--oc-line); }
+.oc-modal__foot-note { flex: 1 1 240px; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--oc-space-1); color: var(--oc-text-2); font-size: 14px; line-height: 20px; }
+.oc-modal__foot .oc-btn { flex: 0 1 auto; max-width: 100%; height: auto; min-height: var(--oc-target-min); padding-top: 8px; padding-bottom: 8px; text-align: center; white-space: normal; }
+.oc-modal__close { flex: none; display: grid; place-items: center; width: var(--oc-target-min); height: var(--oc-target-min); margin: -8px -8px 0 0; background: transparent; border: 1px solid transparent; border-radius: var(--oc-radius-1); color: var(--oc-text-2); cursor: pointer; }
+.oc-modal__close:hover { color: var(--oc-text-1); border-color: var(--oc-line-strong); }
+.oc-modal__close:focus-visible, .oc-opt:focus-visible, .oc-linkbtn:focus-visible { outline: 2px solid var(--oc-accent); outline-offset: 2px; }
+
+.oc-label { display: flex; align-items: center; gap: var(--oc-space-1); font: var(--oc-type-label); letter-spacing: 0.12em; text-transform: uppercase; color: var(--oc-text-2); }
+.oc-label__shape { flex: none; width: 8px; height: 8px; background: var(--tone, var(--oc-accent)); }
+.oc-label__meta { margin-left: auto; font: var(--oc-type-code); letter-spacing: 0.08em; color: var(--oc-text-3); }
+.oc-section { display: flex; flex-direction: column; gap: var(--oc-space-1); min-width: 0; }
+.oc-section__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--oc-space-1); }
+
+.oc-card { display: flex; flex-direction: column; gap: var(--oc-space-1); min-width: 0; padding: var(--oc-space-2); background: var(--oc-bg-inset); border: 1px solid var(--oc-line); border-radius: var(--oc-radius-1); }
+.oc-card[data-tone="accent"], .oc-card[data-tone="caution"], .oc-card[data-tone="critical"] { border-color: var(--tone); }
+.oc-card--tint[data-tone] { background: var(--tone-bg); }
+
+.oc-opt { display: flex; align-items: flex-start; gap: 12px; width: 100%; padding: 12px var(--oc-space-2); text-align: left; background: var(--oc-bg-inset); color: var(--oc-text-1); border: 1px solid var(--oc-line); border-radius: var(--oc-radius-1); cursor: pointer; transition: background var(--oc-dur-fast), border-color var(--oc-dur-fast); }
+.oc-opt:hover { background: var(--oc-bg-raised); border-color: var(--oc-line-strong); }
+.oc-opt[aria-checked="true"], .oc-opt[aria-pressed="true"] { background: var(--oc-bg-raised); border-color: var(--oc-accent); }
+.oc-opt__pip { flex: none; display: block; width: 12px; height: 12px; margin-top: 4px; border: 1px solid var(--oc-text-3); background: transparent; border-radius: 50%; }
+.oc-opt[aria-checked="true"] .oc-opt__pip, .oc-opt[aria-pressed="true"] .oc-opt__pip { background: var(--oc-accent); border-color: var(--oc-accent); border-radius: 0; }
+.oc-opt__main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.oc-opt__title { display: flex; flex-wrap: wrap; align-items: center; gap: var(--oc-space-1); font-weight: 600; font-size: 16px; line-height: 20px; }
+.oc-opt__desc { color: var(--oc-text-2); font-size: 14px; line-height: 20px; overflow-wrap: anywhere; }
+.oc-opt--grid { flex-direction: column; gap: 4px; min-width: 0; }
+
+.oc-chip { flex: none; display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-height: 20px; padding: 0 6px; border-radius: var(--oc-radius-1); background: var(--tone-bg); border: 1px solid var(--tone); color: var(--tone); font: var(--oc-type-code); letter-spacing: 0.08em; text-transform: uppercase; overflow-wrap: anywhere; }
+.oc-chip--solid { background: var(--tone); color: var(--oc-accent-ink); }
+.oc-chip[data-tone="critical"].oc-chip--solid { color: var(--oc-critical-ink); }
+.oc-chip--plain { background: transparent; border-color: var(--oc-line-strong); color: var(--oc-text-2); }
+
+.oc-note { display: flex; align-items: flex-start; gap: var(--oc-space-1); padding: 12px var(--oc-space-2); background: var(--tone-bg); border: 1px solid var(--tone); border-radius: var(--oc-radius-1); color: var(--oc-text-1); font-size: 14px; line-height: 20px; overflow-wrap: anywhere; }
+.oc-note > svg { flex: none; margin-top: 2px; color: var(--tone); }
+.oc-note strong { color: var(--oc-text-1); font-weight: 600; }
+.oc-note--quiet { background: var(--oc-bg-inset); border-color: var(--oc-line); color: var(--oc-text-2); }
+.oc-note--quiet > svg { color: var(--oc-text-3); }
+
+.oc-kv { display: flex; flex-wrap: wrap; gap: 4px var(--oc-space-2); font: var(--oc-type-data-s); color: var(--oc-text-2); font-variant-numeric: tabular-nums; }
+.oc-linkbtn { background: none; border: 0; padding: 0 var(--oc-space-1); min-height: var(--oc-target-min); cursor: pointer; color: var(--oc-text-2); font: var(--oc-type-label); letter-spacing: 0.12em; text-transform: uppercase; }
+.oc-linkbtn:hover { color: var(--oc-text-1); }
+.oc-dots { display: flex; align-items: center; gap: 4px; }
+.oc-dots button { height: var(--oc-target-min); display: grid; place-items: center; padding: 0 4px; background: none; border: 0; cursor: pointer; }
+.oc-dots button i { display: block; width: 8px; height: 8px; background: var(--oc-line-strong); transition: width var(--oc-dur-fast), background var(--oc-dur-fast); }
+.oc-dots button[aria-current="step"] i { width: 24px; background: var(--oc-accent); }
+.oc-dots button:focus-visible { outline: 2px solid var(--oc-accent); outline-offset: -2px; }
+
+/* Tutorial spotlight ring */
+.oc-spot { position: fixed; z-index: 50; pointer-events: none; border: 2px solid var(--oc-accent); border-radius: var(--oc-radius-2); }
+.oc-spot__n { position: absolute; top: -12px; right: -12px; width: 24px; height: 24px; display: grid; place-items: center; background: var(--oc-accent); color: var(--oc-accent-ink); border-radius: 50%; font: var(--oc-type-code); letter-spacing: 0; }
+
+@media (max-width: 520px) {
+  .oc-modal-root { padding: 8px; }
+  /* Phones: the whole dialog scrolls as one (header scrolls away), the action footer stays pinned. */
+  .oc-modal { max-height: calc(100dvh - 16px); overflow-y: auto; overscroll-behavior: contain; }
+  .oc-modal__bar { position: sticky; top: 0; z-index: 2; }
+  .oc-modal__body { flex: none; overflow: visible; }
+  .oc-modal__foot { position: sticky; bottom: 0; z-index: 2; }
+  /* Tall multi-button footers (debrief) stay in flow so they do not cover a quarter of the screen. */
+  .oc-modal__foot--flow { position: static; }
+  .oc-modal__head, .oc-modal__foot { padding: var(--oc-space-2); }
+  .oc-modal__body { padding: var(--oc-space-2); gap: var(--oc-space-2); }
+  .oc-modal__title { font-size: 24px; line-height: 28px; }
+  .oc-modal__foot .oc-btn { width: 100%; }
+}
+
+/* ---- Mini-game helpers ---- */
+.oc-split { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--oc-space-2); align-items: center; }
+.oc-split--tight { grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); }
+@media (max-width: 640px) { .oc-split, .oc-split--tight { grid-template-columns: minmax(0, 1fr); } }
+.oc-stat { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 8px 12px; background: var(--oc-bg-inset); border: 1px solid var(--oc-line); border-radius: var(--oc-radius-1); }
+.oc-stat[data-tone="accent"], .oc-stat[data-tone="caution"], .oc-stat[data-tone="critical"] { border-color: var(--tone); }
+.oc-stat__k { font: var(--oc-type-code); letter-spacing: 0.08em; text-transform: uppercase; color: var(--oc-text-3); }
+.oc-stat__v { font: var(--oc-type-data-l); font-variant-numeric: tabular-nums; color: var(--oc-text-1); }
+.oc-stat__s { font-size: 12px; line-height: 16px; color: var(--oc-text-3); }
+.oc-range { width: 100%; height: var(--oc-target-min); margin: 0; accent-color: var(--oc-accent); background: transparent; cursor: pointer; }
+.oc-range:focus-visible { outline: 2px solid var(--oc-accent); outline-offset: 2px; }
+.oc-range:disabled { opacity: .5; cursor: not-allowed; }
+.oc-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+/* Tutorial card placement: centred on desktop, docked to the screen edge opposite the target on phones. */
+.oc-tut { position: fixed; inset: 0; z-index: 51; display: flex; align-items: center; justify-content: center; padding: var(--oc-space-2); pointer-events: none; }
+@media (max-width: 640px) {
+  .oc-tut { padding: 8px; }
+  .oc-tut--bottom { align-items: flex-end; }
+  .oc-tut--top { align-items: flex-start; }
+}
+
+/* ---- Judge demo bar: in-flow strip, never over primary controls ---- */
+.oc-demo-strip { flex: none; display: flex; align-items: center; padding: 8px var(--oc-space-2); background: var(--oc-bg-void); border-top: 1px solid var(--oc-line); }
+.oc-demo-pill { background: var(--oc-bg-panel); border-color: var(--oc-caution); color: var(--oc-caution); }
+.oc-demo-pill:hover { background: var(--oc-bg-raised); }
+.oc-demo-pill .oc-btn__right { color: var(--oc-text-3); }

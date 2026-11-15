@@ -7,7 +7,6 @@
 // 4. One-click "Play Again" and "Switch Planet" buttons
 // ============================================================
 import { useState, useMemo } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import {
   Award,
   RotateCcw,
@@ -191,404 +190,273 @@ export default function MissionDebriefModal({
   const [showCertificate, setShowCertificate] = useState(false);
   const [showWorksheet, setShowWorksheet] = useState(false);
 
-  if (!isOpen || !gameState) return null;
-
+  // Hooks must run on every render, so the open/closed early return comes after them.
+  const open = isOpen && !!gameState;
   const outcomeRank = useMemo(
-    () => calculateOutcomeRank(gameState),
-    [gameState]
+    () => (open ? calculateOutcomeRank(gameState) : null),
+    [open, gameState]
   );
-  const [insight1, insight2] = useMemo(
-    () => generatePersonalizedInsights(gameState, environment),
-    [gameState, environment]
+  const insights = useMemo(
+    () => (open ? generatePersonalizedInsights(gameState, environment) : null),
+    [open, gameState, environment]
   );
+
+  if (!open || !outcomeRank || !insights) return null;
+  const [insight1, insight2] = insights;
+
+  const rankTone: "accent" | "caution" = outcomeRank.tier === "trainee" ? "caution" : "accent";
+  const difficulty = DIFFICULTY_PRESETS[gameState.difficulty || "commander"];
+  const crewStatusTone = (status: string): "neutral" | "accent" | "caution" | "critical" =>
+    status === "nominal"
+      ? "neutral"
+      : status === "heroic"
+      ? "accent"
+      : status === "irradiated" || status === "fatigued"
+      ? "caution"
+      : "critical";
 
   return (
-    <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
+    <>
+      <div className="oc-modal-root" role="dialog" aria-modal="true" aria-labelledby="debrief-title">
         {/* Backdrop */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={onClose}
-          className="fixed inset-0 bg-black/85 backdrop-blur-md"
-        />
+        <div className="oc-modal-scrim" onClick={onClose} />
 
-        {/* Modal Window */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.94, y: 15 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.94, y: 15 }}
-          transition={{ type: "spring", damping: 25, stiffness: 300 }}
-          className="relative w-full max-w-4xl rounded-3xl bg-[#0B1120] border-2 border-cyan-500/40 shadow-2xl shadow-cyan-950/60 overflow-hidden flex flex-col max-h-[92vh] my-auto"
-        >
-          {/* Header Banner */}
-          <div className="w-full py-2 px-5 bg-gradient-to-r from-blue-950 via-slate-900 to-indigo-950 border-b border-white/10 flex items-center justify-between text-xs font-mono">
-            <div className="flex items-center gap-2 text-cyan-300">
-              <Award className="w-4 h-4 text-amber-400" />
-              <span className="font-bold tracking-wider uppercase">
-                {t("debrief.title")}
-              </span>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-slate-400 hidden sm:inline">
+        {/* Modal window */}
+        <div className="oc-modal oc-modal--lg" data-tone={rankTone}>
+          {/* Header bar */}
+          <div className="oc-modal__bar">
+            <span id="debrief-title">
+              <Award size={14} aria-hidden="true" />
+              {t("debrief.title")}
+            </span>
+            <span style={{ display: "flex", alignItems: "center", gap: 8, flex: "none" }}>
+              <span className="hidden sm:inline">
                 {gameState.scenario
                   ? gameState.scenario.title
                   : environment.id === "lunar_south_pole"
                   ? t("destinations.moon.name")
                   : environment.id === "mars_gale_crater"
-                    ? t("destinations.mars.name")
-                    : environment.name}
+                  ? t("destinations.mars.name")
+                  : environment.name}
               </span>
               <LanguageSelector compact />
               {onClose && (
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all border border-slate-700 ml-1"
-                  title="Close Debrief Modal"
-                >
-                  <X className="w-4 h-4" />
+                <button type="button" onClick={onClose} className="oc-modal__close" style={{ margin: 0, width: 32, height: 32 }} title="Close Debrief Modal" aria-label="Close debrief">
+                  <X size={16} aria-hidden="true" />
                 </button>
               )}
-            </div>
+            </span>
           </div>
 
-          {/* Modal Content */}
-          <div className="overflow-y-auto p-5 sm:p-7 flex flex-col gap-6 [&>*]:shrink-0">
-            {/* 1. MISSION OUTCOME RANK CARD */}
-            <div
-              className={`rounded-3xl p-6 border-2 bg-gradient-to-br ${outcomeRank.bgGradient} ${outcomeRank.borderColor} shadow-xl relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6`}
-            >
-              <div className="flex-1 text-center md:text-left">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-black/50 border border-white/10 text-[11px] font-mono font-bold tracking-wider uppercase mb-2">
-                  <span className={outcomeRank.color}>{outcomeRank.badge}</span>
-                  <span className="text-slate-500">·</span>
-                  <span
-                    className="font-bold px-2 py-0.5 rounded-full"
-                    style={{
-                      backgroundColor: `${DIFFICULTY_PRESETS[gameState.difficulty || "commander"].accentColor}25`,
-                      color: DIFFICULTY_PRESETS[gameState.difficulty || "commander"].accentColor,
-                    }}
-                  >
-                    {DIFFICULTY_PRESETS[gameState.difficulty || "commander"].emoji}{" "}
-                    {DIFFICULTY_PRESETS[gameState.difficulty || "commander"].commanderRank}
+          {/* Modal content */}
+          <div className="oc-modal__body">
+            {/* 1. Mission outcome rank card */}
+            <div className="oc-card oc-card--tint" data-tone={rankTone} style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "stretch", gap: 16, padding: 24 }}>
+              <div className="oc-section" style={{ flex: "1 1 280px", gap: 8 }}>
+                <div className="oc-modal__eyebrow">
+                  <span className="oc-chip oc-chip--solid" data-tone={rankTone}>{outcomeRank.badge}</span>
+                  <span className="oc-chip oc-chip--plain">
+                    {difficulty.emoji} {difficulty.commanderRank}
                   </span>
-                  <span className="text-slate-500">·</span>
-                  <span className="text-slate-300">
-                    Sol {gameState.currentTurn} of 10
-                  </span>
+                  <span>Sol {gameState.currentTurn} of 10</span>
                 </div>
 
-                <h1
-                  className={`text-2xl sm:text-3xl font-black ${outcomeRank.color} tracking-tight`}
-                >
+                <h1 className="oc-modal__title" style={{ fontSize: 40, lineHeight: "44px" }}>
                   {outcomeRank.rankTitle}
                 </h1>
-                <p className="text-xs sm:text-sm text-slate-300 mt-2 leading-relaxed max-w-xl">
+                <p className="oc-modal__text" style={{ fontSize: 16, lineHeight: "24px", color: "var(--oc-text-1)" }}>
                   {outcomeRank.evaluation}
                 </p>
 
-                {/* Action Pills */}
-                <div className="mt-4 flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowCertificate(true)}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:from-amber-400 hover:to-amber-300 text-black font-mono font-black text-xs shadow-lg shadow-amber-950/60 transition-all cursor-pointer transform hover:scale-[1.02]"
-                  >
-                    <Award className="w-4 h-4 text-black" />
-                    <span>Astronaut Mission Certificate (PDF / PNG)</span>
+                {/* Action pills */}
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+                  <button type="button" onClick={() => setShowCertificate(true)} className="oc-btn oc-btn--primary" style={{ height: "auto", paddingTop: 8, paddingBottom: 8, whiteSpace: "normal", textAlign: "center" }}>
+                    <Award size={16} aria-hidden="true" />
+                    <span>{t("debrief.viewCertificate")}</span>
                   </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setShowWorksheet(true)}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-mono font-black text-xs shadow-lg shadow-teal-950/60 transition-all cursor-pointer transform hover:scale-[1.02]"
-                  >
-                    <Printer className="w-4 h-4" />
-                    <span>📄 Print / Save PDF Lab Report</span>
+                  <button type="button" onClick={() => setShowWorksheet(true)} className="oc-btn" style={{ height: "auto", paddingTop: 8, paddingBottom: 8, whiteSpace: "normal", textAlign: "center" }}>
+                    <Printer size={16} aria-hidden="true" />
+                    <span>Print / Save PDF lab report</span>
                   </button>
                 </div>
               </div>
 
-              {/* Composite Score Ring */}
-              <div className="flex flex-col items-center justify-center p-4 rounded-2xl bg-black/40 border border-white/10 shrink-0 min-w-[130px]">
-                <span className="text-[10px] font-mono text-slate-400 uppercase tracking-widest">
-                  Mission Score
-                </span>
-                <span className="text-4xl font-black font-mono text-white mt-0.5">
-                  {gameState.cumulativeScore}
-                </span>
-                <span className="text-[11px] font-mono text-cyan-400 font-bold">
-                  out of 100
-                </span>
+              {/* Composite score */}
+              <div className="oc-stat" style={{ flex: "0 0 auto", alignItems: "center", justifyContent: "center", minWidth: 140, padding: 16, background: "var(--oc-bg-panel)" }}>
+                <span className="oc-stat__k">Mission score</span>
+                <span className="oc-type-data-xl">{gameState.cumulativeScore}</span>
+                <span className="oc-stat__s">out of 100</span>
               </div>
             </div>
 
-            {/* Hardcore Simulation Realism Breakdown (Flight Director) */}
+            {/* Hardcore simulation realism breakdown (Flight Director) */}
             {gameState.difficulty === "flight_director" && (
-              <div className="rounded-2xl p-4 bg-amber-950/40 border border-amber-500/40 flex flex-col gap-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-mono font-bold text-amber-300 uppercase flex items-center gap-2">
-                    <ShieldAlert className="w-4 h-4 text-amber-400" />
-                    Hardcore Simulation Telemetry Ledger
+              <div className="oc-card" data-tone="caution">
+                <div className="oc-section__head">
+                  <span className="oc-label" style={{ color: "var(--oc-caution)" }}>
+                    <ShieldAlert size={16} aria-hidden="true" />
+                    Hardcore simulation telemetry ledger
                   </span>
-                  <span className="text-[10px] font-mono text-slate-400">
-                    NASA-STD-3001 & MMOD Calibration
-                  </span>
+                  <span className="oc-label__meta" style={{ marginLeft: 0 }}>NASA-STD-3001 &amp; MMOD calibration</span>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="bg-black/40 p-3 rounded-xl border border-white/5">
-                    <p className="text-[10px] font-mono text-slate-400 uppercase">MMOD Micro-Punctures</p>
-                    <p className="text-base font-black text-amber-400 font-mono mt-0.5">
-                      {gameState.micrometeoroidHistory.length} Strikes Repelled
-                    </p>
+                <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
+                  <div className="oc-stat" style={{ background: "var(--oc-bg-panel)" }}>
+                    <span className="oc-stat__k">MMOD micro-punctures</span>
+                    <span className="oc-type-data-s" style={{ color: "var(--oc-text-1)" }}>
+                      {gameState.micrometeoroidHistory.length} strikes repelled
+                    </span>
                   </div>
-                  <div className="bg-black/40 p-3 rounded-xl border border-white/5">
-                    <p className="text-[10px] font-mono text-slate-400 uppercase">Thermal Fatigue Wear</p>
-                    <p className="text-base font-black text-cyan-400 font-mono mt-0.5">
-                      +{((gameState.cumulativeThermalFatigueWear || 0) * 100).toFixed(1)}% Cyclic Strain
-                    </p>
+                  <div className="oc-stat" style={{ background: "var(--oc-bg-panel)" }}>
+                    <span className="oc-stat__k">Thermal fatigue wear</span>
+                    <span className="oc-type-data-s" style={{ color: "var(--oc-text-1)" }}>
+                      +{((gameState.cumulativeThermalFatigueWear || 0) * 100).toFixed(1)}% cyclic strain
+                    </span>
                   </div>
-                  <div className="bg-black/40 p-3 rounded-xl border border-white/5">
-                    <p className="text-[10px] font-mono text-slate-400 uppercase">Career Radiation Cap</p>
-                    <p className="text-base font-black font-mono mt-0.5">
-                      <span
-                        className={
-                          gameState.crew.careerRadiationExposureMSv > 500
-                            ? "text-red-400"
-                            : "text-emerald-400"
-                        }
-                      >
-                        {gameState.crew.careerRadiationExposureMSv.toFixed(1)}
-                      </span>
-                      <span className="text-xs text-slate-400 font-normal"> / 500 mSv</span>
-                    </p>
+                  <div className="oc-stat" style={{ background: "var(--oc-bg-panel)" }}>
+                    <span className="oc-stat__k">Career radiation cap</span>
+                    <span
+                      className="oc-type-data-s"
+                      style={{ color: gameState.crew.careerRadiationExposureMSv > 500 ? "var(--oc-critical)" : "var(--oc-text-1)" }}
+                    >
+                      {gameState.crew.careerRadiationExposureMSv.toFixed(1)}{" "}
+                      <span style={{ color: "var(--oc-text-3)" }}>/ 500 mSv</span>
+                    </span>
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Cadet Mission Achievement (Cadet Mode) */}
+            {/* Cadet mission achievement (Cadet mode) */}
             {gameState.difficulty === "cadet" && (
-              <div className="rounded-2xl p-4 bg-emerald-950/40 border border-emerald-500/40 flex items-center gap-3.5">
-                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xl shrink-0">
-                  🌟
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-sm font-bold text-emerald-300">
-                    Cadet Flight Assistant Summary
+              <div className="oc-note" data-tone="accent">
+                <Sparkles size={20} aria-hidden="true" />
+                <div>
+                  <h3 className="oc-label" style={{ color: "var(--oc-text-1)", margin: 0 }}>
+                    Cadet flight assistant summary
                   </h3>
-                  <p className="text-xs text-slate-300 mt-0.5">
+                  <p className="oc-modal__text" style={{ marginTop: 4 }}>
                     Congratulations on completing your mission with automated coaching! You learned how NASA flight directors balance life support air, water, and power grids on distant worlds.
                   </p>
                 </div>
               </div>
             )}
 
-            {/* EXPEDITION CREW STATUS & FLIGHT SURGEON CITATION */}
+            {/* Expedition crew status and flight surgeon citation */}
             {gameState.crew.members && gameState.crew.members.length > 0 && (
-              <div className="rounded-2xl bg-slate-900/90 border border-slate-800 p-4 shadow-lg flex flex-col gap-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg">👨‍🚀</span>
-                    <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-200">
-                      Expedition Crew Roster & Final Vitals
-                    </h3>
-                  </div>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-950 border border-blue-500/40 text-blue-300">
-                    4 Astronauts Deployed
+              <div className="oc-section">
+                <div className="oc-section__head">
+                  <span className="oc-label">
+                    <span className="oc-label__shape" />
+                    Expedition crew roster &amp; final vitals
                   </span>
+                  <span className="oc-chip oc-chip--plain">4 astronauts deployed</span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-                  {gameState.crew.members.map((member) => {
-                    const statusColor =
-                      member.status === "nominal"
-                        ? "text-emerald-400 bg-emerald-950/80 border-emerald-500/40"
-                        : member.status === "heroic"
-                          ? "text-cyan-400 bg-cyan-950/80 border-cyan-500/40"
-                          : member.status === "irradiated"
-                            ? "text-purple-400 bg-purple-950/80 border-purple-500/40"
-                            : member.status === "fatigued"
-                              ? "text-amber-400 bg-amber-950/80 border-amber-500/40"
-                              : "text-red-400 bg-red-950/80 border-red-500/40";
-
-                    return (
-                      <div
-                        key={member.id}
-                        className="bg-black/40 p-3 rounded-xl border border-white/5 flex flex-col justify-between gap-2"
-                      >
-                        <div className="flex items-start justify-between gap-1">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-base">{member.avatar}</span>
-                            <div>
-                              <p className="text-xs font-bold text-white truncate">{member.name}</p>
-                              <p className="text-[10px] text-slate-400 font-mono">"{member.callsign}"</p>
-                            </div>
-                          </div>
-                          <span
-                            className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border uppercase ${statusColor}`}
-                          >
-                            {member.status}
-                          </span>
+                <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
+                  {gameState.crew.members.map((member) => (
+                    <div key={member.id} className="oc-card" style={{ gap: 8 }}>
+                      <div className="oc-section__head" style={{ alignItems: "flex-start", flexWrap: "nowrap" }}>
+                        <div style={{ minWidth: 0 }}>
+                          <p style={{ margin: 0, fontWeight: 600, overflowWrap: "anywhere" }}>
+                            {member.avatar} {member.name}
+                          </p>
+                          <p className="oc-readout__code" style={{ margin: 0 }}>{"“"}{member.callsign}{"”"}</p>
                         </div>
-
-                        <div className="grid grid-cols-2 gap-1 text-[10px] font-mono text-slate-300 pt-1 border-t border-white/5">
-                          <span>Health: <strong className="text-white">{member.health}%</strong></span>
-                          <span>Morale: <strong className="text-white">{member.morale}%</strong></span>
-                          <span>Dose: <strong className="text-amber-300">{member.radiationDoseMSv.toFixed(1)} mSv</strong></span>
-                          <span>Repairs: <strong className="text-emerald-300">{member.repairsConducted}</strong></span>
-                        </div>
+                        <span className="oc-chip" data-tone={crewStatusTone(member.status)}>
+                          {member.status}
+                        </span>
                       </div>
-                    );
-                  })}
+
+                      <div className="oc-kv" style={{ paddingTop: 8, borderTop: "1px solid var(--oc-line)", columnGap: 16 }}>
+                        <span>Health <strong style={{ color: "var(--oc-text-1)", fontWeight: 500 }}>{member.health}%</strong></span>
+                        <span>Morale <strong style={{ color: "var(--oc-text-1)", fontWeight: 500 }}>{member.morale}%</strong></span>
+                        <span>Dose <strong style={{ color: "var(--oc-text-1)", fontWeight: 500 }}>{member.radiationDoseMSv.toFixed(1)} mSv</strong></span>
+                        <span>Repairs <strong style={{ color: "var(--oc-text-1)", fontWeight: 500 }}>{member.repairsConducted}</strong></span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
 
-            {/* 2. SOL-BY-SOL MISSION REPLAY & FLIGHT RECORDER */}
+            {/* 2. Sol-by-sol mission replay and flight recorder */}
             <FlightRecorderReplay gameState={gameState} environment={environment} />
 
-            {/* 3. TWO SPECIFIC PERSONALIZED ENGINEERING INSIGHTS */}
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-amber-400" />
-                <h2 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-400">
-                  Personalized Engineering Insights (Based on Your Actual Run)
+            {/* 3. Two personalized engineering insights */}
+            <div className="oc-section">
+              <div className="oc-section__head">
+                <h2 className="oc-label" style={{ margin: 0 }}>
+                  <Sparkles size={16} aria-hidden="true" />
+                  Personalized engineering insights (based on your actual run)
                 </h2>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                {/* Insight 1 */}
-                <div className="rounded-2xl bg-blue-950/40 border border-blue-500/30 p-4 shadow-md flex flex-col justify-between gap-3">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 text-[10px] font-mono font-bold uppercase">
-                        Hazard Decision Trade-Off
-                      </span>
-                    </div>
-                    <p className="text-xs sm:text-sm text-slate-200 leading-relaxed font-medium">
-                      {insight1}
-                    </p>
+              <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
+                <div className="oc-card" data-tone="accent" style={{ justifyContent: "space-between", gap: 12 }}>
+                  <div className="oc-section">
+                    <span className="oc-chip" data-tone="accent" style={{ alignSelf: "flex-start" }}>Hazard decision trade-off</span>
+                    <p className="oc-modal__text" style={{ color: "var(--oc-text-1)", fontSize: 16, lineHeight: "24px" }}>{insight1}</p>
                   </div>
-                  <div className="text-[10px] font-mono text-blue-400/80">
-                    Verified against mission incident logs
-                  </div>
+                  <div className="oc-readout__code">Verified against mission incident logs</div>
                 </div>
 
-                {/* Insight 2 */}
-                <div className="rounded-2xl bg-cyan-950/40 border border-cyan-500/30 p-4 shadow-md flex flex-col justify-between gap-3">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <span className="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 text-[10px] font-mono font-bold uppercase">
-                        Resource Dynamic Takeaway
-                      </span>
-                    </div>
-                    <p className="text-xs sm:text-sm text-slate-200 leading-relaxed font-medium">
-                      {insight2}
-                    </p>
+                <div className="oc-card" style={{ justifyContent: "space-between", gap: 12 }}>
+                  <div className="oc-section">
+                    <span className="oc-chip oc-chip--plain" style={{ alignSelf: "flex-start" }}>Resource dynamic takeaway</span>
+                    <p className="oc-modal__text" style={{ color: "var(--oc-text-1)", fontSize: 16, lineHeight: "24px" }}>{insight2}</p>
                   </div>
-                  <div className="text-[10px] font-mono text-cyan-400/80">
-                    Calibrated by NASA ECLSS & power models
-                  </div>
+                  <div className="oc-readout__code">Calibrated by NASA ECLSS &amp; power models</div>
                 </div>
               </div>
             </div>
 
-            {/* Final Crew & Consumable Metrics */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="bg-slate-900/70 border border-slate-800 p-3 rounded-2xl text-center">
-                <p className="text-[10px] font-mono text-slate-400 uppercase">Crew Morale</p>
-                <p className="text-lg font-black font-mono text-pink-400">
-                  {gameState.crew.morale}%
-                </p>
+            {/* Final crew and consumable metrics */}
+            <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))" }}>
+              <div className="oc-stat">
+                <span className="oc-stat__k">Crew morale</span>
+                <span className="oc-stat__v">{gameState.crew.morale}%</span>
               </div>
-              <div className="bg-slate-900/70 border border-slate-800 p-3 rounded-2xl text-center">
-                <p className="text-[10px] font-mono text-slate-400 uppercase">Oxygen Buffer</p>
-                <p className="text-lg font-black font-mono text-sky-400">
-                  {gameState.crew.oxygenBufferPercent.toFixed(0)}%
-                </p>
+              <div className="oc-stat">
+                <span className="oc-stat__k">Oxygen buffer</span>
+                <span className="oc-stat__v">{gameState.crew.oxygenBufferPercent.toFixed(0)}%</span>
               </div>
-              <div className="bg-slate-900/70 border border-slate-800 p-3 rounded-2xl text-center">
-                <p className="text-[10px] font-mono text-slate-400 uppercase">Food Reserve</p>
-                <p className="text-lg font-black font-mono text-emerald-400">
-                  {gameState.crew.foodReserveDays.toFixed(1)} Sols
-                </p>
+              <div className="oc-stat">
+                <span className="oc-stat__k">Food reserve</span>
+                <span className="oc-stat__v">{gameState.crew.foodReserveDays.toFixed(1)} <span className="oc-readout__unit">sols</span></span>
               </div>
-              <div className="bg-slate-900/70 border border-slate-800 p-3 rounded-2xl text-center">
-                <p className="text-[10px] font-mono text-slate-400 uppercase">Cumulative Radiation</p>
-                <p className="text-lg font-black font-mono text-orange-400">
-                  {gameState.crew.radiationExposureMSv.toFixed(2)} mSv
-                </p>
+              <div className="oc-stat">
+                <span className="oc-stat__k">Cumulative radiation</span>
+                <span className="oc-stat__v">{gameState.crew.radiationExposureMSv.toFixed(2)} <span className="oc-readout__unit">mSv</span></span>
               </div>
             </div>
           </div>
 
-          {/* Modal Action Bar */}
-          <div className="p-4 sm:p-5 border-t border-white/10 bg-slate-950/90 flex flex-wrap items-center justify-between gap-3">
-            {onShowNasaData && (
-              <button
-                type="button"
-                onClick={onShowNasaData}
-                className="flex items-center gap-2 px-4 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-cyan-300 text-xs font-bold transition-colors"
-              >
-                <Database className="w-4 h-4 text-cyan-400" />
+          {/* Modal action bar */}
+          <div className="oc-modal__foot oc-modal__foot--flow">
+            {onShowNasaData ? (
+              <button type="button" onClick={onShowNasaData} className="oc-btn">
+                <Database size={16} aria-hidden="true" />
                 <span>{t("common.nasaData")}</span>
               </button>
+            ) : (
+              <span />
             )}
 
-            <div className="flex items-center gap-3 w-full sm:w-auto">
-              {/* STEM Flight Director Lab Report Button */}
-              <motion.button
-                type="button"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => setShowWorksheet(true)}
-                className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs sm:text-sm shadow-lg shadow-teal-950/60 cursor-pointer"
-              >
-                <Printer className="w-4 h-4" />
-                <span>📄 Print / Save PDF Lab Report</span>
-              </motion.button>
-
-              {/* Junior Astronaut Certificate Button */}
-              <motion.button
-                type="button"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => setShowCertificate(true)}
-                className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-black text-xs sm:text-sm shadow-lg shadow-amber-950/60"
-              >
-                <Award className="w-4 h-4 text-black" />
-                <span>{t("debrief.viewCertificate")}</span>
-              </motion.button>
-
-              {/* Switch Planet Button */}
-              <motion.button
-                type="button"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={onSwitchPlanet}
-                className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs sm:text-sm transition-colors border border-slate-600"
-              >
-                <Globe className="w-4 h-4 text-cyan-400" />
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "flex-end" }}>
+              {/* Switch planet */}
+              <button type="button" onClick={onSwitchPlanet} className="oc-btn">
+                <Globe size={16} aria-hidden="true" />
                 <span>{t("common.switchPlanet")}</span>
-              </motion.button>
+              </button>
 
-              {/* One-Click Play Again Button */}
-              <motion.button
-                type="button"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={onPlayAgain}
-                className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white font-black text-xs sm:text-sm shadow-lg shadow-cyan-900/50"
-              >
-                <RotateCcw className="w-4 h-4" />
+              {/* One-click play again */}
+              <button type="button" onClick={onPlayAgain} className="oc-btn oc-btn--primary">
+                <RotateCcw size={16} aria-hidden="true" />
                 <span>{t("common.playAgain")}</span>
-              </motion.button>
+              </button>
             </div>
           </div>
-        </motion.div>
+        </div>
       </div>
 
       {/* Junior Astronaut Mission Certificate Modal */}
@@ -612,6 +480,6 @@ export default function MissionDebriefModal({
           environment={environment}
         />
       )}
-    </AnimatePresence>
+    </>
   );
 }

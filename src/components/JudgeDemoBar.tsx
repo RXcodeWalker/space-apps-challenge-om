@@ -229,6 +229,8 @@ export default function JudgeDemoBar({
                 data-tone={a.tone}
                 onClick={() => {
                   soundEffects.playButtonClick();
+                  // Close first so the launched screen is never stacked on top of this dialog.
+                  onToggle();
                   a.onClick?.();
                 }}
               >

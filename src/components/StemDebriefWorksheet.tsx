@@ -221,7 +221,7 @@ export default function StemDebriefWorksheet({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={onClose}
-          className="fixed inset-0 bg-black/85 backdrop-blur-md no-print"
+          className="fixed inset-0 bg-[var(--oc-scrim)] no-print"
         />
 
         {/* Modal Dialog Card */}
@@ -230,18 +230,18 @@ export default function StemDebriefWorksheet({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.96, y: 15 }}
           transition={{ type: "spring", damping: 25, stiffness: 280 }}
-          className="relative w-full max-w-4xl bg-slate-900 border-2 border-emerald-500/40 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh] my-auto"
+          className="relative w-full max-w-4xl bg-oc-panel border border-oc-line-strong rounded-oc-2 flex flex-col max-h-[calc(100dvh-16px)] my-auto"
         >
           {/* Top Control Bar (Screen Only - Hidden during print) */}
-          <div className="w-full py-3 px-5 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 border-b border-slate-700/80 flex flex-wrap items-center justify-between gap-3 no-print">
+          <div className="w-full py-3 px-5 bg-oc-inset border-b border-oc-line rounded-t-[3px] flex flex-wrap items-center justify-between gap-3 no-print">
             <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-sm">
+              <div className="w-7 h-7 rounded-oc-1 bg-oc-raised text-oc-accent flex items-center justify-center font-bold text-sm">
                 📄
               </div>
               <div>
-                <h2 className="text-sm font-mono font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                <h2 className="oc-type-label text-oc-text-1 m-0 flex flex-wrap items-center gap-2">
                   STEM Flight Director Worksheet
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-normal">
+                  <span className="oc-chip oc-chip--plain">
                     Print / PDF Ready
                   </span>
                 </h2>
@@ -252,9 +252,9 @@ export default function StemDebriefWorksheet({
             </div>
 
             {/* Actions: Commander Name Edit, Print, Close */}
-            <div className="flex items-center gap-2.5">
+            <div className="flex flex-wrap items-center gap-2.5">
               {/* Editable Name Field */}
-              <div className="flex items-center gap-1.5 bg-black/50 border border-slate-700 px-3 py-1 rounded-xl text-xs font-mono">
+              <div className="flex items-center gap-1.5 bg-oc-panel border border-oc-line px-3 py-1 rounded-oc-1 text-xs font-mono">
                 <span className="text-slate-400">Student:</span>
                 {isEditingName ? (
                   <input
@@ -264,13 +264,13 @@ export default function StemDebriefWorksheet({
                     onBlur={() => setIsEditingName(false)}
                     onKeyDown={(e) => e.key === "Enter" && setIsEditingName(false)}
                     autoFocus
-                    className="bg-slate-800 text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-500/40 outline-none w-36 font-bold"
+                    className="bg-oc-raised text-oc-text-1 px-1.5 py-0.5 rounded-oc-1 border border-oc-accent outline-none w-32 font-bold"
                   />
                 ) : (
                   <button
                     type="button"
                     onClick={() => setIsEditingName(true)}
-                    className="flex items-center gap-1 text-emerald-300 hover:text-emerald-200 font-bold cursor-pointer"
+                    className="flex items-center gap-1 text-oc-text-1 hover:underline font-bold cursor-pointer min-h-8"
                     title="Click to edit student/commander name"
                   >
                     <span>{commanderName}</span>
@@ -283,7 +283,7 @@ export default function StemDebriefWorksheet({
               <button
                 type="button"
                 onClick={handlePrint}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-mono text-xs font-black shadow-lg shadow-teal-950/60 transition-all cursor-pointer transform hover:scale-[1.02]"
+                className="oc-btn oc-btn--sm oc-btn--primary"
                 title="Print or Save as PDF"
               >
                 <Printer className="w-4 h-4" />
@@ -294,16 +294,18 @@ export default function StemDebriefWorksheet({
               <button
                 type="button"
                 onClick={onClose}
-                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                className="oc-modal__close"
+                style={{ margin: 0, width: 32, height: 32 }}
+                aria-label="Close worksheet"
                 title="Close Worksheet"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
           </div>
 
           {/* Worksheet Viewable Area */}
-          <div className="overflow-y-auto p-3 sm:p-6 bg-slate-950/70">
+          <div className="overflow-y-auto p-3 sm:p-6 bg-oc-void">
             {/* The Actual Printable Worksheet Container */}
             <div
               ref={worksheetRef}
@@ -314,22 +316,22 @@ export default function StemDebriefWorksheet({
               {/* HEADER: Official NASA Junior Flight Director Mission Log     */}
               {/* ============================================================ */}
               <header className="border-b-2 border-slate-900 pb-4 mb-5">
-                <div className="flex items-start justify-between gap-4">
+                <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
                   {/* Left: Official NASA Typography & Meatball Logo */}
                   <div className="flex items-center gap-3.5">
                     {/* High-Contrast Vector NASA Meatball / Artemis Vector Emblem */}
                     <div className="w-14 h-14 rounded-full bg-slate-950 text-white flex flex-col items-center justify-center p-1 border-2 border-slate-900 shrink-0">
-                      <div className="font-mono font-black text-[13px] tracking-widest text-cyan-300">
-                        NASA
+                      <div className="font-mono font-black text-[9px] tracking-wider text-cyan-300">
+                        OUTPOST
                       </div>
                       <div className="text-[7px] font-mono tracking-tighter text-amber-400 uppercase">
-                        ARTEMIS
+                        CMDR
                       </div>
                     </div>
 
                     <div>
                       <div className="text-[10px] font-mono font-bold tracking-[0.2em] text-slate-700 uppercase">
-                        National Aeronautics and Space Administration
+                        Outpost Commander · Inspired by NASA Data
                       </div>
                       <h1 className="text-lg sm:text-xl md:text-2xl font-black tracking-tight text-slate-950 uppercase font-mono">
                         Junior Flight Director Mission Flight Log
@@ -341,7 +343,7 @@ export default function StemDebriefWorksheet({
                   </div>
 
                   {/* Right: Sol Completion & Grade Badge */}
-                  <div className="text-right shrink-0 border-l-2 border-slate-900 pl-4">
+                  <div className="text-left sm:text-right shrink-0 sm:border-l-2 border-slate-900 sm:pl-4">
                     <div className="text-[9px] font-mono font-bold text-slate-600 uppercase">
                       MISSION SCORE
                     </div>

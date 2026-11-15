@@ -124,84 +124,47 @@ export default function FlightRecorderReplay({
   }
 
   return (
-    <div className="w-full flex flex-col gap-4 bg-[#070C18] rounded-3xl border border-cyan-950/60 p-4 sm:p-6 shadow-2xl relative overflow-hidden">
-      {/* Background Accent Grid */}
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#0f172a15_1px,transparent_1px),linear-gradient(to_bottom,#0f172a15_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
-
+    <div className="w-full flex flex-col gap-4 bg-oc-inset rounded-oc-2 border border-oc-line p-4 sm:p-6 relative">
       {/* Top Header & View Controls */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 relative z-10 border-b border-slate-800/80 pb-4">
-        <div className="flex items-center gap-2.5">
-          <div className="p-2 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400">
-            <Activity className="w-5 h-5 animate-pulse" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-base sm:text-lg font-black text-white font-mono tracking-tight uppercase">
-                Sol-by-Sol Mission Replay & Flight Recorder
+      <div className="flex flex-col gap-3 relative z-10 border-b border-oc-line pb-4">
+        <div className="flex items-start gap-3 min-w-0">
+          <Activity className="w-5 h-5 text-oc-accent shrink-0 mt-1" aria-hidden="true" />
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <h2 className="oc-type-label text-oc-text-1 m-0">
+                Sol-by-Sol Mission Replay &amp; Flight Recorder
               </h2>
-              <span className="px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 font-mono text-[10px] font-bold border border-cyan-500/30">
-                10-SOL TELEMETRY
-              </span>
+              <span className="oc-chip oc-chip--plain">10-sol telemetry</span>
             </div>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-sm text-oc-text-2 mt-1 mb-0">
               Multi-subsystem power distribution, crew biometrics, and verified hazard milestone logs.
             </p>
           </div>
         </div>
 
         {/* View Tabs */}
-        <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-slate-900/90 border border-slate-800 shrink-0 overflow-x-auto">
-          <button
-            type="button"
-            onClick={() => setActiveTab("power")}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-mono text-xs font-bold transition-all ${
-              activeTab === "power"
-                ? "bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-md shadow-blue-900/40"
-                : "text-slate-400 hover:text-white hover:bg-slate-800/60"
-            }`}
-          >
-            <Zap className="w-3.5 h-3.5" />
-            <span>Power (MW)</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("crew")}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-mono text-xs font-bold transition-all ${
-              activeTab === "crew"
-                ? "bg-gradient-to-r from-pink-600 to-purple-600 text-white shadow-md shadow-pink-900/40"
-                : "text-slate-400 hover:text-white hover:bg-slate-800/60"
-            }`}
-          >
-            <Users className="w-3.5 h-3.5" />
-            <span>Crew Vitals</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("dual")}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-mono text-xs font-bold transition-all ${
-              activeTab === "dual"
-                ? "bg-gradient-to-r from-indigo-600 to-cyan-500 text-white shadow-md shadow-indigo-900/40"
-                : "text-slate-400 hover:text-white hover:bg-slate-800/60"
-            }`}
-          >
-            <Layers className="w-3.5 h-3.5" />
-            <span>Dual Sync Deck</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("subsystems")}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-mono text-xs font-bold transition-all ${
-              activeTab === "subsystems"
-                ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-900/40"
-                : "text-slate-400 hover:text-white hover:bg-slate-800/60"
-            }`}
-          >
-            <Shield className="w-3.5 h-3.5" />
-            <span>Integrity (%)</span>
-          </button>
+        <div className="oc-seg oc-seg--solid" role="radiogroup" aria-label="Flight recorder view">
+          {(
+            [
+              { id: "power", label: "Power (MW)", Icon: Zap },
+              { id: "crew", label: "Crew Vitals", Icon: Users },
+              { id: "dual", label: "Dual Sync Deck", Icon: Layers },
+              { id: "subsystems", label: "Integrity (%)", Icon: Shield },
+            ] as const
+          ).map(({ id, label, Icon }) => (
+            <button
+              key={id}
+              type="button"
+              role="radio"
+              aria-checked={activeTab === id}
+              onClick={() => setActiveTab(id)}
+              className="oc-seg__opt"
+              style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+            >
+              <Icon className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>{label}</span>
+            </button>
+          ))}
         </div>
       </div>
 
@@ -211,58 +174,56 @@ export default function FlightRecorderReplay({
           key={activeMilestone.sol}
           initial={{ opacity: 0, y: -6 }}
           animate={{ opacity: 1, y: 0 }}
-          className={`relative z-10 rounded-2xl p-3.5 sm:p-4 border transition-all ${
+          className="relative z-10 oc-note"
+          data-tone={
             activeMilestone.severity === "critical"
-              ? "bg-red-950/40 border-red-500/40 text-red-200"
+              ? "critical"
               : activeMilestone.severity === "warning"
-              ? "bg-amber-950/40 border-amber-500/40 text-amber-200"
+              ? "caution"
               : activeMilestone.severity === "bonus"
-              ? "bg-emerald-950/40 border-emerald-500/40 text-emerald-200"
-              : "bg-cyan-950/30 border-cyan-500/30 text-cyan-200"
-          }`}
+              ? "accent"
+              : "neutral"
+          }
         >
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 w-full">
             <div className="flex items-center gap-2.5">
-              <span className="p-1.5 rounded-lg bg-black/40 border border-white/10 shrink-0">
-                {activeMilestone.iconType === "flare" && <Flame className="w-4 h-4 text-orange-400 animate-bounce" />}
-                {activeMilestone.iconType === "storm" && <CloudLightning className="w-4 h-4 text-amber-400" />}
-                {activeMilestone.iconType === "harvest" && <Sparkles className="w-4 h-4 text-emerald-400" />}
-                {activeMilestone.iconType === "eclipse" && <Sun className="w-4 h-4 text-slate-400" />}
-                {activeMilestone.iconType === "strike" && <Flame className="w-4 h-4 text-red-400" />}
-                {activeMilestone.iconType === "thermal" && <CloudLightning className="w-4 h-4 text-cyan-400" />}
-                {activeMilestone.iconType === "nominal" && <Shield className="w-4 h-4 text-blue-400" />}
-                {activeMilestone.iconType === "eval" && <Activity className="w-4 h-4 text-cyan-400" />}
+              <span className="shrink-0 text-oc-text-1">
+                {activeMilestone.iconType === "flare" && <Flame className="w-4 h-4" />}
+                {activeMilestone.iconType === "storm" && <CloudLightning className="w-4 h-4" />}
+                {activeMilestone.iconType === "harvest" && <Sparkles className="w-4 h-4" />}
+                {activeMilestone.iconType === "eclipse" && <Sun className="w-4 h-4" />}
+                {activeMilestone.iconType === "strike" && <Flame className="w-4 h-4" />}
+                {activeMilestone.iconType === "thermal" && <CloudLightning className="w-4 h-4" />}
+                {activeMilestone.iconType === "nominal" && <Shield className="w-4 h-4" />}
+                {activeMilestone.iconType === "eval" && <Activity className="w-4 h-4" />}
               </span>
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="font-mono text-xs font-black uppercase tracking-wider">
+                  <span className="oc-type-label">
                     {activeMilestone.headline}
                   </span>
-                  <span className="px-1.5 py-0.2 rounded bg-black/50 text-[10px] font-mono font-bold uppercase border border-white/10">
+                  <span className="oc-chip oc-chip--plain">
                     {activeMilestone.tag}
                   </span>
                 </div>
-                <p className="text-xs sm:text-sm font-semibold text-white mt-0.5">
+                <p className="text-sm font-medium text-oc-text-1 mt-0.5 mb-0">
                   "{activeMilestone.milestoneAnnotation}"
                 </p>
               </div>
             </div>
 
             {/* Quick Sol Metrics Pills */}
-            <div className="flex items-center gap-2 shrink-0 font-mono text-[11px] bg-black/40 px-3 py-1.5 rounded-xl border border-white/10 flex-wrap">
-              <span className="text-blue-300">
+            <div className="oc-kv shrink-0">
+              <span className="text-oc-text-2">
                 Grid: <strong>{activeMilestone.powerAllocation.powerGrid} MW</strong>
               </span>
-              <span className="text-slate-600">·</span>
-              <span className="text-cyan-300">
+              <span className="text-oc-text-2">
                 ECLSS: <strong>{activeMilestone.powerAllocation.lifeSupport} MW</strong>
               </span>
-              <span className="text-slate-600">·</span>
-              <span className="text-indigo-300">
+              <span className="text-oc-text-2">
                 Shields: <strong>{activeMilestone.powerAllocation.radiationShielding} MW</strong>
               </span>
-              <span className="text-slate-600">·</span>
-              <span className="text-emerald-300">
+              <span className="text-oc-text-2">
                 Food: <strong>{activeMilestone.powerAllocation.foodProduction} MW</strong>
               </span>
             </div>
