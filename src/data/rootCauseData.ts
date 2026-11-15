@@ -123,11 +123,11 @@ export const BROWNOUT_OVERBUDGET: RootCauseProfile = {
   kidFriendlyWhy:
     "Imagine plugging 10 hair dryers, 5 toasters, and a microwave all into one electrical power strip at once! The circuit breaker snaps OFF with a loud CLICK so your house wires don't catch fire. In space, drawing more power than solar panels make trips the outpost breakers and dims all systems simultaneously!",
   isTriggered: (ctx) => {
-    const total = ctx.allocation.powerGrid + ctx.allocation.lifeSupport + ctx.allocation.radiationShielding;
+    const total = ctx.allocation.powerGrid + ctx.allocation.lifeSupport + ctx.allocation.radiationShielding + ctx.allocation.foodProduction;
     return total > ctx.effectiveBudgetMW;
   },
   generateDynamicTelemetry: (ctx) => {
-    const total = ctx.allocation.powerGrid + ctx.allocation.lifeSupport + ctx.allocation.radiationShielding;
+    const total = ctx.allocation.powerGrid + ctx.allocation.lifeSupport + ctx.allocation.radiationShielding + ctx.allocation.foodProduction;
     const deficit = total - ctx.effectiveBudgetMW;
     return {
       headline: `Bus Overload: ${total} MW Requested vs ${ctx.effectiveBudgetMW.toFixed(0)} MW Bus Capacity`,
@@ -786,7 +786,7 @@ export function resolveRootCauseForAlert(
     alert.headline.toLowerCase().includes("brownout") ||
     alert.headline.toLowerCase().includes("power grid")
   ) {
-    if (ctx.allocation.powerGrid + ctx.allocation.lifeSupport + ctx.allocation.radiationShielding > ctx.effectiveBudgetMW) {
+    if (ctx.allocation.powerGrid + ctx.allocation.lifeSupport + ctx.allocation.radiationShielding + ctx.allocation.foodProduction > ctx.effectiveBudgetMW) {
       return BROWNOUT_OVERBUDGET;
     }
     return BROWNOUT_BATTERY_DEPLETION;

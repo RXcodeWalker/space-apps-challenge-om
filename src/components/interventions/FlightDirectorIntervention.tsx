@@ -66,9 +66,24 @@ export default function FlightDirectorIntervention({
     setIsTimerRunning(false);
   }, []);
 
+  // The triage sits below a long briefing. The 15 seconds only start counting once the
+  // player can actually see the puzzle, so reading the incident never costs them the triage.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [isVisible, setIsVisible] = useState<boolean>(false);
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") {
+      setIsVisible(true);
+      return;
+    }
+    const io = new IntersectionObserver(([entry]) => setIsVisible(entry.isIntersecting), { threshold: 0.4 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
   // Timer loop with sub-second accuracy and 1-second audio tick
   useEffect(() => {
-    if (!isTimerRunning || localResult !== null) return;
+    if (!isTimerRunning || localResult !== null || !isVisible) return;
 
     lastTickedSecondRef.current = Math.ceil(timeLeft);
 
@@ -99,7 +114,7 @@ export default function FlightDirectorIntervention({
         intervalRef.current = null;
       }
     };
-  }, [isTimerRunning, localResult, stopTimer, timeLeft]);
+  }, [isTimerRunning, localResult, isVisible, stopTimer, timeLeft]);
 
   // Handle Timeout Event (15 seconds expired)
   const handleTimeout = () => {
@@ -217,7 +232,7 @@ export default function FlightDirectorIntervention({
   );
 
   return (
-    <div className="oc-card" data-tone={localResult !== null ? resultTone : "critical"}>
+    <div ref={rootRef} className="oc-card" data-tone={localResult !== null ? resultTone : "critical"}>
       {/* Top banner: intervention title and cadet skip button */}
       <div className="oc-section__head">
         <div className="oc-opt__title" style={{ fontSize: 14 }}>

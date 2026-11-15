@@ -49,21 +49,25 @@ export default function LandingPage({ onStart, seed, onSeedChange, initialEnviro
   useEffect(() => { planetRef.current?.setEnv(PLANET[env.id]); onPreview?.(`DESTINATION ${env.name} · ${env.subtitle}`); }, [env, onPreview]);
   useEffect(() => { planetRef.current?.setReduceMotion(reduce); }, [reduce]);
 
+  // Leaving the page mid-launch (e.g. opening Data) must not start a mission behind the user's back.
+  const launchRaf = useRef(0);
+  useEffect(() => () => cancelAnimationFrame(launchRaf.current), []);
+
   const begin = () => {
     if (launch) return;
     const dur = motionMs('slow', reduce) + (reduce ? 0 : 220);
     const t0 = performance.now();
     const step = (now: number) => {
-      const p = Math.min(1, (now - t0) / dur);
+      const p = Math.min(1, Math.max(0, (now - t0) / dur));
       setLaunch(p);
-      if (p < 1) requestAnimationFrame(step);
+      if (p < 1) launchRaf.current = requestAnimationFrame(step);
       else {
         const s = seed.trim() ? normalizeSeed(seed) : generateMissionSeed();
         onSeedChange(s);
         onStart(env, tier, s, scenario);
       }
     };
-    requestAnimationFrame(step);
+    launchRaf.current = requestAnimationFrame(step);
   };
 
   const facts: Array<[string, string, string]> = [

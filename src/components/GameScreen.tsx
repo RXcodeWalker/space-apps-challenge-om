@@ -61,6 +61,7 @@ import {
 } from "../utils/capComVoice";
 import type { SpecialistRepairOption } from "../data/crewData";
 import type { HistoricScenario } from "../data/scenarioData";
+import type { FlightDirectorInterventionResult } from "../types/intervention";
 
 import type { MissionEnvironment } from "../data/nasaConstants";
 import { TOTAL_TURNS } from "../data/nasaConstants";
@@ -338,12 +339,15 @@ export default function GameScreen({
   }, [gameState.currentTurn, phase, environment, gameState.activeModifiers, gameState.difficulty, gameState.missionSeed, gameState.scenario]);
 
   const handleSelectIncidentChoice = useCallback(
-    (choice: IncidentChoice, specialistRepair?: SpecialistRepairOption) => {
+    (choice: IncidentChoice, specialistRepair?: SpecialistRepairOption, interventionResult?: FlightDirectorInterventionResult) => {
       if (!activeIncident) return;
       cancelCapComSpeech();
       soundEffects.playButtonClick();
       ambientAudio.triggerAirlock(0.8);
-      const updatedState = applyIncidentChoice(gameState, activeIncident, choice, specialistRepair);
+      // The 15-second triage shows its consequences to the player, so they must reach the engine.
+      // Cadets are never penalised for a missed triage.
+      const triage = interventionResult && !(gameState.difficulty === "cadet" && interventionResult.status === "failure") ? interventionResult : undefined;
+      const updatedState = applyIncidentChoice(gameState, activeIncident, choice, specialistRepair, triage);
       setGameState(updatedState);
       setDismissedIncidents((prev) => ({ ...prev, [currentTurn]: true }));
       setActiveIncident(null);
@@ -527,7 +531,7 @@ export default function GameScreen({
     const ctx = rootCauseContext();
     let profile = BROWNOUT_OVERBUDGET;
     if (type === "brownout") {
-      const total = ctx.allocation.powerGrid + ctx.allocation.lifeSupport + ctx.allocation.radiationShielding;
+      const total = ctx.allocation.powerGrid + ctx.allocation.lifeSupport + ctx.allocation.radiationShielding + ctx.allocation.foodProduction;
       profile = total > ctx.effectiveBudgetMW ? BROWNOUT_OVERBUDGET : BROWNOUT_BATTERY_DEPLETION;
     } else if (type === "life_support") {
       profile = LIFE_SUPPORT_FAILURE;
