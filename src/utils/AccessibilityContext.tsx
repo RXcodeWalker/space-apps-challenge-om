@@ -357,7 +357,12 @@ export function AccessibilityProvider({ children }: { children: React.ReactNode 
  * Safe to call even outside a provider (falls back to standard tokens).
  */
 export function useAccessibility(): AccessibilityContextType {
-  const context = useContext(AccessibilityContext);
+  let context: AccessibilityContextType | undefined;
+  try {
+    context = useContext(AccessibilityContext);
+  } catch {
+    // In environments where React dispatcher is not initialized (e.g. CLI tests)
+  }
   if (context) {
     return context;
   }
