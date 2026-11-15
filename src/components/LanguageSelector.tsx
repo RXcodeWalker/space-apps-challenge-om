@@ -119,7 +119,7 @@ export default function LanguageSelector({
             </div>
 
             {/* Language items */}
-            <div className="flex flex-col gap-1 max-h-72 overflow-y-auto">
+            <div className="flex flex-col gap-1 max-h-72 overflow-y-auto [&>*]:shrink-0">
               {languages.map((lang) => {
                 const isSelected = lang.code === language;
 

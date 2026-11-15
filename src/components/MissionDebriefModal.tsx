@@ -255,7 +255,7 @@ export default function MissionDebriefModal({
           </div>
 
           {/* Modal Content */}
-          <div className="overflow-y-auto p-5 sm:p-7 flex flex-col gap-6">
+          <div className="overflow-y-auto p-5 sm:p-7 flex flex-col gap-6 [&>*]:shrink-0">
             {/* 1. MISSION OUTCOME RANK CARD */}
             <div
               className={`rounded-3xl p-6 border-2 bg-gradient-to-br ${outcomeRank.bgGradient} ${outcomeRank.borderColor} shadow-xl relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6`}

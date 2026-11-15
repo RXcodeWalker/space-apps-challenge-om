@@ -11,6 +11,7 @@
 > **Theme:** *Build a Junior Astronaut Mission Trainer*  
 > **Target Explorers:** Junior Commanders (Ages 7–14+), STEM Classrooms, Space Camp Cadets & General Public  
 > **Live Web Application:** [astronaut.beyondthebasics.me](https://astronaut.beyondthebasics.me)  
+> **Project Demo (7 slides):** [astronaut.beyondthebasics.me/pitch.html](https://astronaut.beyondthebasics.me/pitch.html)  
 > **Deployment Architecture:** Zero-config Edge PWA (Vercel / Netlify / Offline Service Worker)
 
 ---
@@ -320,7 +321,7 @@ npm run preview
 
 *In full compliance with NASA International Space Apps Challenge guidelines and Hackathon rules regarding transparent tool usage:*
 
-This project utilized AI-assisted pair programming and development tools (Google DeepMind's Gemini and Antigravity) during the designated hackathon window. Specifically:
+This project utilized AI-assisted pair programming and development tools (Google DeepMind's Gemini and Antigravity, and Anthropic's Claude via Claude Code) during the designated hackathon window. Specifically:
 - **Architectural Scaffolding:** Accelerated the implementation of modular React 19 components and TypeScript simulation types.
 - **NASA Publication Synthesis:** Assisted in cross-referencing published numerical parameters from NASA technical reports (NASA/TP-2015-218570, LRO Diviner, Curiosity REMS/RAD) into mathematical simulation constants.
 - **Procedural Audio Synthesis:** Assisted in formulating mathematical frequency envelopes and gain ramps for native Web Audio API oscillators.

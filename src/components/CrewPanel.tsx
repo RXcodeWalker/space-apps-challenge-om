@@ -424,7 +424,7 @@ export default function CrewPanel({ crew, kidMode = false }: CrewPanelProps) {
       {/* TAB 3: RECENT CREW MORALE EVENTS & HEROISM */}
       {/* ========================================================= */}
       {activeTab === "events" && (
-        <div className="flex flex-col gap-2 max-h-56 overflow-y-auto pr-1">
+        <div className="flex flex-col gap-2 max-h-56 overflow-y-auto pr-1 [&>*]:shrink-0">
           {events.length === 0 ? (
             <p className="text-xs text-slate-400 text-center py-4 font-mono">
               No emergency repairs or major incidents logged yet.

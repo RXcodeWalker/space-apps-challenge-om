@@ -172,7 +172,7 @@ export default function IncidentModal({
           </div>
 
           {/* Modal Body: NASA Science, Directives & Crew Emergency Assignments */}
-          <div className="overflow-y-auto p-5 sm:p-6 flex flex-col gap-6">
+          <div className="overflow-y-auto p-5 sm:p-6 flex flex-col gap-6 [&>*]:shrink-0">
             {/* REAL NASA SCIENCE BADGE */}
             <div className="rounded-2xl bg-gradient-to-r from-blue-950/70 via-indigo-950/50 to-slate-900 border-2 border-blue-500/40 p-4 shadow-lg relative overflow-hidden">
               <div className="absolute -right-6 -bottom-6 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl pointer-events-none" />

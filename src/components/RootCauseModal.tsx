@@ -217,7 +217,7 @@ export default function RootCauseModal({
           </div>
 
           {/* Modal Body */}
-          <div className="overflow-y-auto p-4 sm:p-6 flex-1 flex flex-col gap-5">
+          <div className="overflow-y-auto p-4 sm:p-6 flex-1 flex flex-col gap-5 [&>*]:shrink-0">
             {/* ========================================================= */}
             {/* TAB 1: CAUSALITY FAULT TREE */}
             {/* ========================================================= */}

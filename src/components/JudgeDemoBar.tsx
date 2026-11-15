@@ -100,7 +100,7 @@ export default function JudgeDemoBar({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 20 }}
-          className="fixed bottom-4 right-4 z-40"
+          className="fixed bottom-3 inset-x-0 z-40 flex justify-center pointer-events-none"
         >
           <button
             type="button"
@@ -108,14 +108,14 @@ export default function JudgeDemoBar({
               soundEffects.playButtonClick();
               onToggle();
             }}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-slate-950/90 hover:bg-slate-900 border-2 border-amber-500/80 hover:border-amber-400 text-amber-300 shadow-2xl shadow-amber-950/60 backdrop-blur-md font-mono text-xs font-bold transition-all hover:scale-105 active:scale-95 group cursor-pointer"
+            className="pointer-events-auto flex items-center gap-2 px-4 py-2.5 rounded-full bg-slate-950/90 hover:bg-slate-900 border-2 border-amber-500/80 hover:border-amber-400 text-amber-300 shadow-2xl shadow-amber-950/60 backdrop-blur-md font-mono text-xs font-bold transition-all hover:scale-105 active:scale-95 group cursor-pointer"
             title="Open Judge Express Demo Bar (Press 'D')"
           >
             <div className="relative">
               <Zap className="w-4 h-4 text-amber-400 animate-pulse" />
               <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-400 animate-ping" />
             </div>
-            <span>⚡ Demo / Fast-Forward</span>
+            <span>Judge Demo / Fast-Forward</span>
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-200 border border-amber-400/40">
               3-Min Eval
             </span>

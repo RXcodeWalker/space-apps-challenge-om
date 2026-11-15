@@ -238,7 +238,7 @@ export default function NasaDataModal({
           </div>
 
           {/* Body Content */}
-          <div className="overflow-y-auto p-5 flex flex-col gap-5">
+          <div className="overflow-y-auto p-5 flex flex-col gap-5 [&>*]:shrink-0">
             {/* TAB 1: CALIBRATION & SIMULATION RULES */}
             {activeTab === "calibration" && (
               <div className="flex flex-col gap-4">
