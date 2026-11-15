@@ -13,6 +13,7 @@
 // ============================================================
 
 import { soundEffects } from "./soundEffects";
+import { getSettings, subscribe as subscribeProgress } from "../ui/game/progress";
 
 const STORAGE_KEYS = {
   AMBIENT_VOLUME: "outpost_ambient_volume",
@@ -756,10 +757,15 @@ class AmbientAudioManager {
       this.loadSettings();
 
       // Listen to SoundEffects global mute state
-      this.isMuted = soundEffects.getIsMuted();
-      soundEffects.subscribe((muted) => {
-        this.setMuted(muted);
-      });
+      // Silent when muted globally OR when "Interface sounds" is off in Settings.
+      const shouldMute = () => soundEffects.getIsMuted() || !getSettings().sfx;
+      this.isMuted = shouldMute();
+      const syncMute = () => {
+        const next = shouldMute();
+        if (next !== this.isMuted) this.setMuted(next);
+      };
+      soundEffects.subscribe(syncMute);
+      subscribeProgress(syncMute);
 
       // Browser autoplay unlock listeners
       const unlockAudio = () => {

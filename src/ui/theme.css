@@ -146,3 +146,15 @@
 .oc-blink { animation: oc-blink var(--oc-dur-alarm) steps(1, end) infinite; }
 @media (prefers-reduced-motion: reduce) { .oc-blink { animation: none; } }
 [data-oc-reduce-motion="true"] .oc-blink { animation: none; }
+
+/* In-app "Reduce motion: On" must reach every CSS animation and transition, not just the OS media query. */
+[data-oc-reduce-motion="true"] *,
+[data-oc-reduce-motion="true"] *::before,
+[data-oc-reduce-motion="true"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  animation-delay: 0ms !important;
+  transition-duration: 0.01ms !important;
+  transition-delay: 0ms !important;
+  scroll-behavior: auto !important;
+}

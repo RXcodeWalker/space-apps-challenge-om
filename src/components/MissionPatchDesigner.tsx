@@ -54,6 +54,7 @@ import {
   type MissionPatchState,
 } from "../data/patchAssets";
 import { soundEffects } from "../utils/soundEffects";
+import { award } from "../ui";
 
 // ============================================================
 // STANDALONE / EMBEDDABLE MISSION PATCH SVG COMPONENT
@@ -421,6 +422,7 @@ export default function MissionPatchDesigner({
   const handleSaveToStorage = () => {
     soundEffects.playPuzzleSuccess();
     savePatchToStorage(patch);
+    award("patch");
     setSaveSuccess(true);
     if (onSave) {
       onSave(patch);

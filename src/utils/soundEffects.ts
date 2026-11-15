@@ -8,6 +8,8 @@
 // Includes persistent mute/unmute toggle state.
 // ============================================================
 
+import { getSettings } from "../ui/game/progress";
+
 const MUTE_STORAGE_KEY = "outpost_commander_muted";
 const SFX_VOLUME_STORAGE_KEY = "outpost_commander_sfx_volume";
 
@@ -61,6 +63,11 @@ class SoundEffectsManager {
     return this.isMuted;
   }
 
+  /** True when UI sounds must stay quiet: global mute, or "Interface sounds" switched off in Settings. */
+  private silenced(): boolean {
+    return this.isMuted || !getSettings().sfx;
+  }
+
   public getSfxVolume(): number {
     return this.sfxVolume;
   }
@@ -102,7 +109,7 @@ class SoundEffectsManager {
    * Throttled to max 25 clicks/sec to avoid distortion during rapid slider drags.
    */
   public playSliderClick(freqOffset: number = 0): void {
-    if (this.isMuted) return;
+    if (this.silenced()) return;
 
     const now = performance.now();
     if (now - this.lastSliderClickTime < 35) return;
@@ -139,7 +146,7 @@ class SoundEffectsManager {
    * Sings a smooth ascending tri-tone chime (D5 -> A5 -> D6)
    */
   public playTurnChime(): void {
-    if (this.isMuted) return;
+    if (this.silenced()) return;
 
     const ctx = this.getContext();
     if (!ctx) return;
@@ -181,7 +188,7 @@ class SoundEffectsManager {
    * Authentic dual-tone warning pulse (caution tone)
    */
   public playIncidentAlert(): void {
-    if (this.isMuted) return;
+    if (this.silenced()) return;
 
     const ctx = this.getContext();
     if (!ctx) return;
@@ -241,7 +248,7 @@ class SoundEffectsManager {
    * Warm, heroic sci-fi major 9th arpeggio with rich decay
    */
   public playVictoryChord(): void {
-    if (this.isMuted) return;
+    if (this.silenced()) return;
 
     const ctx = this.getContext();
     if (!ctx) return;
@@ -286,7 +293,7 @@ class SoundEffectsManager {
    * Synthesizes a NASA Quindar-style comms burst and bandpassed static click
    */
   public playRadioSquelch(): void {
-    if (this.isMuted) return;
+    if (this.silenced()) return;
 
     const ctx = this.getContext();
     if (!ctx) return;
@@ -347,7 +354,7 @@ class SoundEffectsManager {
    * Synthesizes a NASA Quindar-style unkey chirp (2017 Hz) and subtle static release
    */
   public playRadioOut(): void {
-    if (this.isMuted) return;
+    if (this.silenced()) return;
 
     const ctx = this.getContext();
     if (!ctx) return;
@@ -406,7 +413,7 @@ class SoundEffectsManager {
    * General button interaction beep
    */
   public playButtonClick(): void {
-    if (this.isMuted) return;
+    if (this.silenced()) return;
 
     const ctx = this.getContext();
     if (!ctx) return;
@@ -438,7 +445,7 @@ class SoundEffectsManager {
    * Accelerates and sharpens pitch when under 4 seconds.
    */
   public playCountdownTick(isUrgent: boolean = false): void {
-    if (this.isMuted) return;
+    if (this.silenced()) return;
 
     const ctx = this.getContext();
     if (!ctx) return;
@@ -493,7 +500,7 @@ class SoundEffectsManager {
    * Plays an uplifting, crisp ascending 4-note cadence
    */
   public playPuzzleSuccess(): void {
-    if (this.isMuted) return;
+    if (this.silenced()) return;
 
     const ctx = this.getContext();
     if (!ctx) return;
@@ -535,7 +542,7 @@ class SoundEffectsManager {
    * Deep warning double-buzz denoting triage breach / timeout
    */
   public playPuzzleFail(): void {
-    if (this.isMuted) return;
+    if (this.silenced()) return;
 
     const ctx = this.getContext();
     if (!ctx) return;
@@ -576,7 +583,7 @@ class SoundEffectsManager {
    * 9. Heavy mechanical circuit breaker toggle sound
    */
   public playSwitchToggle(on: boolean = true): void {
-    if (this.isMuted) return;
+    if (this.silenced()) return;
 
     const ctx = this.getContext();
     if (!ctx) return;

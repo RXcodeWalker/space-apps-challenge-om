@@ -733,11 +733,11 @@ export default function GameScreen({
             )}
           </div>
 
-          <div aria-label="Crew" className="grid flex-none grid-cols-2 gap-2 sm:grid-cols-4">
+          <div aria-label="Crew" className="grid flex-none grid-cols-[repeat(auto-fit,minmax(136px,1fr))] gap-2">
             {members.map((m, i) => {
               const hp = crewHp[i], st = statusOf("crew", hp);
               return (
-                <Panel key={m.id} status={st}>
+                <Panel key={m.id} status={st} className="min-w-0">
                   <div className="flex min-w-0 flex-col">
                     <span className="truncate font-semibold leading-5">{m.name}</span>
                     <span className="oc-type-code truncate text-oc-text-3">{m.roleTitle}</span>
