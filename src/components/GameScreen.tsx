@@ -51,6 +51,7 @@ import {
 import QuickTutorialOverlay, { TUTORIAL_STORAGE_KEY } from "./QuickTutorialOverlay";
 import LanguageSelector from "./LanguageSelector";
 import AmbientAudioModal from "./AmbientAudioModal";
+import LiveSpaceWeatherBadge from "./LiveSpaceWeatherBadge";
 import { useTranslation } from "../i18n/LanguageContext";
 import { soundEffects, useSoundMuted } from "../utils/soundEffects";
 import { ambientAudio } from "../utils/ambientAudio";
@@ -961,6 +962,9 @@ export default function GameScreen({
                 </div>
 
                 <div className="flex items-center gap-2">
+                  {/* Live Space Weather Telemetry Pill */}
+                  <LiveSpaceWeatherBadge />
+
                   {/* Multi-Language Selector */}
                   <LanguageSelector compact />
 
@@ -1035,6 +1039,9 @@ export default function GameScreen({
                     <HelpCircle className="w-3.5 h-3.5 text-[#06B6D4]" />
                     <span className="hidden sm:inline">{t("common.howToPlay")}</span>
                   </button>
+
+                  {/* Real NASA DONKI / NOAA Space Weather Telemetry Pill */}
+                  <LiveSpaceWeatherBadge />
 
                   {/* NASA Data Header Button */}
                   <button

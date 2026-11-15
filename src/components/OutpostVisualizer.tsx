@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import Habitat3DDiorama from "./Habitat3DDiorama";
 import RegolithChemistryViewer from "./RegolithChemistryViewer";
+import SolarElevationTracker from "./SolarElevationTracker";
 import ModuleInspectModal from "./ModuleInspectModal";
 import {
   type HabitatModuleId,
@@ -63,7 +64,7 @@ export default function OutpostVisualizer({
   interactive = true,
   onInspectRootCause,
 }: OutpostVisualizerProps) {
-  const [viewMode, setViewMode] = useState<"3d" | "2d" | "chemistry">("3d");
+  const [viewMode, setViewMode] = useState<"3d" | "2d" | "chemistry" | "solar">("3d");
   const [inspectedModule, setInspectedModule] = useState<InspectedModule>(null);
   const [cutawayModuleId, setCutawayModuleId] = useState<HabitatModuleId | null>(null);
   const [isCutawayOpen, setIsCutawayOpen] = useState<boolean>(false);
@@ -178,6 +179,22 @@ export default function OutpostVisualizer({
           >
             <Atom className="w-3.5 h-3.5" />
             <span>Regolith Chem (Mol*)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              soundEffects.playSliderClick(70);
+              setViewMode("solar");
+            }}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
+              viewMode === "solar"
+                ? "bg-gradient-to-r from-amber-400 to-orange-500 text-black shadow-md shadow-amber-950 font-black"
+                : "text-slate-300 hover:text-white hover:bg-slate-900"
+            }`}
+          >
+            <Sun className="w-3.5 h-3.5" />
+            <span>Solar & Shadows</span>
           </button>
         </div>
 
@@ -304,6 +321,17 @@ export default function OutpostVisualizer({
           }
           onClose={() => setViewMode("3d")}
         />
+      )}
+
+      {/* SOLAR ELEVATION & SHADOW TRACKER VIEW */}
+      {viewMode === "solar" && (
+        <div className="p-4 bg-slate-950/80">
+          <SolarElevationTracker
+            initialBody={isMars ? "mars" : "moon"}
+            variant="embedded"
+            onClose={() => setViewMode("3d")}
+          />
+        </div>
       )}
 
       {/* 2D SVG BLUEPRINT CROSS-SECTION VIEW */}

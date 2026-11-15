@@ -17,6 +17,7 @@ import {
   Zap,
   ChevronDown,
   Sparkles,
+  Sun,
 } from "lucide-react";
 import { soundEffects } from "../utils/soundEffects";
 
@@ -27,6 +28,7 @@ interface JudgeDemoBarProps {
   onTriggerMinigame: () => void;
   onViewDebrief: () => void;
   onPreviewLabReport: () => void;
+  onOpenSolarTracker?: () => void;
 }
 
 /**
@@ -69,6 +71,7 @@ export default function JudgeDemoBar({
   onTriggerMinigame,
   onViewDebrief,
   onPreviewLabReport,
+  onOpenSolarTracker,
 }: JudgeDemoBarProps) {
   // Global keyboard shortcut ('d' or 'D') to toggle drawer if not focused on inputs
   useEffect(() => {
@@ -273,6 +276,35 @@ export default function JudgeDemoBar({
                   </p>
                 </div>
               </button>
+
+              {/* 5. ☀️ Solar Elevation & Shadow Tracker */}
+              {onOpenSolarTracker && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    soundEffects.playButtonClick();
+                    onOpenSolarTracker();
+                  }}
+                  className="group p-3 rounded-xl bg-gradient-to-br from-amber-950/40 to-slate-900/90 hover:from-amber-900/50 hover:to-slate-800 border-2 border-amber-500/60 hover:border-amber-400 transition-all text-left flex items-start gap-3 shadow-md hover:shadow-amber-950/50 cursor-pointer sm:col-span-2"
+                >
+                  <div className="p-2 rounded-lg bg-amber-500/20 text-amber-400 group-hover:scale-110 transition-transform shrink-0 border border-amber-500/30">
+                    <Sun className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-1 mb-0.5">
+                      <span className="text-xs font-black text-white group-hover:text-amber-200 transition-colors">
+                        ☀️ Solar Elevation & Shadow Tracker (NASA LRO & Curiosity)
+                      </span>
+                      <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-amber-950 text-amber-300 border border-amber-600/50 font-bold uppercase shrink-0">
+                        Orbital Physics
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-300 leading-snug">
+                      Inspect Moon 1.5° grazing sun vs Mars 25.2° diurnal arc, 20km crater shadows & Artemis vertical solar masts.
+                    </p>
+                  </div>
+                </button>
+              )}
             </div>
 
             {/* Bottom Footer Tip */}

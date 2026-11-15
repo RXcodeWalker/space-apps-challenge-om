@@ -13,6 +13,7 @@ import JudgeDemoBar from "./components/JudgeDemoBar";
 import CrisisMinigameModal from "./components/CrisisMinigameModal";
 import MissionDebriefModal from "./components/MissionDebriefModal";
 import StemDebriefWorksheet from "./components/StemDebriefWorksheet";
+import SolarElevationTracker from "./components/SolarElevationTracker";
 import {
   createSol9CrisisGameState,
   createCompletedMissionGameState,
@@ -78,6 +79,7 @@ export default function App() {
   const [demoCompletedGameState, setDemoCompletedGameState] = useState<GameState | null>(null);
   const [initialGameStateOverride, setInitialGameStateOverride] = useState<GameState | null>(null);
   const [sol9CrisisTrigger, setSol9CrisisTrigger] = useState<number>(0);
+  const [isSolarTrackerOpen, setIsSolarTrackerOpen] = useState<boolean>(false);
 
   function handleOpenNasaData(env?: MissionEnvironment | null) {
     soundEffects.playButtonClick();
@@ -197,7 +199,18 @@ export default function App() {
         onTriggerMinigame={handleTriggerMinigame}
         onViewDebrief={handleViewMissionDebrief}
         onPreviewLabReport={handlePreviewPrintableLabReport}
+        onOpenSolarTracker={() => setIsSolarTrackerOpen(true)}
       />
+
+      {/* Standalone Solar Elevation & Shadow Tracker Modal */}
+      {isSolarTrackerOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/85 backdrop-blur-md overflow-y-auto">
+          <SolarElevationTracker
+            initialBody={selectedEnvironment?.id === "mars_gale_crater" ? "mars" : "moon"}
+            onClose={() => setIsSolarTrackerOpen(false)}
+          />
+        </div>
+      )}
 
       {/* 15-Second Flight Director Crisis Minigame Sandbox Modal */}
       <CrisisMinigameModal

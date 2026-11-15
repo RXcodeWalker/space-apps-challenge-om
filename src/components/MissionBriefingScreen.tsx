@@ -64,6 +64,7 @@ import { soundEffects, useSoundMuted } from "../utils/soundEffects";
 import { ambientAudio } from "../utils/ambientAudio";
 import AmbientAudioModal from "./AmbientAudioModal";
 import EducatorHubModal from "./EducatorHubModal";
+import LiveSpaceWeatherBadge from "./LiveSpaceWeatherBadge";
 import {
   DIFFICULTY_PRESETS,
   type DifficultyTier,
@@ -383,6 +384,9 @@ export default function MissionBriefingScreen({
           </div>
 
           <div className="flex items-center gap-2 sm:gap-4 text-xs font-mono">
+            {/* Real NASA DONKI / NOAA Space Weather Telemetry Pill */}
+            <LiveSpaceWeatherBadge />
+
             {onToggleDemoBar && (
               <JudgeDemoNavPill onClick={onToggleDemoBar} isOpen={isDemoBarOpen} />
             )}

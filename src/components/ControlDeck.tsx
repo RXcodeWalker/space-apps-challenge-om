@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import AmbientAudioModal from "./AmbientAudioModal";
 import EducatorHubModal from "./EducatorHubModal";
+import LiveSpaceWeatherBadge from "./LiveSpaceWeatherBadge";
 import CrewPanel from "./CrewPanel";
 import CrewCommsBubble from "./CrewCommsBubble";
 import { useAccessibility } from "../utils/AccessibilityContext";
@@ -669,6 +670,9 @@ export default function ControlDeck({
             <span className="hidden lg:inline">For Teachers / NGSS</span>
             <span className="lg:hidden">NGSS</span>
           </motion.button>
+
+          {/* Real NASA DONKI / NOAA Space Weather Telemetry Pill */}
+          <LiveSpaceWeatherBadge />
 
           {/* NASA Data Button */}
           <button
